@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: iran_macro_postgres
+    environment:
+      POSTGRES_USER: iran_macro
+      POSTGRES_PASSWORD: iran_macro_pass
+      POSTGRES_DB: iran_macro_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iran_macro -d iran_macro_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - iran_macro_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  iran_macro_network:
+    driver: bridge
