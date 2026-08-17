@@ -76,10 +76,11 @@ cd iran-macro-platform
 ```bash
 # Install Python dependencies
 poetry install
-
-# Activate virtual environment
-poetry shell
 ```
+
+Poetry 2.x ships `shell` as a separate plugin, so prefix commands with
+`poetry run` (e.g. `poetry run pytest`). To get the old behaviour:
+`poetry self add poetry-plugin-shell`.
 
 ### 3. Configure Environment
 
@@ -91,6 +92,14 @@ cp .env.template .env
 # (Default values work for local development)
 ```
 
+If a system PostgreSQL already occupies port 5432, set a free host port in
+`.env` — the compose file honours it — and update `DATABASE_URL` to match:
+
+```bash
+DATABASE_PORT=5433
+DATABASE_URL=postgresql://iran_macro:iran_macro_pass@localhost:5433/iran_macro_db
+```
+
 ### 4. Start Database
 
 ```bash
@@ -98,14 +107,18 @@ cp .env.template .env
 make db-up
 
 # Wait for health check to pass
-docker-compose ps
+docker compose ps
 ```
+
+If Docker Desktop is installed but not running, the CLI may target its stopped
+socket and fail with `Cannot connect to the Docker daemon`. Use the system daemon
+for a single command with `DOCKER_CONTEXT=default make db-up`.
 
 ### 5. Run Database Migrations
 
 ```bash
 # Apply schema migrations
-alembic upgrade head
+poetry run alembic upgrade head
 
 # Verify tables created
 make db-check
@@ -142,20 +155,23 @@ make typecheck    # Type check with mypy
 make check        # Run all quality gates
 
 # Testing
-make test         # Run pytest with coverage
+make test         # Unit tests with coverage (skips integration)
 make test-unit    # Unit tests only
 make test-integration  # Integration tests (requires Docker)
+make test-all     # Unit + integration tests
 
 # Database
 make db-up        # Start Docker services
 make db-down      # Stop Docker services
 make db-shell     # Connect to PostgreSQL shell
 make db-reset     # Reset database (WARNING: deletes data)
+make db-check     # Verify connection + TimescaleDB extension
 
 # Migrations
-alembic revision --autogenerate -m "Description"  # Create migration
-alembic upgrade head                               # Apply migrations
-alembic downgrade -1                               # Rollback one migration
+poetry run alembic revision --autogenerate -m "Description"  # Create migration
+poetry run alembic upgrade head                              # Apply migrations
+poetry run alembic downgrade -1                              # Rollback one migration
+poetry run alembic check                                     # Detect model drift
 
 # Data pipeline (Phase 3+)
 python -m src.connectors.world_bank               # Run World Bank connector
@@ -254,23 +270,30 @@ See `AGENTS.md` for detailed connector implementation guidelines.
 ### Running Tests
 
 ```bash
-# All tests with coverage
+# Unit tests with coverage (the default gate; skips integration)
 make test
 
-# Unit tests only
-pytest tests/unit/
-
 # Integration tests (requires Docker)
-pytest tests/integration/ -m integration
+make test-integration
+
+# Everything
+make test-all
 
 # Live API tests (manual only)
-pytest tests/integration/ -m live
+poetry run pytest tests/integration/ -m live
 ```
+
+Current status: **53 tests passing** — 40 unit (86.68% coverage) and 13
+integration (95.30% combined).
 
 ### Coverage Requirements
 
-- **Minimum:** 80% code coverage (enforced)
+- **Minimum:** 80% code coverage (enforced by `make test` and `make test-all`)
 - **Target:** 90%+ for core utilities and connectors
+
+`make test-integration` runs with the gate disabled — the 80% threshold measures
+the project as a whole, so an integration-only subset cannot meaningfully satisfy
+it.
 
 ### Test Organization
 
@@ -307,25 +330,29 @@ pytest tests/integration/ -m live
 
 ```bash
 # Check container status
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs postgres
+docker compose logs postgres
 
 # Reset Docker environment
 make db-down
-docker-compose down -v
+docker compose down -v
 make db-up
 ```
+
+If every `docker` command fails with `Cannot connect to the Docker daemon`,
+check `docker context ls` — a stopped Docker Desktop leaves the CLI pointed at
+its socket. Prefix with `DOCKER_CONTEXT=default` to use the system daemon.
 
 ### Database Connection Issues
 
 ```bash
 # Test connection
-docker-compose exec postgres psql -U iran_macro -d iran_macro_db -c "SELECT version();"
+docker compose exec postgres psql -U iran_macro -d iran_macro_db -c "SELECT version();"
 
 # Check TimescaleDB extension
-docker-compose exec postgres psql -U iran_macro -d iran_macro_db -c "SELECT * FROM timescaledb_information.hypertables;"
+docker compose exec postgres psql -U iran_macro -d iran_macro_db -c "SELECT * FROM timescaledb_information.hypertables;"
 ```
 
 ### Poetry Issues

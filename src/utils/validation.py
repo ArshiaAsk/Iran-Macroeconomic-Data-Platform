@@ -5,8 +5,7 @@ Provides schema validation, data quality checks, and outlier detection.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -25,9 +24,7 @@ class ValidationResult:
     record_count: int
 
 
-def validate_schema(
-    df: pd.DataFrame, required_columns: list[str]
-) -> tuple[bool, list[str]]:
+def validate_schema(df: pd.DataFrame, required_columns: list[str]) -> tuple[bool, list[str]]:
     """
     Validate DataFrame has required columns.
 
@@ -48,7 +45,10 @@ def validate_schema(
 
 
 def validate_date_range(
-    df: pd.DataFrame, date_column: str, min_date: datetime | None = None, max_date: datetime | None = None
+    df: pd.DataFrame,
+    date_column: str,
+    min_date: datetime | None = None,
+    max_date: datetime | None = None,
 ) -> tuple[bool, list[str]]:
     """
     Validate dates are within acceptable range.
@@ -74,8 +74,13 @@ def validate_date_range(
         errors.append(f"Failed to parse dates: {e}")
         return False, errors
 
-    # Check for future dates
-    if (dates > datetime.now()).any():
+    # Check for future dates. Match the tz-awareness of the parsed dates so the
+    # comparison does not raise on naive/aware mismatch.
+    now = datetime.now(UTC)
+    if getattr(dates.dtype, "tz", None) is None:
+        now = now.replace(tzinfo=None)
+
+    if (dates > now).any():
         errors.append("Found dates in the future")
 
     # Check min date
@@ -101,20 +106,19 @@ def calculate_null_percentage(df: pd.DataFrame, column: str) -> float:
         Percentage of null values (0-100)
     """
     if column not in df.columns:
-        raise ValidationError(f"Column '{column}' not found")
+        msg = f"Column '{column}' not found"
+        raise ValidationError(msg)
 
-    null_count = df[column].isnull().sum()
+    null_count = df[column].isna().sum()
     total_count = len(df)
 
     if total_count == 0:
         return 0.0
 
-    return (null_count / total_count) * 100
+    return float(null_count / total_count) * 100
 
 
-def detect_outliers_iqr(
-    df: pd.DataFrame, column: str, multiplier: float = 1.5
-) -> pd.Series:
+def detect_outliers_iqr(df: pd.DataFrame, column: str, multiplier: float = 1.5) -> pd.Series:
     """
     Detect outliers using Interquartile Range (IQR) method.
 
@@ -127,14 +131,15 @@ def detect_outliers_iqr(
         Boolean Series indicating outliers (True = outlier)
     """
     if column not in df.columns:
-        raise ValidationError(f"Column '{column}' not found")
+        msg = f"Column '{column}' not found"
+        raise ValidationError(msg)
 
-    Q1 = df[column].quantile(0.25)
-    Q3 = df[column].quantile(0.75)
-    IQR = Q3 - Q1
+    q1 = df[column].quantile(0.25)
+    q3 = df[column].quantile(0.75)
+    iqr = q3 - q1
 
-    lower_bound = Q1 - multiplier * IQR
-    upper_bound = Q3 + multiplier * IQR
+    lower_bound = q1 - multiplier * iqr
+    upper_bound = q3 + multiplier * iqr
 
     return (df[column] < lower_bound) | (df[column] > upper_bound)
 
@@ -190,9 +195,7 @@ def validate_data_quality(
     # Check null percentage
     null_pct = calculate_null_percentage(df, value_column)
     if null_pct > null_threshold:
-        warnings.append(
-            f"High null percentage: {null_pct:.2f}% (threshold: {null_threshold}%)"
-        )
+        warnings.append(f"High null percentage: {null_pct:.2f}% (threshold: {null_threshold}%)")
 
     # Validate date range
     date_valid, date_errors = validate_date_range(df, date_column)
@@ -204,9 +207,7 @@ def validate_data_quality(
 
     if outlier_count > 0:
         outlier_pct = (outlier_count / len(df)) * 100
-        warnings.append(
-            f"Found {outlier_count} outliers ({outlier_pct:.2f}% of data)"
-        )
+        warnings.append(f"Found {outlier_count} outliers ({outlier_pct:.2f}% of data)")
 
     is_valid = len(errors) == 0
 

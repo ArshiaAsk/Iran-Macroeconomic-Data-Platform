@@ -20,9 +20,7 @@ class ConcreteConnector(DataConnector):
     def discover(self) -> list[IndicatorMetadata]:
         return []
 
-    def fetch(
-        self, indicator_id: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def fetch(self, indicator_id: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         return pd.DataFrame()
 
     def validate(self, data: pd.DataFrame) -> ValidationResult:

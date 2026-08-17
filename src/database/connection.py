@@ -4,13 +4,12 @@ Database connection utilities.
 Provides connection pooling and session management for PostgreSQL + TimescaleDB.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import Pool
 
 from src.database.schema import Base
 
@@ -35,9 +34,7 @@ class DatabaseConnection:
             pool_pre_ping=True,  # Verify connections before using
             pool_recycle=3600,  # Recycle connections after 1 hour
         )
-        self.SessionLocal = sessionmaker(
-            autocommit=False, autoflush=False, bind=self.engine
-        )
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
         # Register connection pool event listeners
         self._setup_event_listeners()
@@ -45,13 +42,13 @@ class DatabaseConnection:
     def _setup_event_listeners(self) -> None:
         """Set up SQLAlchemy event listeners for connection pool."""
 
-        @event.listens_for(Pool, "connect")
-        def set_search_path(dbapi_conn: object, connection_record: object) -> None:
+        # Registered on this engine's pool rather than the global Pool class, so
+        # other engines in the process are unaffected.
+        @event.listens_for(self.engine, "connect")
+        def set_search_path(dbapi_conn: object, connection_record: object) -> None:  # noqa: ARG001 - signature required by SQLAlchemy
             """Set search path to include all schemas."""
-            cursor = dbapi_conn.cursor()  # type: ignore
-            cursor.execute(
-                "SET search_path TO public, bronze, silver, gold, metadata"
-            )
+            cursor = dbapi_conn.cursor()  # type: ignore[attr-defined]
+            cursor.execute("SET search_path TO public, bronze, silver, gold, metadata")
             cursor.close()
 
     def create_all_tables(self) -> None:
@@ -93,28 +90,43 @@ class DatabaseConnection:
         with self.get_session() as session:
             # Create hypertable for gold_analytical
             session.execute(
-                """
-                SELECT create_hypertable(
-                    'gold.gold_analytical',
-                    'timestamp',
-                    if_not_exists => TRUE,
-                    chunk_time_interval => INTERVAL '1 month'
-                );
-                """
+                text(
+                    """
+                    SELECT create_hypertable(
+                        'gold.gold_analytical',
+                        'timestamp',
+                        if_not_exists => TRUE,
+                        migrate_data => TRUE,
+                        chunk_time_interval => INTERVAL '1 month'
+                    );
+                    """
+                )
             )
 
-            # Optionally add compression policy for older data
+            # Compression must be enabled on the hypertable before a retention
+            # policy can reference it.
             session.execute(
-                """
-                SELECT add_compression_policy(
-                    'gold.gold_analytical',
-                    INTERVAL '6 months',
-                    if_not_exists => TRUE
-                );
-                """
+                text(
+                    """
+                    ALTER TABLE gold.gold_analytical
+                    SET (timescaledb.compress,
+                         timescaledb.compress_segmentby = 'indicator_id');
+                    """
+                )
             )
 
-            session.commit()
+            # Compress chunks older than 6 months
+            session.execute(
+                text(
+                    """
+                    SELECT add_compression_policy(
+                        'gold.gold_analytical',
+                        INTERVAL '6 months',
+                        if_not_exists => TRUE
+                    );
+                    """
+                )
+            )
 
     def test_connection(self) -> bool:
         """
@@ -125,10 +137,10 @@ class DatabaseConnection:
         """
         try:
             with self.engine.connect() as conn:
-                conn.execute("SELECT 1")  # type: ignore
-            return True
+                conn.execute(text("SELECT 1"))
         except Exception:
             return False
+        return True
 
     def close(self) -> None:
         """Close all database connections."""
@@ -150,7 +162,7 @@ def init_database(database_url: str, echo: bool = False) -> DatabaseConnection:
     Returns:
         Database connection instance
     """
-    global _db_connection
+    global _db_connection  # noqa: PLW0603 - module-level singleton by design
     _db_connection = DatabaseConnection(database_url=database_url, echo=echo)
     return _db_connection
 
@@ -166,7 +178,6 @@ def get_db() -> DatabaseConnection:
         RuntimeError: If database not initialized
     """
     if _db_connection is None:
-        raise RuntimeError(
-            "Database not initialized. Call init_database() first."
-        )
+        msg = "Database not initialized. Call init_database() first."
+        raise RuntimeError(msg)
     return _db_connection

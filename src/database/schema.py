@@ -8,8 +8,8 @@ Implements 4-layer medallion architecture:
 - Metadata: Indicator catalog and audit logs
 """
 
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -23,14 +23,18 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def utc_now() -> datetime:
+    """Current time as a timezone-aware UTC datetime (column default)."""
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
-
-    pass
 
 
 # ============================================================================
@@ -49,18 +53,16 @@ class BronzeRaw(Base):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     source_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    source_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # 'api', 'scraper', 'file'
-    raw_data: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'api', 'scraper', 'file'
+    raw_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     collection_timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
-    http_status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    request_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    http_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    request_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
 
 
@@ -83,7 +85,7 @@ class SilverCleaned(Base):
     indicator_id: Mapped[str] = mapped_column(String(100), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
-    unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
     frequency: Mapped[str] = mapped_column(String(20), nullable=False)  # daily, monthly, etc.
     source_name: Mapped[str] = mapped_column(String(100), nullable=False)
     bronze_id: Mapped[UUID] = mapped_column(
@@ -92,14 +94,14 @@ class SilverCleaned(Base):
     validation_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="valid"
     )  # valid, flagged, invalid
-    validation_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    validation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_outlier: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
 
     # Relationships
@@ -121,27 +123,31 @@ class GoldAnalytical(Base):
         {"schema": "gold"},
     )
 
+    # Composite primary key: TimescaleDB requires the partitioning column
+    # ("timestamp") to be part of every unique index on a hypertable.
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     indicator_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), primary_key=True, nullable=False
+    )
     value: Mapped[float] = mapped_column(Float, nullable=False)
-    original_value: Mapped[Optional[float]] = mapped_column(
+    original_value: Mapped[float | None] = mapped_column(
         Float, nullable=True
     )  # Before chain-linking
     is_chain_linked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    chain_linking_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    chain_linking_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
     frequency: Mapped[str] = mapped_column(String(20), nullable=False)
     domain: Mapped[str] = mapped_column(String(50), nullable=False)  # inflation, gdp, etc.
     silver_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("silver.silver_cleaned.id"), nullable=False
     )
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
 
     # Relationships
@@ -165,27 +171,27 @@ class IndicatorCatalog(Base):
 
     indicator_id: Mapped[str] = mapped_column(String(100), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
     frequency: Mapped[str] = mapped_column(String(20), nullable=False)
     domain: Mapped[str] = mapped_column(String(50), nullable=False)
     source_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    source_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    availability_start: Mapped[Optional[datetime]] = mapped_column(
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    availability_start: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    availability_end: Mapped[Optional[datetime]] = mapped_column(
+    availability_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     has_base_year_changes: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    base_years: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of base years
+    base_years: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)  # List of base years
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
 
 
@@ -201,17 +207,15 @@ class DataCollectionLog(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     source_name: Mapped[str] = mapped_column(String(100), nullable=False)
     collection_timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # success, partial, failed
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # success, partial, failed
     records_collected: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    execution_time_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_time_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
 
 
@@ -231,18 +235,16 @@ class TransformationLog(Base):
         String(50), nullable=False
     )  # cleaning, chain_linking
     transformation_timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
     records_processed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # success, partial, failed
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    execution_time_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # success, partial, failed
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_time_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
 
 
@@ -258,19 +260,17 @@ class ChainLinkingLog(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     indicator_id: Mapped[str] = mapped_column(String(100), nullable=False)
     linking_timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
     base_year_from: Mapped[int] = mapped_column(Integer, nullable=False)
     base_year_to: Mapped[int] = mapped_column(Integer, nullable=False)
     linking_method: Mapped[str] = mapped_column(String(50), nullable=False)  # splice, overlap
     records_linked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    avg_confidence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    overlap_period_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    growth_rate_variance: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # success, partial, failed
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    avg_confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    overlap_period_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    growth_rate_variance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # success, partial, failed
+    record_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
