@@ -2,7 +2,7 @@
 Unit tests for validation utilities.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
@@ -18,16 +18,16 @@ from src.utils.validation import (
 
 def test_validate_schema_success() -> None:
     """Test schema validation with valid DataFrame."""
-    df = pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]})
-    is_valid, errors = validate_schema(df, ["col1", "col2"])
+    frame = pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]})
+    is_valid, errors = validate_schema(frame, ["col1", "col2"])
     assert is_valid is True
     assert len(errors) == 0
 
 
 def test_validate_schema_missing_columns() -> None:
     """Test schema validation with missing columns."""
-    df = pd.DataFrame({"col1": [1, 2, 3]})
-    is_valid, errors = validate_schema(df, ["col1", "col2", "col3"])
+    frame = pd.DataFrame({"col1": [1, 2, 3]})
+    is_valid, errors = validate_schema(frame, ["col1", "col2", "col3"])
     assert is_valid is False
     assert len(errors) == 1
     assert "Missing required columns" in errors[0]
@@ -38,8 +38,8 @@ def test_validate_date_range_success(sample_timeseries: pd.DataFrame) -> None:
     is_valid, errors = validate_date_range(
         sample_timeseries,
         "timestamp",
-        min_date=datetime(2019, 1, 1),
-        max_date=datetime(2025, 1, 1),
+        min_date=datetime(2019, 1, 1, tzinfo=UTC),
+        max_date=datetime(2025, 1, 1, tzinfo=UTC),
     )
     assert is_valid is True
     assert len(errors) == 0
@@ -47,12 +47,31 @@ def test_validate_date_range_success(sample_timeseries: pd.DataFrame) -> None:
 
 def test_validate_date_range_future_dates() -> None:
     """Test date range validation rejects future dates."""
-    df = pd.DataFrame(
-        {"timestamp": [datetime(2050, 1, 1), datetime(2051, 1, 1)]}
+    frame = pd.DataFrame(
+        {"timestamp": [datetime(2050, 1, 1, tzinfo=UTC), datetime(2051, 1, 1, tzinfo=UTC)]}
     )
-    is_valid, errors = validate_date_range(df, "timestamp")
+    is_valid, errors = validate_date_range(frame, "timestamp")
     assert is_valid is False
     assert any("future" in error.lower() for error in errors)
+
+
+def test_validate_date_range_naive_timestamps() -> None:
+    """Test date range validation handles timezone-naive timestamps without raising."""
+    # Naive datetimes are intentional here: the validator must not blow up when the
+    # incoming data has no timezone information.
+    frame = pd.DataFrame(
+        {"timestamp": [datetime(2050, 1, 1), datetime(2051, 1, 1)]}  # noqa: DTZ001
+    )
+    is_valid, errors = validate_date_range(frame, "timestamp")
+    assert is_valid is False
+    assert any("future" in error.lower() for error in errors)
+
+
+def test_validate_date_range_missing_column(sample_timeseries: pd.DataFrame) -> None:
+    """Test date range validation reports a missing date column."""
+    is_valid, errors = validate_date_range(sample_timeseries, "does_not_exist")
+    assert is_valid is False
+    assert "not found" in errors[0]
 
 
 def test_calculate_null_percentage_no_nulls(
@@ -99,8 +118,8 @@ def test_validate_data_quality_valid(sample_timeseries: pd.DataFrame) -> None:
 
 def test_validate_data_quality_empty_dataframe() -> None:
     """Test data quality validation with empty DataFrame."""
-    df = pd.DataFrame()
-    result = validate_data_quality(df)
+    frame = pd.DataFrame()
+    result = validate_data_quality(frame)
     assert result.is_valid is False
     assert "empty" in result.errors[0].lower()
 
@@ -109,9 +128,7 @@ def test_validate_data_quality_with_warnings(
     sample_timeseries_with_nulls: pd.DataFrame,
 ) -> None:
     """Test data quality validation generates warnings for high null percentage."""
-    result = validate_data_quality(
-        sample_timeseries_with_nulls, null_threshold=5.0
-    )
+    result = validate_data_quality(sample_timeseries_with_nulls, null_threshold=5.0)
     assert result.is_valid is True  # Still valid, but has warnings
     assert len(result.warnings) > 0
     assert "null percentage" in result.warnings[0].lower()

@@ -25,33 +25,41 @@ The platform solves critical challenges for economic research:
 |------------|---------|
 | Python 3.11+ | Primary language for all components |
 | PostgreSQL 15 + TimescaleDB | Time-series optimized data warehouse |
+| SQLAlchemy 2.x | Typed ORM (`DeclarativeBase`, `Mapped`, `mapped_column`) |
 | Playwright | Production-grade web scraping for domestic sources |
 | Streamlit + Plotly | Interactive dashboard and visualization |
-| Apache Airflow | Orchestration and scheduling (LocalExecutor) |
+| Apache Airflow 3.x | Orchestration and scheduling (LocalExecutor) |
 | Docker Compose | Local containerized environment |
 | pytest + pytest-cov | Testing framework (target 80%+ coverage) |
 | Poetry | Dependency management |
 | ruff | Linting and formatting |
-| mypy | Static type checking |
+| mypy | Static type checking (strict mode) |
 | Alembic | Database migrations |
+
+> Airflow is pinned to **3.x** because it must share SQLAlchemy with the rest of
+> the platform: Airflow 2.x requires `sqlalchemy<2.0`, which is incompatible with
+> the 2.0 typed ORM used in `src/database/schema.py`.
 
 ## Commands
 
 ```bash
 # Setup
-docker-compose up -d              # Start PostgreSQL + TimescaleDB
+make db-up                        # Start PostgreSQL + TimescaleDB
 poetry install                    # Install dependencies
 
 # Development
 make format                       # Format code with ruff
 make lint                         # Lint with ruff
 make typecheck                    # Type check with mypy
-make test                         # Run pytest suite
+make test                         # Run unit tests (skips integration)
+make test-integration             # Run integration tests (requires Docker)
+make test-all                     # Run unit + integration tests
 make check                        # Run all quality gates (format + lint + typecheck + test)
 
 # Database
-alembic upgrade head              # Apply migrations
-alembic revision --autogenerate   # Create new migration
+poetry run alembic upgrade head            # Apply migrations
+poetry run alembic revision --autogenerate # Create new migration
+poetry run alembic check                   # Detect model/database drift
 
 # Data Pipeline
 python -m src.connectors.world_bank  # Run World Bank connector
@@ -60,6 +68,10 @@ airflow dags trigger <dag_id>        # Trigger specific DAG
 # Dashboard
 streamlit run dashboard/app.py    # Launch interactive dashboard
 ```
+
+Poetry 2.x has no built-in `shell`; prefix commands with `poetry run`. If Docker
+commands fail with `Cannot connect to the Docker daemon`, prefix them with
+`DOCKER_CONTEXT=default`.
 
 ## Project Structure
 
@@ -227,6 +239,33 @@ class DataConnector(ABC):
 - **Functions/Variables:** Snake case (`fetch_indicators`, `base_year`)
 - **Constants:** Uppercase snake case (`MAX_RETRIES`, `DEFAULT_TIMEOUT`)
 - **Private:** Leading underscore (`_parse_response`, `_validate_date_range`)
+- **JSONB metadata columns:** the Python attribute is `record_metadata`, the
+  database column is `metadata`. `metadata` is reserved by SQLAlchemy's
+  `DeclarativeBase`, so declaring it directly raises `InvalidRequestError`.
+  Always spell it:
+  ```python
+  record_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+      "metadata", JSONB, nullable=True
+  )
+  ```
+
+### Database Conventions
+
+- **Timezone-aware everywhere:** all `DateTime` columns use `timezone=True` and
+  default to the `utc_now()` helper in `src/database/schema.py`. Never use
+  `datetime.utcnow()` — it returns a naive datetime and `ruff` rejects it (DTZ).
+- **Hypertable primary keys:** TimescaleDB requires the partitioning column in
+  every unique index, so `GoldAnalytical` has a composite PK `(id, timestamp)`.
+  Any future hypertable must include its time column in the PK.
+- **Insert-time vs construction-time defaults:** `mapped_column(default=...)` is
+  applied by the database on INSERT, not when you construct the object. A
+  freshly-built instance still has `None` for those fields — assert against the
+  declared default or flush the session first.
+- **New migrations:** run `poetry run alembic check` after any model change; it
+  fails if the models and database have drifted. TimescaleDB-managed indexes are
+  excluded via the `include_object` hook in `alembic/env.py`, so add any new ones
+  to `TIMESCALE_MANAGED_INDEXES` rather than letting them show up as spurious
+  drops.
 
 ### File Organization
 
@@ -348,14 +387,17 @@ class DataConnector(ABC):
 |------|---------|
 | `PRD.md` | Product requirements and implementation plan |
 | `docs/research/init-research.md` | Original research and data source analysis |
-| `pyproject.toml` | Poetry dependencies, tool configs (ruff, mypy, pytest) - *to be created* |
-| `docker-compose.yml` | PostgreSQL + TimescaleDB + Airflow local setup - *to be created* |
-| `Makefile` | Common commands (format, lint, test, check) - *to be created* |
-| `src/connectors/base.py` | Abstract DataConnector protocol - *to be implemented* |
-| `src/database/schema.py` | SQLAlchemy models for all layers - *to be implemented* |
-| `src/chain_linking/splice.py` | Chain-linking algorithm implementation - *to be implemented* |
-| `dashboard/app.py` | Streamlit entry point - *to be implemented* |
-| `docs/data_dictionary.md` | Complete indicator catalog with metadata - *to be created* |
+| `docs/phase-1/VALIDATION.md` | Phase 1 validation checklist with recorded results |
+| `pyproject.toml` | Poetry dependencies, tool configs (ruff, mypy, pytest) |
+| `docker-compose.yml` | PostgreSQL + TimescaleDB local setup |
+| `Makefile` | Common commands (format, lint, test, check, db-*) |
+| `src/connectors/base.py` | Abstract DataConnector protocol |
+| `src/database/schema.py` | SQLAlchemy models for all layers |
+| `src/database/connection.py` | Engine, session management, hypertable setup |
+| `alembic/versions/20260817_1456_initial_schema.py` | Initial migration (all 4 schemas + hypertable) |
+| `src/chain_linking/splice.py` | Chain-linking algorithm - *to be implemented (Phase 2)* |
+| `dashboard/app.py` | Streamlit entry point - *to be implemented (Phase 7)* |
+| `docs/data_dictionary.md` | Complete indicator catalog with metadata - *to be created (Phase 2)* |
 
 ## Important Constraints
 
@@ -440,3 +482,11 @@ class DataConnector(ABC):
 - **Don't drop outliers automatically:** Flag them, let analysts decide
 - **Don't mix base years:** Always chain-link before combining multiple series
 - **Don't forget Persian calendar:** Domestic sources often use Jalali dates
+- **Don't name a column `metadata`:** it's reserved by SQLAlchemy — use
+  `record_metadata` mapped to the `metadata` column (see Naming Conventions)
+- **Don't pass raw SQL strings to `execute()`:** SQLAlchemy 2.0 requires
+  `text("SELECT …")`
+- **Don't register pool events on the `Pool` class:** bind them to the specific
+  engine, or you mutate connection state for every engine in the process
+- **Don't assert on `default=` values before flushing:** those defaults are
+  applied by the database, not the constructor

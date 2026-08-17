@@ -70,9 +70,7 @@ class DataConnector(ABC):
         pass
 
     @abstractmethod
-    def fetch(
-        self, indicator_id: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def fetch(self, indicator_id: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Fetch time-series data for an indicator.
 
@@ -106,13 +104,12 @@ class DataConnector(ABC):
         """
         pass
 
-    def disconnect(self) -> None:
+    def disconnect(self) -> None:  # noqa: B027 - optional hook, subclasses override if needed
         """
         Close connection to data source.
 
         Override if cleanup is needed.
         """
-        pass
 
     def __enter__(self) -> "DataConnector":
         """Context manager entry."""

@@ -7,7 +7,7 @@ Provides structured JSON logging for Airflow compatibility.
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -17,7 +17,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
         log_data: dict[str, Any] = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -62,6 +62,7 @@ def setup_logging(
     handler.setLevel(level.upper())
 
     # Set formatter
+    formatter: logging.Formatter
     if log_format == "json":
         formatter = JSONFormatter()
     else:
@@ -89,9 +90,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def log_with_context(
-    logger: logging.Logger, level: str, message: str, **context: Any
-) -> None:
+def log_with_context(logger: logging.Logger, level: str, message: str, **context: Any) -> None:
     """
     Log message with additional context fields.
 
@@ -103,5 +102,4 @@ def log_with_context(
     """
     # Create log record with extra fields
     log_method = getattr(logger, level.lower())
-    extra_record = type("LogRecord", (), {"extra_fields": context})()
     log_method(message, extra={"extra_fields": context})
