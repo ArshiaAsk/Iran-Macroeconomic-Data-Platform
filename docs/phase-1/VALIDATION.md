@@ -288,8 +288,12 @@ All Phase 1 criteria are met **and verified by execution**:
 
 ## Next Steps (Phase 2)
 
-1. Implement World Bank API connector
-2. Implement TGJU scraper
-3. Test end-to-end Bronze → Silver → Gold flow
-4. Create data dictionary
-5. Document connector patterns
+Phase boundaries follow `PRD.md` §7: Phase 2 is the World Bank connector and the
+end-to-end pipeline; the TGJU scraper belongs to **Phase 3**, alongside Airflow.
+
+1. Implement World Bank API connector — ✅ done, see
+   [../plans/phase-2-world-bank-connector.md](../plans/phase-2-world-bank-connector.md)
+2. Test end-to-end Bronze → Silver → Gold flow — ✅ done
+3. Create data dictionary — ✅ [../phase-2/data_dictionary.md](../data_dictionary.md)
+4. Document connector patterns — ✅ see "Connector Protocol" in `AGENTS.md`
+5. Then Phase 3: TGJU scraper (Playwright) and Airflow orchestration

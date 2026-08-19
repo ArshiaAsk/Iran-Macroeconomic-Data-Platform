@@ -173,9 +173,10 @@ poetry run alembic upgrade head                              # Apply migrations
 poetry run alembic downgrade -1                              # Rollback one migration
 poetry run alembic check                                     # Detect model drift
 
-# Data pipeline (Phase 3+)
-python -m src.connectors.world_bank               # Run World Bank connector
-airflow dags trigger <dag_id>                     # Trigger Airflow DAG
+# Data pipeline
+poetry run python -m src.connectors.world_bank --dry-run  # Fetch + validate, write nothing
+poetry run python -m src.connectors.world_bank            # Full Bronze → Silver → Gold run
+airflow dags trigger <dag_id>                             # Trigger Airflow DAG (Phase 3)
 ```
 
 ### Project Structure
@@ -184,31 +185,31 @@ airflow dags trigger <dag_id>                     # Trigger Airflow DAG
 iran-macro-platform/
 ├── src/
 │   ├── connectors/          # Data source connectors (APIs + scrapers)
-│   │   ├── base.py          # Abstract DataConnector protocol
-│   │   ├── world_bank.py    # World Bank API connector
-│   │   ├── imf.py           # IMF DataMapper connector
-│   │   ├── tgju_scraper.py  # TGJU FX/gold scraper
-│   │   └── cbi_scraper.py   # CBI TSD monetary data scraper
+│   │   ├── base.py          # Abstract DataConnector base class
+│   │   └── world_bank.py    # World Bank API connector + pipeline entry point
 │   ├── etl/                 # Bronze/Silver/Gold transformations
+│   │   ├── bronze.py        # Raw envelope persistence + collection log
+│   │   ├── silver.py        # Cleaning, validation, idempotent upsert
+│   │   ├── gold.py          # Chain-linked publication + derived growth
+│   │   ├── lineage.py       # TransformationLog audit trail
+│   │   └── pipeline.py      # Bronze → Silver → Gold runner
 │   ├── chain_linking/       # Base year adjustment algorithms
-│   ├── database/            # Schema, migrations, query utilities
-│   └── utils/               # Validation, logging, configuration
-├── dashboard/
-│   ├── app.py               # Streamlit entry point
-│   ├── pages/               # Multi-page dashboard
-│   └── components/          # Reusable UI components
-├── airflow/
-│   ├── dags/                # DAG definitions
-│   └── config/              # Airflow configuration
+│   │   └── splice.py        # Break detection, splice, confidence scoring
+│   ├── database/            # Schema and connection management
+│   └── utils/               # Config, logging, validation, retry/backoff
+├── alembic/                 # Migration environment and versions
+├── dashboard/               # Streamlit app (Phase 7 — not built yet)
+├── airflow/                 # DAG definitions (Phase 3 — not built yet)
 ├── tests/
-│   ├── unit/                # Unit tests
-│   ├── integration/         # Integration tests
-│   └── fixtures/            # Test data
+│   ├── unit/                # Unit tests (no network, no database)
+│   ├── integration/         # Integration tests (PostgreSQL + TimescaleDB)
+│   └── fixtures/            # Captured API payloads
 ├── docs/
 │   ├── research/            # Research documents
-│   ├── architecture.md      # System architecture
-│   └── data_dictionary.md   # Indicator catalog
-├── scripts/                 # Utility scripts
+│   ├── plans/               # Phase implementation plans
+│   ├── phase-1/             # Phase 1 validation + implementation report
+│   └── phase-2/             # Phase 2 Indicator catalog (observed coverage)
+├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies
 ├── Makefile                 # Common commands
@@ -221,31 +222,40 @@ iran-macro-platform/
 1. **Inherit from `DataConnector`:**
 
 ```python
-from src.connectors.base import DataConnector
+from datetime import datetime
+
+import pandas as pd
+
+from src.connectors.base import DataConnector, IndicatorMetadata
+from src.utils.validation import ValidationResult
+
 
 class MySourceConnector(DataConnector):
     def connect(self) -> bool:
-        # Establish connection
-        pass
-    
-    def discover(self) -> List[IndicatorMetadata]:
-        # Discover available indicators
-        pass
-    
-    def fetch(self, indicator_id: str, start_date: date, end_date: date) -> pd.DataFrame:
-        # Fetch time-series data
-        pass
-    
+        """Cheap reachability probe — True if the source is usable."""
+
+    def discover(self) -> list[IndicatorMetadata]:
+        """Describe the available indicators for the catalog."""
+
+    def fetch(
+        self, indicator_id: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
+        """Return a tidy frame; write nothing to the database."""
+
     def validate(self, data: pd.DataFrame) -> ValidationResult:
-        # Validate fetched data
-        pass
+        """Report quality; warn on gaps rather than dropping rows."""
 ```
 
-2. **Store raw data in Bronze layer**
-3. **Add tests with mocked responses**
-4. **Document in `docs/data_dictionary.md`**
+2. **Inject the HTTP session, `RetryPolicy`, and `RateLimiter`** so tests can
+   serve captured payloads with no network and no sleeps
+3. **Store the raw response in the Bronze layer** via `src.etl.bronze`, then run
+   `src.etl.silver` and `src.etl.gold`
+4. **Add unit tests with captured fixtures** under `tests/fixtures/<source>/`
+5. **Document in `docs/phase-2/data_dictionary.md`** with coverage observed from a real
+   run
 
-See `AGENTS.md` for detailed connector implementation guidelines.
+`src/connectors/world_bank.py` is the reference implementation; see `AGENTS.md`
+for the detailed conventions.
 
 ---
 
@@ -253,15 +263,19 @@ See `AGENTS.md` for detailed connector implementation guidelines.
 
 | Source | Type | Indicators | Frequency | Status |
 |--------|------|------------|-----------|--------|
-| **World Bank** | API | GDP, Trade, Inflation | Annual | ✓ Implemented |
-| **IMF DataMapper** | API | Fiscal, External | Quarterly | Planned (Phase 2) |
-| **CBI TSD** | Scraper | Monetary, Banking | Monthly | Planned (Phase 2) |
-| **TGJU** | Scraper | FX, Gold | Daily | Planned (Phase 2) |
-| **SCI** | Scraper | CPI, Labor | Quarterly | Planned (Phase 4) |
-| **TSETMC** | Package | Stock indices | Daily | Planned (Phase 5) |
-| **EIA** | API | Oil prices | Daily | Planned (Phase 5) |
-| **OPEC** | Scraper | Oil production | Monthly | Planned (Phase 6) |
+| **World Bank** | API | GDP, inflation, trade, population, energy (12 indicators) | Annual | ✅ Implemented (Phase 2) |
+| **IMF DataMapper** | API | Fiscal, External | Quarterly | Planned (Phase 4) |
+| **CBI TSD** | Scraper | Monetary, Banking | Monthly | Planned (Phase 5) |
+| **TGJU** | Scraper | FX, Gold | Daily | Planned (Phase 3) |
+| **SCI** | Scraper | CPI, Labor | Quarterly | Planned (Phase 5) |
+| **TSETMC** | Package | Stock indices | Daily | Planned (Phase 6) |
+| **EIA** | API | Oil prices | Daily | Planned (Phase 4) |
+| **OPEC** | Scraper | Oil production | Monthly | Planned (Phase 4) |
 | **HBSIR** | Package | Household surveys | Annual | Planned (Phase 6) |
+
+Phase numbers follow `PRD.md` §7. Every World Bank indicator, its unit, and its
+**observed** coverage for Iran are documented in
+[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md).
 
 ---
 
@@ -279,12 +293,13 @@ make test-integration
 # Everything
 make test-all
 
-# Live API tests (manual only)
-poetry run pytest tests/integration/ -m live
+# Live API tests (manual only — hits the real World Bank API)
+RUN_LIVE_API_TESTS=1 poetry run pytest -m live
 ```
 
-Current status: **53 tests passing** — 40 unit (86.68% coverage) and 13
-integration (95.30% combined).
+Current status: **253 tests passing** — 225 unit (86.94% coverage) and 28
+integration (93.61% combined). The live API test is skipped unless
+`RUN_LIVE_API_TESTS=1` is set.
 
 ### Coverage Requirements
 
@@ -311,8 +326,9 @@ it.
 - **[AGENTS.md](AGENTS.md)** — Project conventions and AI agent guidance
 - **[PRD.md](PRD.md)** — Product requirements and implementation plan
 - **[docs/research/init-research.md](docs/research/init-research.md)** — Data source analysis
-- **[docs/architecture.md](docs/architecture.md)** — System architecture (Phase 2)
-- **[docs/data_dictionary.md](docs/data_dictionary.md)** — Indicator catalog (Phase 2)
+- **[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md)** — Indicator catalog with observed coverage
+- **[docs/phase-1/VALIDATION.md](docs/phase-1/VALIDATION.md)** — Phase 1 validation checklist
+- **[docs/plans/](docs/plans/)** — Per-phase implementation plans
 
 ### Architecture Principles
 
@@ -372,33 +388,42 @@ poetry cache clear . --all
 
 ## Roadmap
 
-### Phase 1: Foundation ✅ (Current)
+### Phase 1: Foundation ✅
 - [x] Project scaffolding with Poetry
 - [x] Docker Compose with PostgreSQL + TimescaleDB
 - [x] Database schema (Bronze/Silver/Gold/Metadata)
 - [x] DataConnector protocol and testing framework
 
-### Phase 2: Core Connectors (Week 3-4)
-- [ ] World Bank API connector
-- [ ] TGJU scraper (FX + gold prices)
-- [ ] End-to-end Bronze → Silver → Gold validation
+### Phase 2: API Connector MVP ✅ (Current)
+- [x] World Bank API connector (12 indicators, retry/backoff, discovery)
+- [x] Bronze → Silver → Gold pipeline with lineage logging
+- [x] Chain-linking algorithm (break detection, splice, confidence scoring)
+- [x] 66 years of Iran macroeconomic data queryable from Gold
+- [x] Data dictionary recorded from a real run
 
-### Phase 3: Orchestration (Week 5)
-- [ ] Airflow local deployment
-- [ ] Daily update DAGs
+### Phase 3: Web Scraper MVP + Orchestration (Week 3-4)
+- [ ] Playwright TGJU scraper (FX + gold prices)
+- [ ] Airflow local deployment and daily update DAGs
 - [ ] Error monitoring and alerts
 
-### Phase 4-6: Connector Expansion (Week 6-8)
-- [ ] All 9 data sources integrated
-- [ ] Chain-linking algorithm implemented
-- [ ] Data quality monitoring
+### Phase 4: Additional APIs (Week 4-5)
+- [ ] IMF DataMapper connector with forecasts
+- [ ] EIA and OPEC energy connectors
 
-### Phase 7: Dashboard (Week 9-10)
+### Phase 5: Complex Domestic Scrapers (Week 5-6)
+- [ ] CBI TSD monetary scraper
+- [ ] SCI CPI/labour scraper with real multi-base-year chain-linking
+
+### Phase 6: Market & Survey Data (Week 6-7)
+- [ ] TSETMC stock market connector
+- [ ] HBSIR household survey connector
+
+### Phase 7: Dashboard (Week 7-8)
 - [ ] Streamlit multi-page app
 - [ ] Domain-specific analytics
 - [ ] Export functionality
 
-### Phase 8: Production Readiness (Week 11-12)
+### Phase 8: Production Readiness (Week 8)
 - [ ] CI/CD pipeline
 - [ ] Backup automation
 - [ ] Performance optimization
@@ -438,4 +463,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** [Your Name]  
-**Project Status:** Phase 1 Foundation (In Development)
+**Project Status:** Phase 2 API Connector MVP complete — Phase 3 (TGJU scraper + Airflow) next
