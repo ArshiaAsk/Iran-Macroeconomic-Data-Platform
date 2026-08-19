@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Planning & Initial Setup (Pre-implementation)
+* **Lifecycle Stage:** Active implementation — Phase 1 (foundation) and Phase 2 (World Bank connector, ETL pipeline, chain-linking) complete; Phase 3 (TGJU scraper + Airflow) next
 
 ## Tech Stack
 
@@ -62,8 +62,9 @@ poetry run alembic revision --autogenerate # Create new migration
 poetry run alembic check                   # Detect model/database drift
 
 # Data Pipeline
-python -m src.connectors.world_bank  # Run World Bank connector
-airflow dags trigger <dag_id>        # Trigger specific DAG
+poetry run python -m src.connectors.world_bank --dry-run  # Fetch + validate, write nothing
+poetry run python -m src.connectors.world_bank            # Full Bronze → Silver → Gold run
+airflow dags trigger <dag_id>        # Trigger specific DAG (Phase 3)
 
 # Dashboard
 streamlit run dashboard/app.py    # Launch interactive dashboard
@@ -81,31 +82,24 @@ iran-macro-platform/
 │   ├── connectors/          # Data source connectors (APIs + scrapers)
 │   │   ├── base.py          # Abstract DataConnector protocol
 │   │   ├── world_bank.py    # World Bank API connector ✓ IMPLEMENTED
-│   │   ├── imf.py           # IMF DataMapper connector
-│   │   ├── tgju_scraper.py  # TGJU FX/gold scraper
-│   │   ├── cbi_scraper.py   # CBI TSD monetary data scraper
-│   │   └── ...              # Additional connectors
-│   ├── etl/                 # Bronze/Silver/Gold transformations
-│   ├── chain_linking/       # Base year adjustment algorithms
-│   ├── database/            # Schema, migrations, query utilities
-│   └── utils/               # Validation, logging, configuration
-├── dashboard/
-│   ├── app.py               # Streamlit entry point
-│   ├── pages/               # Multi-page dashboard (domain-specific views)
-│   └── components/          # Reusable UI components
-├── airflow/
-│   ├── dags/                # DAG definitions for scheduling
-│   └── config/              # Airflow configuration
+│   │   └── ...              # imf.py, tgju_scraper.py, cbi_scraper.py — later phases
+│   ├── etl/                 # Bronze/Silver/Gold transformations ✓ IMPLEMENTED
+│   ├── chain_linking/       # Base year adjustment algorithms ✓ IMPLEMENTED
+│   ├── database/            # Schema, connection, hypertable setup
+│   └── utils/               # Validation, logging, configuration, retry
+├── alembic/                 # Migration environment and versions
+├── dashboard/               # Streamlit app — Phase 7
+├── airflow/                 # DAG definitions — Phase 3
 ├── tests/
 │   ├── unit/                # Unit tests for all modules
 │   ├── integration/         # Integration tests (ETL + DB)
-│   └── fixtures/            # Test data and mock responses
+│   └── fixtures/            # Captured API payloads
 ├── docs/
 │   ├── research/            # Research documents
-│   ├── architecture.md      # System architecture
-│   ├── data_dictionary.md   # Indicator catalog
-│   └── runbooks/            # Operational procedures
-├── scripts/                 # Utility scripts (backup, monitoring)
+│   ├── plans/               # Per-phase implementation plans
+│   ├── phase-1/             # Phase 1 validation + implementation report
+│   └── phase-2/             # Phase 2 Indicator catalog ✓ CREATED
+├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
 ├── Makefile                 # Common commands
@@ -168,7 +162,7 @@ iran-macro-platform/
 * **Chain-Linking First:** Any base year changes MUST be automatically chain-linked before Gold layer
 * **Preserve Raw Data:** Always store raw responses in Bronze layer (allows re-parsing without re-scraping)
 * **Audit Everything:** Log all transformations with lineage metadata (source, timestamp, transformation_type)
-* **No Data Leakage:** When implementing forecasting (Phase 2), strictly enforce temporal splits
+* **No Data Leakage:** When implementing forecasting, strictly enforce temporal splits
 * **Frequency Handling:** Document frequency at ingestion; transformations must preserve temporal integrity
 * **Persian Calendar:** Always convert Persian (Jalali) dates to Gregorian for storage; keep original in metadata
 
@@ -209,19 +203,53 @@ class DataConnector(ABC):
     @abstractmethod
     def connect(self) -> bool:
         """Establish connection to data source"""
-    
+
     @abstractmethod
-    def discover(self) -> List[IndicatorMetadata]:
+    def discover(self) -> list[IndicatorMetadata]:
         """Discover available indicators"""
-    
+
     @abstractmethod
-    def fetch(self, indicator_id: str, start_date: date, end_date: date) -> pd.DataFrame:
+    def fetch(self, indicator_id: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Fetch time-series data"""
-    
+
     @abstractmethod
     def validate(self, data: pd.DataFrame) -> ValidationResult:
         """Validate fetched data"""
 ```
+
+**Implementation pattern** (established by `src/connectors/world_bank.py`, the
+reference implementation — copy it rather than redesigning):
+
+```python
+class MySourceConnector(DataConnector):
+    def __init__(
+        self,
+        config: MySourceConfig | None = None,
+        http_session: requests.Session | None = None,   # injected in tests
+        retry_policy: RetryPolicy | None = None,        # injected in tests
+        rate_limiter: RateLimiter | None = None,        # injected in tests
+    ) -> None: ...
+```
+
+- **Inject the transport, `RetryPolicy`, and `RateLimiter`.** Unit tests pass a
+  fake session plus no-op sleeps, so the whole suite runs with no network and no
+  wall-clock cost. Real runs build them from configuration.
+- **Own what you create.** `disconnect()` closes the session only when the
+  connector created it; an injected session is the caller's to close. The class
+  is a context manager, so `with Connector(...) as c:` cleans up.
+- **`fetch()` returns a DataFrame and writes nothing.** Bronze needs the raw
+  response too, so add a richer method (`fetch_series()` → a result object
+  carrying `frame`, `raw_envelope`, `request_url`, `http_status_code`,
+  `pages_fetched`, `source_last_updated`) and let the pipeline persist it. This
+  keeps the connector testable without a database.
+- **`discover()` describes indicators, not coverage.** Leave
+  `availability_start` / `availability_end` as `None` when the source cannot
+  report per-country coverage; the pipeline fills them from the observations it
+  actually stored.
+- **Config is a frozen dataclass with defaults from `get_config()`** — no
+  hardcoded URLs, timeouts, or page sizes in the logic.
+- **The pipeline runner is separate** (`src/etl/pipeline.py`) and uses one
+  committed session per indicator, so one bad indicator cannot abort the batch.
 
 ### Orchestration
 
@@ -392,12 +420,20 @@ class DataConnector(ABC):
 | `docker-compose.yml` | PostgreSQL + TimescaleDB local setup |
 | `Makefile` | Common commands (format, lint, test, check, db-*) |
 | `src/connectors/base.py` | Abstract DataConnector protocol |
+| `src/connectors/world_bank.py` | World Bank connector + `python -m` pipeline entry point (reference implementation) |
+| `src/etl/bronze.py` | Raw envelope persistence + `DataCollectionLog` |
+| `src/etl/silver.py` | Cleaning, outlier flagging, idempotent upsert |
+| `src/etl/gold.py` | Chain-linked publication + derived growth series |
+| `src/etl/lineage.py` | `TransformationLog` audit trail (records failures out of band) |
+| `src/etl/pipeline.py` | Bronze → Silver → Gold runner, one session per indicator |
+| `src/utils/retry.py` | Retry/backoff policy and rate limiter |
 | `src/database/schema.py` | SQLAlchemy models for all layers |
 | `src/database/connection.py` | Engine, session management, hypertable setup |
 | `alembic/versions/20260817_1456_initial_schema.py` | Initial migration (all 4 schemas + hypertable) |
-| `src/chain_linking/splice.py` | Chain-linking algorithm - *to be implemented (Phase 2)* |
+| `alembic/versions/20260819_1236_silver_unique_constraint.py` | `uq_silver_indicator_timestamp` (Silver idempotency) |
+| `src/chain_linking/splice.py` | Chain-linking algorithm (break detection, splice, confidence) |
 | `dashboard/app.py` | Streamlit entry point - *to be implemented (Phase 7)* |
-| `docs/data_dictionary.md` | Complete indicator catalog with metadata - *to be created (Phase 2)* |
+| `docs/phase-2/data_dictionary.md` | Indicator catalog with coverage observed from a real run |
 
 ## Important Constraints
 
@@ -435,6 +471,8 @@ class DataConnector(ABC):
 |-------|------|
 | Research & Data Sources | `docs/research/init-research.md` |
 | Product Requirements | `PRD.md` |
+| Loaded indicators, units, observed coverage | `docs/phase-2/data_dictionary.md` |
+| Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents
 
@@ -448,10 +486,12 @@ class DataConnector(ABC):
 ### When Adding New Connectors
 
 1. **Follow connector protocol:** Inherit from `DataConnector`, implement all abstract methods (connect, discover, fetch, validate)
-2. **Bronze first:** Store raw responses before parsing (allows re-parsing without re-scraping)
-3. **Test with fixtures:** Don't hit live APIs in unit tests; use mocked responses
-4. **Document limitations:** Note data gaps, frequency, update schedules in docstrings
-5. **Handle errors gracefully:** Use custom exception hierarchy (ConnectionError, DataRetrievalError, ValidationError)
+2. **Copy the reference implementation:** `src/connectors/world_bank.py` — inject the session, `RetryPolicy`, and `RateLimiter` so unit tests need no network and no sleeps
+3. **Bronze first:** Store raw responses before parsing (allows re-parsing without re-scraping)
+4. **Test with fixtures:** Don't hit live APIs in unit tests; capture real payloads under `tests/fixtures/<source>/` and gate any live test behind `RUN_LIVE_API_TESTS=1` and `@pytest.mark.live()`
+5. **Make re-runs idempotent:** Silver upserts on `(indicator_id, timestamp)`; Gold deletes and reinserts per indicator
+6. **Document limitations:** Note data gaps, frequency, update schedules in docstrings, and add the indicators to `docs/phase-2/data_dictionary.md` with coverage observed from a real run
+7. **Handle errors gracefully:** Use custom exception hierarchy (ConnectionError, DataRetrievalError, ValidationError)
 
 ### When Debugging Scrapers
 

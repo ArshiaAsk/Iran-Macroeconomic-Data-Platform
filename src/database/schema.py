@@ -22,6 +22,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -78,6 +79,10 @@ class SilverCleaned(Base):
     __table_args__ = (
         Index("idx_silver_indicator_timestamp", "indicator_id", "timestamp"),
         Index("idx_silver_source", "source_name"),
+        # One observation per (indicator, timestamp): enforces AGENTS.md's
+        # "reject duplicate (indicator_id, timestamp)" rule at the database level
+        # and gives the Silver writer a conflict target for idempotent upserts.
+        UniqueConstraint("indicator_id", "timestamp", name="uq_silver_indicator_timestamp"),
         {"schema": "silver"},
     )
 

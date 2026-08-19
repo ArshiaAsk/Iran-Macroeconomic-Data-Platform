@@ -440,27 +440,28 @@ No issues — documentation updated to match validated reality.
 
 ## Next Steps (Phase 2)
 
-After validation passes:
+After validation passes. Phase boundaries follow `PRD.md` §7 — the TGJU scraper
+is **Phase 3**, not Phase 2:
 
-1. **Implement World Bank Connector**
+1. **Implement World Bank Connector** — ✅ done
    - Use DataConnector base class
    - Bronze → Silver → Gold flow
-   - Unit tests with mocked responses
+   - Unit tests with captured fixtures
 
-2. **Implement TGJU Scraper**
-   - Playwright-based scraping
-   - Persian number parsing
-   - Rate limiting and retry logic
-
-3. **End-to-End Validation**
+2. **End-to-End Validation** — ✅ done
    - Test complete data pipeline
    - Verify TimescaleDB performance
-   - Create data dictionary
+   - Create data dictionary (`docs/phase-2/data_dictionary.md`)
 
-4. **Chain-Linking Algorithm**
+3. **Chain-Linking Algorithm** — ✅ done (`src/chain_linking/splice.py`)
    - Implement splice method
    - Base year overlap detection
    - Confidence scoring
+
+4. **Then Phase 3: TGJU Scraper + Orchestration**
+   - Playwright-based scraping
+   - Persian number parsing
+   - Airflow DAGs for scheduled collection
 
 ---
 

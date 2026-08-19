@@ -1,0 +1,268 @@
+[
+  {
+    "page": 2,
+    "pages": 2,
+    "per_page": 50,
+    "total": 66,
+    "sourceid": "2",
+    "lastupdated": "2026-07-13"
+  },
+  [
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1975",
+      "value": 12.8791818338341,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1974",
+      "value": 14.2489355382567,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1973",
+      "value": 9.81948673318762,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1972",
+      "value": 6.39824135128871,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1971",
+      "value": 4.19529837265423,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1970",
+      "value": 1.66687093970068,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1969",
+      "value": 3.59319451551281,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1968",
+      "value": 0.690360521996233,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1967",
+      "value": 1.59761007964354,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1966",
+      "value": -0.388148532154432,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1965",
+      "value": 2.15437483520967,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1964",
+      "value": 3.81448957223043,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1963",
+      "value": 0.371849607221666,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1962",
+      "value": 0.721320571656337,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1961",
+      "value": 3.16256439585745,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    },
+    {
+      "indicator": {
+        "id": "FP.CPI.TOTL.ZG",
+        "value": "Inflation, consumer prices (annual %)"
+      },
+      "country": {
+        "id": "IR",
+        "value": "Iran, Islamic Rep."
+      },
+      "countryiso3code": "IRN",
+      "date": "1960",
+      "value": 9.82241081297867,
+      "unit": "",
+      "obs_status": "",
+      "decimal": 1
+    }
+  ]
+]
