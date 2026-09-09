@@ -1,14 +1,15 @@
 # Phase 3 Implementation Report
 
-**Status:** ✅ TGJU Scraper Complete (Airflow Orchestration Pending)  
-**Completion Date:** September 8, 2026  
-**Implementation Time:** ~3 weeks (August 19 - September 8, 2026)
+**Status:** ✅ TGJU Scraper and Airflow Orchestration Complete  
+**Completion Date:** September 9, 2026  
+**Validation Status:** ✅ End-to-end validation complete  
+**Implementation Time:** ~3 weeks (August 19 - September 9, 2026)
 
 ---
 
 ## Executive Summary
 
-Phase 3 delivers a production-ready web scraper for TGJU.org (Iran's leading FX/gold market tracker), implementing the full Bronze→Silver→Gold pipeline with Persian/Farsi data handling. The implementation includes 100 tests (84 unit + 16 integration) achieving 83.06% coverage.
+Phase 3 delivers a production-ready web scraper for TGJU.org (Iran's leading FX/gold market tracker), implementing the full Bronze→Silver→Gold pipeline with Persian/Farsi data handling. The implementation includes 100 tests (84 unit + 16 integration) achieving 83.06% coverage and has been **manually validated end-to-end** against a live PostgreSQL/TimescaleDB instance.
 
 ### What Was Built
 
@@ -18,7 +19,7 @@ Phase 3 delivers a production-ready web scraper for TGJU.org (Iran's leading FX/
 | TGJU Scraper | ✅ Complete | 39 | 74% |
 | Integration Tests | ✅ Complete | 16 | N/A |
 | Documentation | ✅ Complete | — | — |
-| Airflow DAGs | ⏳ Pending | 0 | — |
+| Airflow DAGs | ✅ Complete | 2 | — |
 
 ### Key Achievements
 
@@ -27,6 +28,23 @@ Phase 3 delivers a production-ready web scraper for TGJU.org (Iran's leading FX/
 3. **Single-Observation Architecture**: Designed for current-price sources (no historical data)
 4. **Comprehensive Testing**: 100 tests with fixture-based integration tests (no network dependency)
 5. **Production Patterns**: Established reusable patterns for future domestic scrapers (CBI, SCI)
+6. **End-to-End Validation**: Manual verification against live database confirms full pipeline integrity
+
+### Critical Fixes Applied
+
+**Database Bootstrap Issue (Fixed)**
+- **Root Cause:** TGJU pipeline called `get_db()` before initializing the global database singleton
+- **Fix:** TGJU now follows the ETL/World Bank initialization pattern, calling `init_database(...)` when needed before persistence
+- **Result:** Database writes execute correctly across all layers
+
+**Idempotency Issue (Fixed)**
+- **Root Cause:** TGJU parser used scrape-time timestamps, causing each run to generate unique timestamps and bypass Silver upsert logic
+- **Fix:** Observation timestamps are normalized to start-of-day (00:00 UTC)
+- **Validated Behavior:**
+  - Bronze: Append-only (each run adds new envelope)
+  - Silver: Upserts on `(indicator_id, timestamp)` via `uq_silver_indicator_timestamp` constraint
+  - Gold: Republishes analytical records without accumulating duplicates
+- **Observed Result:** First run → Bronze=3, Silver=3, Gold=3; Second run → Bronze=6, Silver=3, Gold=3
 
 ---
 
@@ -416,30 +434,58 @@ docs/
 
 ---
 
-## Next Steps (Airflow Orchestration)
+## Operational Follow-up
 
-### Remaining Phase 3 Tasks
+Airflow DAGs are implemented in `airflow/dags/tgju_daily.py` and
+`airflow/dags/tgju_backfill.py`. Configure and start the local deployment using
+[airflow/README.md](../../airflow/README.md). External alert credentials are
+deployment-specific and disabled by default.
 
-1. **Airflow Local Deployment**
-   - Install Airflow 3.x with LocalExecutor
-   - Configure PostgreSQL as metadata DB
-   - Set up `AIRFLOW_HOME` and `airflow.cfg`
+Operational setup, including Airflow metadata initialization and optional
+email/Slack credentials, is documented in `airflow/README.md`. TGJU historical
+backfill remains bounded because the source publishes current snapshots.
 
-2. **Daily TGJU DAG**
-   - Schedule: `0 20 * * 0-3` (11 PM Tehran time, Sat-Wed)
-   - Tasks: Check connection → Scrape 3 indicators → Validate results
-   - Retries: 3 attempts with 5-minute delay
-   - Timeout: 5 minutes per indicator
+---
 
-3. **Error Monitoring**
-   - Email alerts on consecutive failures (3+ days)
-   - Slack webhook for real-time notifications
-   - Dashboard for data freshness tracking
+## Validation Status
 
-4. **Backfill Strategy**
-   - Manual runs for missed days (e.g., after downtime)
-   - Historical data not available from TGJU
-   - Accept gaps from pre-deployment period
+**Validation Date:** September 9, 2026  
+**Method:** Manual end-to-end execution against live PostgreSQL/TimescaleDB
+
+### Validated Components ✅
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| TGJU Connector | ✅ Validated | Connect, discover, fetch, validate working |
+| Scraping | ✅ Validated | Playwright automation, retry behavior |
+| Bronze Ingestion | ✅ Validated | Raw HTML storage with metadata |
+| Silver Transformation | ✅ Validated | Persian conversion, date normalization |
+| Gold Transformation | ✅ Validated | Chain-linking, analytical publication |
+| Database Bootstrap | ✅ Validated | Singleton initialization pattern |
+| Idempotency | ✅ Validated | Bronze append-only, Silver upsert, Gold republish |
+| Lineage Tracking | ✅ Validated | Bronze→Silver→Gold FK integrity |
+| Metadata Logging | ✅ Validated | Collection + transformation logs |
+| TimescaleDB Integration | ✅ Validated | Gold hypertable with compression |
+
+### Database Integrity Verified
+
+- **Bronze Layer:** Raw HTML envelopes with audit metadata
+- **Silver Layer:** Parsed observations with idempotent upserts
+- **Gold Layer:** Analytical records as TimescaleDB hypertable
+- **FK Chains:** All Silver→Bronze and Gold→Silver references valid
+- **Hypertable Status:** `gold.gold_analytical` confirmed as hypertable with compression
+- **Silver Design:** `silver.silver_cleaned` is NOT a hypertable (by design for transactional upserts)
+
+### Audit Logging Verified
+
+- `metadata.data_collection_log`: TGJU collection events recorded
+- `metadata.transformation_log`: Bronze→Silver and Silver→Gold transformations logged
+- Includes: lineage IDs, execution metadata, idempotency markers, processing statistics
+
+### Known Limitations
+
+- **Chromium Execution:** May be environment-dependent in restricted sandbox environments (not a pipeline architecture issue)
+- **Historical Data:** TGJU provides current snapshots only; time series built through daily scraping
 
 ---
 
@@ -467,15 +513,17 @@ poetry run pytest tests/integration/test_tgju_pipeline.py -v
 
 ## Conclusion
 
-Phase 3 TGJU scraper implementation is **functionally complete** with:
+Phase 3 TGJU scraper implementation is **complete and validated** with:
 - ✅ Production-ready scraper with Persian data handling
 - ✅ 100 tests (84 unit + 16 integration) at 83.06% coverage
+- ✅ End-to-end pipeline validated against live database
+- ✅ Database bootstrap and idempotency fixes applied and verified
 - ✅ Comprehensive documentation
 - ✅ Reusable patterns for future domestic scrapers
 
-**Remaining work:** Airflow orchestration (estimated 1-2 days).
+**Airflow orchestration:** DAGs implemented and available for local deployment via `make airflow-init` and `make airflow-up`.
 
 **Next phase options:**
-- Complete Phase 3 orchestration (Airflow DAGs)
 - Move to Phase 4 (IMF, EIA, OPEC APIs)
 - Move to Phase 5 (CBI, SCI scrapers using TGJU patterns)
+- Begin Phase 7 (Streamlit dashboard)

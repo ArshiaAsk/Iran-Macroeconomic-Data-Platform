@@ -295,7 +295,11 @@ class TestIntegration:
         fixtures = [
             ("usd_normal.html", "TGJU.USD.FREE", 2255000.0),
             ("coin_emami_normal.html", "TGJU.COIN.EMAMI", 2340100000.0),
-            ("gold_18k_normal.html", "TGJU.GOLD.18K", 234602000.0),  # Updated to actual fixture value
+            (
+                "gold_18k_normal.html",
+                "TGJU.GOLD.18K",
+                234602000.0,
+            ),  # Updated to actual fixture value
         ]
 
         for fixture_name, indicator_id, expected_price in fixtures:

@@ -59,11 +59,9 @@ class CollectionConfig(BaseSettings):
     retry_max: int = Field(default=3, alias="COLLECTION_RETRY_MAX")
     timeout: int = Field(default=30, alias="COLLECTION_TIMEOUT")
     user_agent_rotation: bool = Field(default=True, alias="USER_AGENT_ROTATION")
-    
+
     # Scraper-specific settings
-    scraper_min_request_interval: float = Field(
-        default=1.0, alias="SCRAPER_MIN_REQUEST_INTERVAL"
-    )
+    scraper_min_request_interval: float = Field(default=1.0, alias="SCRAPER_MIN_REQUEST_INTERVAL")
     scraper_page_timeout: int = Field(default=30, alias="SCRAPER_PAGE_TIMEOUT")
 
     model_config = SettingsConfigDict(

@@ -9,10 +9,10 @@ from datetime import datetime
 
 import pendulum
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 
-def _run_tgju_backfill(**context) -> None:
+def _run_tgju_backfill(**context: object) -> None:
     """
     Task callable: backfill TGJU instruments for a date range.
 
@@ -52,9 +52,7 @@ def _run_tgju_backfill(**context) -> None:
         start_date = datetime.fromisoformat(start_date_str)
         end_date = datetime.fromisoformat(end_date_str)
     except ValueError as exc:
-        raise AirflowException(
-            f"Invalid date format: {exc}. Use ISO8601 (YYYY-MM-DD)"
-        ) from exc
+        raise AirflowException(f"Invalid date format: {exc}. Use ISO8601 (YYYY-MM-DD)") from exc
 
     if start_date > end_date:
         raise AirflowException(
@@ -62,11 +60,7 @@ def _run_tgju_backfill(**context) -> None:
         )
 
     # Parse paths if provided
-    paths = (
-        tuple(p.strip() for p in paths_str.split(",") if p.strip())
-        if paths_str
-        else None
-    )
+    paths = tuple(p.strip() for p in paths_str.split(",") if p.strip()) if paths_str else None
 
     log_with_context(
         logger,
@@ -85,7 +79,7 @@ def _run_tgju_backfill(**context) -> None:
     #
     # For now, this DAG demonstrates the backfill *pattern* by scraping the
     # current state. Future enhancement would integrate a true historical source.
-    
+
     summary = run_tgju_pipeline(paths=paths, dry_run=False)
 
     log_with_context(
@@ -102,12 +96,10 @@ def _run_tgju_backfill(**context) -> None:
     )
 
     if summary.failed:
-        raise AirflowException(
-            f"TGJU backfill failed for {len(summary.failed)} instruments"
-        )
+        raise AirflowException(f"TGJU backfill failed for {len(summary.failed)} instruments")
 
 
-def _on_failure_callback(context: dict) -> None:
+def _on_failure_callback(context: dict[str, object]) -> None:
     """
     Alert on backfill task failure.
 
@@ -160,6 +152,5 @@ backfill_task = PythonOperator(
     task_id="backfill_tgju_instruments",
     python_callable=_run_tgju_backfill,
     on_failure_callback=_on_failure_callback,
-    provide_context=True,
     dag=dag,
 )

@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phase 1 (foundation) and Phase 2 (World Bank connector, ETL pipeline, chain-linking) complete; Phase 3 (TGJU scraper + Airflow) next
+* **Lifecycle Stage:** Active implementation — Phase 1 (foundation), Phase 2 (World Bank connector, ETL pipeline, chain-linking), and Phase 3 (TGJU scraper + Airflow) complete; Phase 4 (IMF/EIA/OPEC APIs) or Phase 7 (Dashboard) next
 
 ## Tech Stack
 

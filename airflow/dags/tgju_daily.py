@@ -5,11 +5,11 @@ Schedule: 23:00 Asia/Tehran (nightly, after markets close)
 Catchup: Disabled (no backfill on DAG activation)
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pendulum
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 
 def _run_tgju_scrape() -> None:
@@ -48,7 +48,7 @@ def _run_tgju_scrape() -> None:
         )
 
 
-def _on_failure_callback(context: dict) -> None:
+def _on_failure_callback(context: dict[str, object]) -> None:
     """
     Alert on repeated task failures.
 

@@ -124,7 +124,16 @@ def derived_ma30_indicator_id(indicator_id: str, prefix: str) -> str:
 
 def _resolve_catalog_entry(session: Session, indicator_id: str) -> IndicatorCatalog | None:
     """Look up an indicator's catalog row, if it has been seeded."""
-    return session.get(IndicatorCatalog, indicator_id)
+    catalog = session.get(IndicatorCatalog, indicator_id)
+    if catalog is not None:
+        return catalog
+
+    # A few Session-compatible adapters do not implement primary-key lookup
+    # consistently, while still supporting the normal query interface.
+    matches = (
+        session.query(IndicatorCatalog).filter(IndicatorCatalog.indicator_id == indicator_id).all()
+    )
+    return matches[0] if matches else None
 
 
 def _resolve_domain(catalog: IndicatorCatalog | None, indicator_id: str, domain: str | None) -> str:
@@ -530,11 +539,11 @@ def silver_to_gold(
         stamped = utc_now()
 
         records = _level_records(linked, result, series, resolved_domain, stamped)
-        
+
         # Apply derivation strategy
         derived_records: list[dict[str, Any]] = []
         derived_ids: list[str] = []
-        
+
         if include_growth:
             if derivation_strategy == "yoy":
                 # Year-over-year growth for annual/quarterly/monthly data

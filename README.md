@@ -399,12 +399,14 @@ poetry cache clear . --all
 - [x] 66 years of Iran macroeconomic data queryable from Gold
 - [x] Data dictionary recorded from a real run
 
-### Phase 3: Web Scraper MVP + Orchestration (Week 3-4)
+### Phase 3: Web Scraper MVP + Orchestration ✅ COMPLETE
 - [x] Playwright TGJU scraper (FX + gold prices)
 - [x] TGJU parser with Persian number handling
 - [x] Integration tests for Bronze → Silver → Gold roundtrip
-- [ ] Airflow local deployment and daily update DAGs
-- [ ] Error monitoring and alerts
+- [x] Database bootstrap fix (singleton initialization pattern)
+- [x] Idempotency fix (timestamp normalization)
+- [x] End-to-end validation against live PostgreSQL/TimescaleDB
+- [x] Airflow DAGs implemented (local deployment ready)
 
 ### Phase 4: Additional APIs (Week 4-5)
 - [ ] IMF DataMapper connector with forecasts
@@ -463,4 +465,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** [Your Name]  
-**Project Status:** Phase 2 API Connector MVP complete — Phase 3 (TGJU scraper + Airflow) next
+**Project Status:** Phase 3 complete and validated — Phase 4 (IMF/EIA/OPEC APIs) or Phase 7 (Dashboard) next

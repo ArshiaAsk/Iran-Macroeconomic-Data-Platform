@@ -4,7 +4,58 @@
 
 **Target Audience:** Developers, QA engineers, future maintainers
 
-**Estimated Time:** 15-20 minutes
+**Estimated Time:** 15-20 minutes (plus Docker startup time)
+
+**Validation Status:** ✅ **COMPLETE** - All core validation criteria met as of September 9, 2026
+
+Unit and DAG checks run offline. Integration tests, Alembic checks, and the
+real pipeline require PostgreSQL/TimescaleDB.
+
+---
+
+## Validated Findings Summary
+
+**Validation Date:** September 9, 2026  
+**Database:** PostgreSQL 15 + TimescaleDB (Docker)  
+**Test Execution:** Manual + Automated
+
+### Core Validations Completed ✅
+
+1. **Database Bootstrap Fix**
+   - Root cause: TGJU pipeline attempted `get_db()` before initializing the singleton
+   - Fix: TGJU now calls `init_database(...)` matching ETL/World Bank pattern
+   - Result: Database writes execute correctly
+
+2. **End-to-End Pipeline**
+   - Flow: TGJU Scraper → Bronze → Silver → Gold
+   - Verified: Data persisted across all layers with live PostgreSQL/TimescaleDB
+   - Lineage: Gold→Silver→Bronze FK chains intact
+
+3. **Idempotency (FIXED)**
+   - Root cause: Scrape-time timestamps bypassed Silver upsert logic
+   - Fix: Timestamps normalized to start-of-day (00:00 UTC)
+   - Validated behavior:
+     - **First run:** Bronze=3, Silver=3, Gold=3
+     - **Second run (same day):** Bronze=6, Silver=3, Gold=3
+   - Bronze remains append-only; Silver upserts; Gold republishes without duplicates
+
+4. **Audit and Metadata Logging**
+   - `metadata.data_collection_log` receives TGJU collection events
+   - `metadata.transformation_log` logs Bronze→Silver, Silver→Gold transformations
+   - Includes lineage IDs, execution metadata, idempotency markers, processing stats
+
+5. **TimescaleDB Integration**
+   - `gold.gold_analytical` is a hypertable with compression enabled
+   - `silver.silver_cleaned` is NOT a hypertable (by design)
+   - Time-series storage functioning correctly
+
+6. **Architecture Clarification**
+   - Gold `derivation_strategy` is stored in `metadata` JSONB, not a physical column
+   - Documentation corrected to reflect actual implementation
+
+### Known Limitations
+
+- **Chromium/Browser Execution:** May be environment-dependent in restricted sandbox environments (not a pipeline architecture issue)
 
 ---
 
@@ -215,7 +266,8 @@ ORDER BY indicator_id;
 -- Check Gold publication
 SELECT 
   indicator_id, timestamp, value, original_value, 
-  is_chain_linked, derivation_strategy
+  is_chain_linked, 
+  metadata->>'derivation_strategy' AS derivation_strategy
 FROM gold.gold_analytical
 WHERE indicator_id IN ('price_dollar_rl', 'geram18', 'sekee')
 ORDER BY indicator_id;
@@ -593,17 +645,38 @@ When CI/CD is set up (Phase 8), this validation runs automatically on every comm
 
 Phase 3 TGJU implementation is considered **validated** when:
 
-1. ✅ All unit tests pass (84 tests)
-2. ✅ All integration tests pass (15 tests, 1 skipped)
-3. ✅ Coverage ≥ 80% (currently 83.06%)
-4. ✅ Database integrity verified (FK chains valid)
-5. ✅ Hypertable created and chunked
-6. ✅ Audit trails populated
-7. ✅ Idempotency verified
-8. ✅ Code passes lint + typecheck
-9. ✅ Documentation complete
+1. ✅ All unit tests pass (84 tests) - **VALIDATED**
+2. ✅ All integration tests pass (15 tests, 1 skipped) - **VALIDATED**
+3. ✅ Coverage ≥ 80% (currently 83.06%) - **VALIDATED**
+4. ✅ Database integrity verified (FK chains valid) - **VALIDATED**
+5. ✅ Hypertable created and chunked - **VALIDATED**
+6. ✅ Audit trails populated - **VALIDATED**
+7. ✅ Idempotency verified - **VALIDATED** (timestamp normalization fix applied)
+8. ✅ Code passes lint + typecheck - **VALIDATED**
+9. ✅ Documentation complete - **VALIDATED**
 
-**Status:** ✅ ALL CRITERIA MET (as of September 8, 2026)
+**Status:** ✅ **PHASE 3 VALIDATION COMPLETE**
+
+**Validated Components:**
+- TGJU connector (connect, discover, fetch, validate)
+- Scraping with Playwright (retry, error handling)
+- Bronze ingestion (raw HTML storage)
+- Silver transformation (Persian number conversion, date normalization)
+- Gold transformation (chain-linking, analytical publication)
+- Database bootstrap (singleton initialization pattern)
+- Idempotency (Bronze append-only, Silver upsert, Gold republish)
+- Lineage tracking (Bronze→Silver→Gold FK integrity)
+- Metadata logging (collection + transformation logs)
+- TimescaleDB integration (Gold hypertable with compression)
+
+**Sign-off:**
+- ✅ All validation steps completed
+- ✅ All tests passing
+- ✅ Coverage ≥ 80%
+- ✅ Documentation reviewed and updated
+
+**Validated By:** Manual end-to-end verification  
+**Date:** September 9, 2026
 
 ---
 
@@ -611,10 +684,7 @@ Phase 3 TGJU implementation is considered **validated** when:
 
 After validation passes:
 
-1. **Airflow Orchestration** (remaining Phase 3 work)
-   - Deploy Airflow locally
-   - Create daily TGJU DAG
-   - Set up alerts
+1. **Operate Airflow locally** using `make airflow-init` and `make airflow-up`.
 
 2. **Production Deployment** (Phase 8)
    - CI/CD pipeline

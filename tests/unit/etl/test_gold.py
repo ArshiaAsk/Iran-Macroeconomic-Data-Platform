@@ -554,7 +554,6 @@ def test_load_gold_series_is_empty_for_an_unpublished_indicator(
     assert load_gold_series(fake_session, GDP).empty  # type: ignore[arg-type]
 
 
-
 # ---------------------------------------------------------------- daily metrics derivation
 
 
@@ -585,10 +584,10 @@ def seed_daily_silver(
     """Seed a daily price series for testing daily metrics."""
     rows: list[SilverCleaned] = []
     base_value = 1000.0
-    
+
     for day_offset in range(days):
         # Simple growth pattern: 1% daily growth
-        value = base_value * (1.01 ** day_offset)
+        value = base_value * (1.01**day_offset)
         row = SilverCleaned(
             indicator_id=indicator_id,
             timestamp=datetime(2026, 9, 1, tzinfo=UTC) + pd.Timedelta(days=day_offset),
@@ -601,7 +600,7 @@ def seed_daily_silver(
         row.id = uuid4()
         rows.append(row)
         session.add(row)
-    
+
     return rows
 
 
@@ -622,19 +621,19 @@ def test_silver_to_gold_daily_strategy_derives_ret1d() -> None:
     ret1d_rows = [
         r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
     ]
-    
+
     # Should have 9 RET1D rows (first day has no prior value)
     assert len(ret1d_rows) == 9
-    
+
     # All RET1D rows should have derivation_method = "ret1d"
     assert all(r.derivation_method == "ret1d" for r in ret1d_rows)
-    
+
     # Unit should be "%" for returns
     assert all(r.unit == "%" for r in ret1d_rows)
-    
+
     # is_chain_linked should be False (passthrough)
     assert all(r.is_chain_linked is False for r in ret1d_rows)
-    
+
     # confidence should be None (not chain-linked)
     assert all(r.confidence is None for r in ret1d_rows)
 
@@ -656,13 +655,13 @@ def test_silver_to_gold_daily_strategy_derives_ma30() -> None:
     ma30_rows = [
         r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
     ]
-    
+
     # Should have 11 MA30 rows (first 29 days have insufficient data)
     assert len(ma30_rows) == 11
-    
+
     # All MA30 rows should have derivation_method = "ma30"
     assert all(r.derivation_method == "ma30" for r in ma30_rows)
-    
+
     # is_chain_linked should be False (passthrough)
     assert all(r.is_chain_linked is False for r in ma30_rows)
 
@@ -686,7 +685,7 @@ def test_daily_ret1d_values_are_correct() -> None:
         row.id = uuid4()
         simple_rows.append(row)
         session.add(row)
-    
+
     catalog_entry_daily(session, "TEST.PRICE", domain="test", frequency="daily")
 
     silver_to_gold(session, "TEST.PRICE", derivation_strategy="daily", derived_prefix="TEST")
@@ -695,10 +694,10 @@ def test_daily_ret1d_values_are_correct() -> None:
         [r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id],
         key=lambda r: r.timestamp,
     )
-    
+
     # Should have 3 returns (skip first day)
     assert len(ret1d_rows) == 3
-    
+
     # Verify values: (105-100)/100*100 = 5.0%, (110-105)/105*100 = 4.76%, (104.5-110)/110*100 = -5.0%
     assert abs(ret1d_rows[0].value - 5.0) < 0.01
     assert abs(ret1d_rows[1].value - 4.76) < 0.01
@@ -723,7 +722,7 @@ def test_daily_ma30_values_are_correct() -> None:
         row.id = uuid4()
         constant_rows.append(row)
         session.add(row)
-    
+
     catalog_entry_daily(session, "TEST.CONSTANT", domain="test", frequency="daily")
 
     silver_to_gold(session, "TEST.CONSTANT", derivation_strategy="daily", derived_prefix="TEST")
@@ -731,10 +730,10 @@ def test_daily_ma30_values_are_correct() -> None:
     ma30_rows = [
         r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
     ]
-    
+
     # Should have 6 MA rows (days 30-35)
     assert len(ma30_rows) == 6
-    
+
     # All should be exactly 100.0
     assert all(abs(r.value - 100.0) < 0.01 for r in ma30_rows)
 
@@ -745,13 +744,15 @@ def test_daily_strategy_skips_first_return() -> None:
     rows = seed_daily_silver(session, days=5)
     catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
 
-    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+    silver_to_gold(
+        session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
+    )
 
     ret1d_rows = sorted(
         [r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id],
         key=lambda r: r.timestamp,
     )
-    
+
     # First timestamp should be day 2 (skip day 1)
     assert ret1d_rows[0].timestamp == datetime(2026, 9, 2, tzinfo=UTC)
     assert len(ret1d_rows) == 4  # 5 days - 1 skipped
@@ -763,13 +764,15 @@ def test_daily_strategy_skips_first_29_ma() -> None:
     rows = seed_daily_silver(session, days=32)
     catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
 
-    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+    silver_to_gold(
+        session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
+    )
 
     ma30_rows = sorted(
         [r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id],
         key=lambda r: r.timestamp,
     )
-    
+
     # First timestamp should be day 30
     assert ma30_rows[0].timestamp == datetime(2026, 9, 30, tzinfo=UTC)
     assert len(ma30_rows) == 3  # Days 30, 31, 32
@@ -784,7 +787,7 @@ def test_daily_derived_series_have_correct_indicator_ids() -> None:
     silver_to_gold(session, "TGJU.USD.FREE", derivation_strategy="daily", derived_prefix="TGJU")
 
     added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
-    
+
     # Should have base, RET1D, and MA30
     assert "TGJU.USD.FREE" in added_indicators
     assert "TGJU.USD.FREE.RET1D" in added_indicators
@@ -797,7 +800,9 @@ def test_daily_strategy_preserves_silver_id_lineage() -> None:
     rows = seed_daily_silver(session, days=35)
     catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
 
-    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+    silver_to_gold(
+        session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
+    )
 
     ret1d_rows = [
         r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
@@ -805,11 +810,11 @@ def test_daily_strategy_preserves_silver_id_lineage() -> None:
     ma30_rows = [
         r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
     ]
-    
+
     # All derived rows should have a non-null silver_id
     assert all(r.silver_id is not None for r in ret1d_rows)
     assert all(r.silver_id is not None for r in ma30_rows)
-    
+
     # silver_id should point to actual Silver rows
     silver_ids = {r.id for r in rows}
     assert all(r.silver_id in silver_ids for r in ret1d_rows)
@@ -822,10 +827,12 @@ def test_daily_strategy_does_not_publish_yoy() -> None:
     rows = seed_daily_silver(session, days=400)  # More than a year of data
     catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
 
-    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+    silver_to_gold(
+        session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
+    )
 
     added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
-    
+
     # Should NOT have YOY
     assert not any("YOY" in ind for ind in added_indicators)
 
@@ -839,7 +846,7 @@ def test_yoy_strategy_does_not_publish_daily_metrics() -> None:
     silver_to_gold(session, GDP, derivation_strategy="yoy", derived_prefix="WB")
 
     added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
-    
+
     # Should have YOY but not RET1D or MA30
     assert any("YOY" in ind for ind in added_indicators)
     assert not any("RET1D" in ind for ind in added_indicators)
@@ -852,10 +859,12 @@ def test_daily_strategy_with_custom_prefix() -> None:
     rows = seed_daily_silver(session, indicator_id="CUSTOM.INDICATOR", days=35)
     catalog_entry_daily(session, "CUSTOM.INDICATOR", domain="test", frequency="daily")
 
-    silver_to_gold(session, "CUSTOM.INDICATOR", derivation_strategy="daily", derived_prefix="CUSTOM")
+    silver_to_gold(
+        session, "CUSTOM.INDICATOR", derivation_strategy="daily", derived_prefix="CUSTOM"
+    )
 
     added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
-    
+
     # IDs should start with CUSTOM prefix
     assert "CUSTOM.INDICATOR" in added_indicators
     assert "CUSTOM.INDICATOR.RET1D" in added_indicators
@@ -868,12 +877,14 @@ def test_daily_metrics_metadata_in_gold() -> None:
     rows = seed_daily_silver(session, days=35)
     catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
 
-    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+    silver_to_gold(
+        session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
+    )
 
     ret1d_rows = [
         r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
     ]
-    
+
     # Check one RET1D row in detail
     sample = ret1d_rows[0]
     assert sample.unit == "%"
