@@ -67,21 +67,59 @@ DERIVED_YOY_SUFFIX = "YOY"
 DERIVED_YOY_UNIT = "annual %"
 DERIVED_METHOD = "year_over_year_percent_change"
 
+# Daily metrics constants
+DERIVED_RET1D_SUFFIX = "RET1D"
+DERIVED_RET1D_UNIT = "%"
+DERIVED_RET1D_METHOD = "daily_return"
+
+DERIVED_MA30_SUFFIX = "MA30"
+DERIVED_MA30_METHOD = "30day_moving_average"
+MA30_WINDOW = 30
+
 DEFAULT_DOMAIN = "unclassified"
 PERCENT = 100.0
 
 
-def derived_growth_indicator_id(indicator_id: str) -> str:
+def derived_growth_indicator_id(indicator_id: str, prefix: str = DERIVED_PREFIX) -> str:
     """
     Namespaced id for an indicator's derived year-over-year growth series.
 
     Args:
         indicator_id: Source indicator code
+        prefix: Source namespace (default: WB)
 
     Returns:
-        e.g. ``WB.NY.GDP.MKTP.KD.YOY``
+        e.g. ``WB.NY.GDP.MKTP.KD.YOY`` or ``TGJU.USD.FREE.YOY``
     """
-    return f"{DERIVED_PREFIX}.{indicator_id}.{DERIVED_YOY_SUFFIX}"
+    return f"{prefix}.{indicator_id}.{DERIVED_YOY_SUFFIX}"
+
+
+def derived_ret1d_indicator_id(indicator_id: str, prefix: str) -> str:
+    """
+    Namespaced id for an indicator's derived daily return series.
+
+    Args:
+        indicator_id: Source indicator code
+        prefix: Source namespace (e.g., TGJU)
+
+    Returns:
+        e.g. ``TGJU.USD.FREE.RET1D``
+    """
+    return f"{prefix}.{indicator_id}.{DERIVED_RET1D_SUFFIX}"
+
+
+def derived_ma30_indicator_id(indicator_id: str, prefix: str) -> str:
+    """
+    Namespaced id for an indicator's derived 30-day moving average series.
+
+    Args:
+        indicator_id: Source indicator code
+        prefix: Source namespace (e.g., TGJU)
+
+    Returns:
+        e.g. ``TGJU.USD.FREE.MA30``
+    """
+    return f"{prefix}.{indicator_id}.{DERIVED_MA30_SUFFIX}"
 
 
 def _resolve_catalog_entry(session: Session, indicator_id: str) -> IndicatorCatalog | None:
@@ -166,6 +204,7 @@ def _growth_records(
     series: SilverSeries,
     domain: str,
     stamped: datetime,
+    prefix: str = DERIVED_PREFIX,
 ) -> list[dict[str, Any]]:
     """
     Build derived year-over-year growth rows from the linked levels.
@@ -173,8 +212,19 @@ def _growth_records(
     ``original_value`` carries the growth rate implied by the *unlinked* values,
     which is why chain-linking matters: at a rebase junction the unlinked rate is
     meaningless, so it is left NULL there rather than published as a number.
+
+    Args:
+        linked: Chain-linked DataFrame
+        result: Chain-linking result
+        series: Silver series metadata
+        domain: Analytical domain
+        stamped: Creation timestamp
+        prefix: Namespace prefix for derived indicator (default: WB)
+
+    Returns:
+        List of Gold records for derived growth series
     """
-    derived_id = derived_growth_indicator_id(series.indicator_id)
+    derived_id = derived_growth_indicator_id(series.indicator_id, prefix=prefix)
 
     growth = linked[VALUE_COLUMN].pct_change(fill_method=None) * PERCENT
     original_growth = linked[ORIGINAL_VALUE_COLUMN].pct_change(fill_method=None) * PERCENT
@@ -226,6 +276,143 @@ def _growth_records(
                     "from_period": previous.date().isoformat(),
                     "to_period": timestamp.date().isoformat(),
                     "spans_base_year_break": crossed_break,
+                },
+                "created_at": stamped,
+                "updated_at": stamped,
+            }
+        )
+    return records
+
+
+def _daily_return_records(
+    linked: pd.DataFrame,
+    series: SilverSeries,
+    domain: str,
+    stamped: datetime,
+    prefix: str,
+) -> list[dict[str, Any]]:
+    """
+    Build derived daily return (RET1D) rows from the linked levels.
+
+    Daily returns are simple percentage changes: (value_t / value_t-1 - 1) × 100.
+    Each return is attributed to the **current day's** Silver row.
+
+    Args:
+        linked: Chain-linked DataFrame
+        series: Silver series metadata
+        domain: Analytical domain
+        stamped: Creation timestamp
+        prefix: Namespace prefix for derived indicator (e.g., TGJU)
+
+    Returns:
+        List of Gold records for derived daily return series
+    """
+    derived_id = derived_ret1d_indicator_id(series.indicator_id, prefix=prefix)
+
+    # Daily percent change
+    returns = linked[VALUE_COLUMN].pct_change(fill_method=None) * PERCENT
+    timestamps = linked[TIMESTAMP_COLUMN]
+
+    records: list[dict[str, Any]] = []
+
+    # Skip position 0 (first day has no return)
+    for position in range(1, len(linked)):
+        ret = returns.iloc[position]
+        if not np.isfinite(ret):
+            continue
+
+        timestamp = pd.Timestamp(timestamps.iloc[position]).to_pydatetime()
+        silver_id = series.silver_ids.get(timestamp)
+        if silver_id is None:
+            continue
+
+        previous = pd.Timestamp(timestamps.iloc[position - 1]).to_pydatetime()
+
+        records.append(
+            {
+                "id": uuid4(),
+                "indicator_id": derived_id,
+                "timestamp": timestamp,
+                "value": float(ret),
+                "original_value": float(ret),  # No chain-linking for daily data
+                "is_chain_linked": False,
+                "chain_linking_confidence": None,
+                "unit": DERIVED_RET1D_UNIT,
+                "frequency": series.frequency,
+                "domain": domain,
+                "silver_id": silver_id,
+                "record_metadata": {
+                    "derived_from": series.indicator_id,
+                    "method": DERIVED_RET1D_METHOD,
+                    "from_period": previous.date().isoformat(),
+                    "to_period": timestamp.date().isoformat(),
+                },
+                "created_at": stamped,
+                "updated_at": stamped,
+            }
+        )
+    return records
+
+
+def _moving_average_records(
+    linked: pd.DataFrame,
+    series: SilverSeries,
+    domain: str,
+    stamped: datetime,
+    prefix: str,
+) -> list[dict[str, Any]]:
+    """
+    Build derived 30-day moving average (MA30) rows from the linked levels.
+
+    The MA is computed on the linked values. Each MA is attributed to the
+    **current day's** Silver row.
+
+    Args:
+        linked: Chain-linked DataFrame
+        series: Silver series metadata
+        domain: Analytical domain
+        stamped: Creation timestamp
+        prefix: Namespace prefix for derived indicator (e.g., TGJU)
+
+    Returns:
+        List of Gold records for derived moving average series
+    """
+    derived_id = derived_ma30_indicator_id(series.indicator_id, prefix=prefix)
+
+    # 30-day rolling mean
+    ma = linked[VALUE_COLUMN].rolling(window=MA30_WINDOW, min_periods=MA30_WINDOW).mean()
+    timestamps = linked[TIMESTAMP_COLUMN]
+
+    records: list[dict[str, Any]] = []
+
+    # Skip first 29 days (MA undefined)
+    for position in range(MA30_WINDOW - 1, len(linked)):
+        ma_value = ma.iloc[position]
+        if not np.isfinite(ma_value):
+            continue
+
+        timestamp = pd.Timestamp(timestamps.iloc[position]).to_pydatetime()
+        silver_id = series.silver_ids.get(timestamp)
+        if silver_id is None:
+            continue
+
+        records.append(
+            {
+                "id": uuid4(),
+                "indicator_id": derived_id,
+                "timestamp": timestamp,
+                "value": float(ma_value),
+                "original_value": float(ma_value),  # No chain-linking for daily data
+                "is_chain_linked": False,
+                "chain_linking_confidence": None,
+                "unit": series.unit,  # Same unit as source
+                "frequency": series.frequency,
+                "domain": domain,
+                "silver_id": silver_id,
+                "record_metadata": {
+                    "derived_from": series.indicator_id,
+                    "method": DERIVED_MA30_METHOD,
+                    "window_days": MA30_WINDOW,
                 },
                 "created_at": stamped,
                 "updated_at": stamped,
@@ -300,6 +487,8 @@ def silver_to_gold(
     base_years: Sequence[int] | None = None,
     include_growth: bool = True,
     statistical_fallback: bool = False,
+    derived_prefix: str = DERIVED_PREFIX,
+    derivation_strategy: str = "yoy",
 ) -> TransformResult:
     """
     Chain-link one indicator's Silver history into Gold and derive growth rates.
@@ -309,8 +498,10 @@ def silver_to_gold(
         indicator_id: Indicator to transform
         domain: Analytical domain; resolved from the catalog when omitted
         base_years: Known base years; resolved from the catalog when omitted
-        include_growth: Also publish the derived ``WB.<id>.YOY`` series
+        include_growth: Also publish derived series
         statistical_fallback: Permit level-shift break detection without metadata
+        derived_prefix: Namespace prefix for derived indicators (default: WB)
+        derivation_strategy: Strategy for derived metrics - "yoy" or "daily"
 
     Returns:
         Counts and status for the transformation
@@ -339,14 +530,41 @@ def silver_to_gold(
         stamped = utc_now()
 
         records = _level_records(linked, result, series, resolved_domain, stamped)
-        growth_records = (
-            _growth_records(linked, result, series, resolved_domain, stamped)
-            if include_growth
-            else []
-        )
+        
+        # Apply derivation strategy
+        derived_records: list[dict[str, Any]] = []
+        derived_ids: list[str] = []
+        
+        if include_growth:
+            if derivation_strategy == "yoy":
+                # Year-over-year growth for annual/quarterly/monthly data
+                derived_records = _growth_records(
+                    linked, result, series, resolved_domain, stamped, prefix=derived_prefix
+                )
+                derived_ids = [derived_growth_indicator_id(indicator_id, prefix=derived_prefix)]
+            elif derivation_strategy == "daily":
+                # Daily returns + 30-day MA for daily data
+                ret_records = _daily_return_records(
+                    linked, series, resolved_domain, stamped, prefix=derived_prefix
+                )
+                ma_records = _moving_average_records(
+                    linked, series, resolved_domain, stamped, prefix=derived_prefix
+                )
+                derived_records = [*ret_records, *ma_records]
+                derived_ids = [
+                    derived_ret1d_indicator_id(indicator_id, prefix=derived_prefix),
+                    derived_ma30_indicator_id(indicator_id, prefix=derived_prefix),
+                ]
+            else:
+                log_with_context(
+                    logger,
+                    "WARNING",
+                    f"unknown derivation strategy '{derivation_strategy}'; no derived metrics",
+                    indicator_id=indicator_id,
+                )
 
-        targets = [indicator_id, derived_growth_indicator_id(indicator_id)]
-        written = _replace_gold_rows(session, targets, [*records, *growth_records])
+        targets = [indicator_id, *derived_ids]
+        written = _replace_gold_rows(session, targets, [*records, *derived_records])
         _write_chain_linking_log(session, indicator_id, result)
 
         processed = int(len(series.frame))
@@ -361,7 +579,9 @@ def silver_to_gold(
             "indicator_id": indicator_id,
             "domain": resolved_domain,
             "level_rows": len(records),
-            "growth_rows": len(growth_records),
+            "growth_rows": len(derived_records) if derivation_strategy == "yoy" else 0,
+            "derived_rows": len(derived_records),
+            "derivation_strategy": derivation_strategy if include_growth else None,
             "is_chain_linked": result.is_chain_linked,
             "linking_method": result.linking_method,
             "records_linked": result.records_linked,
@@ -379,7 +599,9 @@ def silver_to_gold(
         indicator_id=indicator_id,
         domain=resolved_domain,
         level_rows=len(records),
-        growth_rows=len(growth_records),
+        growth_rows=len(derived_records) if derivation_strategy == "yoy" else 0,
+        derived_rows=len(derived_records),
+        derivation_strategy=derivation_strategy if include_growth else None,
         is_chain_linked=result.is_chain_linked,
     )
 
@@ -395,17 +617,30 @@ def silver_to_gold(
     )
 
 
-def gold_indicator_ids(indicator_id: str) -> tuple[str, str]:
+def gold_indicator_ids(
+    indicator_id: str, strategy: str = "yoy", prefix: str = DERIVED_PREFIX
+) -> tuple[str, ...]:
     """
     Every Gold indicator id derived from one source indicator.
 
     Args:
         indicator_id: Source indicator code
+        strategy: Derivation strategy ("yoy" or "daily")
+        prefix: Namespace prefix (default: WB)
 
     Returns:
-        Tuple of (level series id, derived growth series id)
+        Tuple of (level series id, derived indicator id(s))
+        - yoy: (indicator_id, <prefix>.<indicator>.YOY)
+        - daily: (indicator_id, <prefix>.<indicator>.RET1D, <prefix>.<indicator>.MA30)
     """
-    return (indicator_id, derived_growth_indicator_id(indicator_id))
+    if strategy == "daily":
+        return (
+            indicator_id,
+            derived_ret1d_indicator_id(indicator_id, prefix=prefix),
+            derived_ma30_indicator_id(indicator_id, prefix=prefix),
+        )
+    # Default to yoy
+    return (indicator_id, derived_growth_indicator_id(indicator_id, prefix=prefix))
 
 
 def load_gold_series(session: Session, indicator_id: str) -> pd.DataFrame:

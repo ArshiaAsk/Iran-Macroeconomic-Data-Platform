@@ -1,4 +1,4 @@
-.PHONY: help format lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean
+.PHONY: help format lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean airflow-init airflow-up airflow-down airflow-status airflow-logs
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -66,3 +66,36 @@ clean: ## Remove generated files and caches
 	find . -type f -name ".coverage" -delete 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@echo "Cleanup complete"
+
+airflow-init: ## Initialize Airflow database and create admin user
+	@echo "Setting up Airflow environment..."
+	@export $$(cat airflow/config/airflow.env | grep -v '^#' | xargs) && \
+		poetry run airflow db migrate && \
+		poetry run airflow users create \
+			--username admin \
+			--password admin \
+			--firstname Admin \
+			--lastname User \
+			--role Admin \
+			--email admin@example.com || echo "Admin user may already exist"
+	@echo "✓ Airflow initialized. Access the webserver at http://localhost:8080 (admin/admin)"
+
+airflow-up: ## Start Airflow webserver and scheduler
+	@echo "Starting Airflow services..."
+	@export $$(cat airflow/config/airflow.env | grep -v '^#' | xargs) && \
+		poetry run airflow webserver --port 8080 & \
+		poetry run airflow scheduler &
+	@echo "✓ Airflow started. Webserver: http://localhost:8080"
+
+airflow-down: ## Stop Airflow services
+	@echo "Stopping Airflow services..."
+	@pkill -f "airflow webserver" || true
+	@pkill -f "airflow scheduler" || true
+	@echo "✓ Airflow stopped"
+
+airflow-status: ## Check Airflow DAGs status
+	@export $$(cat airflow/config/airflow.env | grep -v '^#' | xargs) && \
+		poetry run airflow dags list
+
+airflow-logs: ## View Airflow logs
+	@tail -f airflow/logs/*/*.log 2>/dev/null || echo "No logs found yet"

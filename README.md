@@ -266,7 +266,7 @@ for the detailed conventions.
 | **World Bank** | API | GDP, inflation, trade, population, energy (12 indicators) | Annual | ✅ Implemented (Phase 2) |
 | **IMF DataMapper** | API | Fiscal, External | Quarterly | Planned (Phase 4) |
 | **CBI TSD** | Scraper | Monetary, Banking | Monthly | Planned (Phase 5) |
-| **TGJU** | Scraper | FX, Gold | Daily | Planned (Phase 3) |
+| **TGJU** | Scraper | FX, Gold (3 indicators) | Daily | ✅ Implemented (Phase 3) |
 | **SCI** | Scraper | CPI, Labor | Quarterly | Planned (Phase 5) |
 | **TSETMC** | Package | Stock indices | Daily | Planned (Phase 6) |
 | **EIA** | API | Oil prices | Daily | Planned (Phase 4) |
@@ -297,9 +297,7 @@ make test-all
 RUN_LIVE_API_TESTS=1 poetry run pytest -m live
 ```
 
-Current status: **253 tests passing** — 225 unit (86.94% coverage) and 28
-integration (93.61% combined). The live API test is skipped unless
-`RUN_LIVE_API_TESTS=1` is set.
+Current status: **377 tests** — 309 pass (unit tests at 83.06% coverage), 44 integration tests (15 TGJU + 28 World Bank + 1 live test skipped by default), 23 failing (13 Airflow DAG tests + 10 gold daily-metrics tests pending implementation).
 
 ### Coverage Requirements
 
@@ -402,7 +400,9 @@ poetry cache clear . --all
 - [x] Data dictionary recorded from a real run
 
 ### Phase 3: Web Scraper MVP + Orchestration (Week 3-4)
-- [ ] Playwright TGJU scraper (FX + gold prices)
+- [x] Playwright TGJU scraper (FX + gold prices)
+- [x] TGJU parser with Persian number handling
+- [x] Integration tests for Bronze → Silver → Gold roundtrip
 - [ ] Airflow local deployment and daily update DAGs
 - [ ] Error monitoring and alerts
 
