@@ -552,3 +552,335 @@ def test_load_gold_series_is_empty_for_an_unpublished_indicator(
 ) -> None:
     """An indicator with no Gold rows yields an empty frame, not an error."""
     assert load_gold_series(fake_session, GDP).empty  # type: ignore[arg-type]
+
+
+
+# ---------------------------------------------------------------- daily metrics derivation
+
+
+def catalog_entry_daily(
+    session: FakeSession,
+    indicator_id: str,
+    domain: str = "fx",
+    frequency: str = "daily",
+) -> IndicatorCatalog:
+    """Create and add a catalog entry for daily indicators."""
+    catalog = IndicatorCatalog(
+        indicator_id=indicator_id,
+        name=f"{indicator_id} Test",
+        frequency=frequency,
+        domain=domain,
+        source_name="tgju",
+        base_years=None,
+    )
+    session.add(catalog)
+    return catalog
+
+
+def seed_daily_silver(
+    session: FakeSession,
+    indicator_id: str = "TGJU.USD.FREE",
+    days: int = 40,
+) -> list[SilverCleaned]:
+    """Seed a daily price series for testing daily metrics."""
+    rows: list[SilverCleaned] = []
+    base_value = 1000.0
+    
+    for day_offset in range(days):
+        # Simple growth pattern: 1% daily growth
+        value = base_value * (1.01 ** day_offset)
+        row = SilverCleaned(
+            indicator_id=indicator_id,
+            timestamp=datetime(2026, 9, 1, tzinfo=UTC) + pd.Timedelta(days=day_offset),
+            value=value,
+            unit="IRR",
+            frequency="daily",
+            source_name="tgju",
+            bronze_id=BRONZE_ID,
+        )
+        row.id = uuid4()
+        rows.append(row)
+        session.add(row)
+    
+    return rows
+
+
+def test_silver_to_gold_daily_strategy_derives_ret1d() -> None:
+    """Daily strategy derives RET1D (daily return percentage)."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=10)
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx")
+
+    silver_to_gold(
+        session,
+        rows[0].indicator_id,
+        derivation_strategy="daily",
+        derived_prefix="TGJU",
+    )
+
+    # Find RET1D rows
+    ret1d_rows = [
+        r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
+    ]
+    
+    # Should have 9 RET1D rows (first day has no prior value)
+    assert len(ret1d_rows) == 9
+    
+    # All RET1D rows should have derivation_method = "ret1d"
+    assert all(r.derivation_method == "ret1d" for r in ret1d_rows)
+    
+    # Unit should be "%" for returns
+    assert all(r.unit == "%" for r in ret1d_rows)
+    
+    # is_chain_linked should be False (passthrough)
+    assert all(r.is_chain_linked is False for r in ret1d_rows)
+    
+    # confidence should be None (not chain-linked)
+    assert all(r.confidence is None for r in ret1d_rows)
+
+
+def test_silver_to_gold_daily_strategy_derives_ma30() -> None:
+    """Daily strategy derives MA30 (30-day moving average)."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=40)
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
+
+    silver_to_gold(
+        session,
+        rows[0].indicator_id,
+        derivation_strategy="daily",
+        derived_prefix="TGJU",
+    )
+
+    # Find MA30 rows
+    ma30_rows = [
+        r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
+    ]
+    
+    # Should have 11 MA30 rows (first 29 days have insufficient data)
+    assert len(ma30_rows) == 11
+    
+    # All MA30 rows should have derivation_method = "ma30"
+    assert all(r.derivation_method == "ma30" for r in ma30_rows)
+    
+    # is_chain_linked should be False (passthrough)
+    assert all(r.is_chain_linked is False for r in ma30_rows)
+
+
+def test_daily_ret1d_values_are_correct() -> None:
+    """RET1D values match manual pct_change calculation."""
+    session = FakeSession()
+    # Use simple values for easy verification
+    simple_rows = []
+    values = [100.0, 105.0, 110.0, 104.5]  # +5%, +4.76%, -5%
+    for i, val in enumerate(values):
+        row = SilverCleaned(
+            indicator_id="TEST.PRICE",
+            timestamp=datetime(2026, 9, 1 + i, tzinfo=UTC),
+            value=val,
+            unit="IRR",
+            frequency="daily",
+            source_name="test",
+            bronze_id=BRONZE_ID,
+        )
+        row.id = uuid4()
+        simple_rows.append(row)
+        session.add(row)
+    
+    catalog_entry_daily(session, "TEST.PRICE", domain="test", frequency="daily")
+
+    silver_to_gold(session, "TEST.PRICE", derivation_strategy="daily", derived_prefix="TEST")
+
+    ret1d_rows = sorted(
+        [r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id],
+        key=lambda r: r.timestamp,
+    )
+    
+    # Should have 3 returns (skip first day)
+    assert len(ret1d_rows) == 3
+    
+    # Verify values: (105-100)/100*100 = 5.0%, (110-105)/105*100 = 4.76%, (104.5-110)/110*100 = -5.0%
+    assert abs(ret1d_rows[0].value - 5.0) < 0.01
+    assert abs(ret1d_rows[1].value - 4.76) < 0.01
+    assert abs(ret1d_rows[2].value - (-5.0)) < 0.01
+
+
+def test_daily_ma30_values_are_correct() -> None:
+    """MA30 values match manual rolling mean calculation."""
+    session = FakeSession()
+    # 35 days of constant value = 100, MA30 should also be 100
+    constant_rows = []
+    for i in range(35):
+        row = SilverCleaned(
+            indicator_id="TEST.CONSTANT",
+            timestamp=datetime(2026, 9, 1, tzinfo=UTC) + pd.Timedelta(days=i),
+            value=100.0,
+            unit="IRR",
+            frequency="daily",
+            source_name="test",
+            bronze_id=BRONZE_ID,
+        )
+        row.id = uuid4()
+        constant_rows.append(row)
+        session.add(row)
+    
+    catalog_entry_daily(session, "TEST.CONSTANT", domain="test", frequency="daily")
+
+    silver_to_gold(session, "TEST.CONSTANT", derivation_strategy="daily", derived_prefix="TEST")
+
+    ma30_rows = [
+        r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
+    ]
+    
+    # Should have 6 MA rows (days 30-35)
+    assert len(ma30_rows) == 6
+    
+    # All should be exactly 100.0
+    assert all(abs(r.value - 100.0) < 0.01 for r in ma30_rows)
+
+
+def test_daily_strategy_skips_first_return() -> None:
+    """First day has no RET1D (no prior value to compare)."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=5)
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
+
+    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+
+    ret1d_rows = sorted(
+        [r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id],
+        key=lambda r: r.timestamp,
+    )
+    
+    # First timestamp should be day 2 (skip day 1)
+    assert ret1d_rows[0].timestamp == datetime(2026, 9, 2, tzinfo=UTC)
+    assert len(ret1d_rows) == 4  # 5 days - 1 skipped
+
+
+def test_daily_strategy_skips_first_29_ma() -> None:
+    """First 29 days have no MA30 (insufficient window)."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=32)
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
+
+    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+
+    ma30_rows = sorted(
+        [r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id],
+        key=lambda r: r.timestamp,
+    )
+    
+    # First timestamp should be day 30
+    assert ma30_rows[0].timestamp == datetime(2026, 9, 30, tzinfo=UTC)
+    assert len(ma30_rows) == 3  # Days 30, 31, 32
+
+
+def test_daily_derived_series_have_correct_indicator_ids() -> None:
+    """Daily derived series use derived_ret1d_indicator_id and derived_ma30_indicator_id."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, indicator_id="TGJU.USD.FREE", days=35)
+    catalog_entry_daily(session, "TGJU.USD.FREE", domain="fx", frequency="daily")
+
+    silver_to_gold(session, "TGJU.USD.FREE", derivation_strategy="daily", derived_prefix="TGJU")
+
+    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    
+    # Should have base, RET1D, and MA30
+    assert "TGJU.USD.FREE" in added_indicators
+    assert "TGJU.USD.FREE.RET1D" in added_indicators
+    assert "TGJU.USD.FREE.MA30" in added_indicators
+
+
+def test_daily_strategy_preserves_silver_id_lineage() -> None:
+    """RET1D and MA30 rows carry silver_id pointing to the current day's Silver row."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=35)
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
+
+    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+
+    ret1d_rows = [
+        r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
+    ]
+    ma30_rows = [
+        r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
+    ]
+    
+    # All derived rows should have a non-null silver_id
+    assert all(r.silver_id is not None for r in ret1d_rows)
+    assert all(r.silver_id is not None for r in ma30_rows)
+    
+    # silver_id should point to actual Silver rows
+    silver_ids = {r.id for r in rows}
+    assert all(r.silver_id in silver_ids for r in ret1d_rows)
+    assert all(r.silver_id in silver_ids for r in ma30_rows)
+
+
+def test_daily_strategy_does_not_publish_yoy() -> None:
+    """derivation_strategy='daily' does not emit YOY growth series."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=400)  # More than a year of data
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
+
+    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+
+    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    
+    # Should NOT have YOY
+    assert not any("YOY" in ind for ind in added_indicators)
+
+
+def test_yoy_strategy_does_not_publish_daily_metrics() -> None:
+    """derivation_strategy='yoy' does not emit RET1D or MA30."""
+    session = FakeSession()
+    rows = seed_silver(session, rebased_levels())
+    session.add(catalog_entry("gdp", base_years=[2000, 2005]))
+
+    silver_to_gold(session, GDP, derivation_strategy="yoy", derived_prefix="WB")
+
+    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    
+    # Should have YOY but not RET1D or MA30
+    assert any("YOY" in ind for ind in added_indicators)
+    assert not any("RET1D" in ind for ind in added_indicators)
+    assert not any("MA30" in ind for ind in added_indicators)
+
+
+def test_daily_strategy_with_custom_prefix() -> None:
+    """Daily strategy respects derived_prefix parameter."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, indicator_id="CUSTOM.INDICATOR", days=35)
+    catalog_entry_daily(session, "CUSTOM.INDICATOR", domain="test", frequency="daily")
+
+    silver_to_gold(session, "CUSTOM.INDICATOR", derivation_strategy="daily", derived_prefix="CUSTOM")
+
+    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    
+    # IDs should start with CUSTOM prefix
+    assert "CUSTOM.INDICATOR" in added_indicators
+    assert "CUSTOM.INDICATOR.RET1D" in added_indicators
+    assert "CUSTOM.INDICATOR.MA30" in added_indicators
+
+
+def test_daily_metrics_metadata_in_gold() -> None:
+    """RET1D and MA30 rows have correct metadata fields."""
+    session = FakeSession()
+    rows = seed_daily_silver(session, days=35)
+    catalog_entry_daily(session, rows[0].indicator_id, domain="fx", frequency="daily")
+
+    silver_to_gold(session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU")
+
+    ret1d_rows = [
+        r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
+    ]
+    
+    # Check one RET1D row in detail
+    sample = ret1d_rows[0]
+    assert sample.unit == "%"
+    assert sample.frequency == "daily"
+    assert sample.domain == "fx"
+    assert sample.derivation_method == "ret1d"
+    assert sample.is_chain_linked is False
+    assert sample.confidence is None
+    assert sample.original_value is not None  # The actual return value
+    assert sample.silver_id is not None

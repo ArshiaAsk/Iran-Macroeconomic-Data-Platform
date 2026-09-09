@@ -59,6 +59,12 @@ class CollectionConfig(BaseSettings):
     retry_max: int = Field(default=3, alias="COLLECTION_RETRY_MAX")
     timeout: int = Field(default=30, alias="COLLECTION_TIMEOUT")
     user_agent_rotation: bool = Field(default=True, alias="USER_AGENT_ROTATION")
+    
+    # Scraper-specific settings
+    scraper_min_request_interval: float = Field(
+        default=1.0, alias="SCRAPER_MIN_REQUEST_INTERVAL"
+    )
+    scraper_page_timeout: int = Field(default=30, alias="SCRAPER_PAGE_TIMEOUT")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -87,6 +93,24 @@ class CollectionConfig(BaseSettings):
             raise ValueError(msg)
         return v
 
+    @field_validator("scraper_min_request_interval")
+    @classmethod
+    def validate_scraper_min_request_interval(cls, v: float) -> float:
+        """Validate scraper_min_request_interval is non-negative."""
+        if v < 0:
+            msg = "scraper_min_request_interval must be non-negative"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("scraper_page_timeout")
+    @classmethod
+    def validate_scraper_page_timeout(cls, v: int) -> int:
+        """Validate scraper_page_timeout is positive."""
+        if v <= 0:
+            msg = "scraper_page_timeout must be positive"
+            raise ValueError(msg)
+        return v
+
 
 class APIConfig(BaseSettings):
     """API configuration for external data sources."""
@@ -98,6 +122,7 @@ class APIConfig(BaseSettings):
     )
     eia_api_key: str | None = Field(default=None, alias="EIA_API_KEY")
     eia_url: str = Field(default="https://api.eia.gov/v2", alias="EIA_API_URL")
+    tgju_base_url: str = Field(default="https://www.tgju.org", alias="TGJU_BASE_URL")
 
     model_config = SettingsConfigDict(
         env_file=".env",

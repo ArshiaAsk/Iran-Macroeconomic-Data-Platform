@@ -251,6 +251,85 @@ class MySourceConnector(DataConnector):
 - **The pipeline runner is separate** (`src/etl/pipeline.py`) and uses one
   committed session per indicator, so one bad indicator cannot abort the batch.
 
+### Scraper-Specific Patterns (TGJU Reference)
+
+For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
+
+**Bronze Structure for Scrapers:**
+- Store **raw HTML** in Bronze `raw_data`, wrapped in the `{rows: [...]}` convention:
+  ```python
+  bronze.write_bronze(
+      session,
+      source_name="tgju",
+      source_type="scraper",
+      raw_envelope={
+          "rows": [{"html": html_content, "url": request_url, "scraped_at": timestamp}]
+      },
+      ...
+  )
+  ```
+- The `rows` wrapper allows `extract_rows()` to process scraped data uniformly
+  with API responses. Even if a scraper produces **one observation** (TGJU
+  current price), wrap it as a single-element list.
+
+**Parser Separation:**
+- Keep **scraper** (Playwright navigation) and **parser** (HTML extraction) in
+  separate modules:
+  - `tgju_scraper.py` — browser automation, page loading, retry logic
+  - `tgju_parser.py` — HTML parsing, data extraction, validation
+- This allows unit-testing the parser with fixture HTML (no browser needed).
+
+**Persian/Farsi Data Handling:**
+- **Persian digits** (`۰۱۲۳۴۵۶۷۸۹`) must be converted to Arabic numerals
+  (`0123456789`) before parsing:
+  ```python
+  PERSIAN_TO_ARABIC = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+  cleaned = text.translate(PERSIAN_TO_ARABIC).replace(",", "")
+  value = float(cleaned)
+  ```
+- **Persian dates** (Jalali calendar) must be converted to Gregorian for storage:
+  ```python
+  import jdatetime
+  persian_date = jdatetime.datetime(1405, 6, 18)  # YYYY-MM-DD in Jalali
+  gregorian = persian_date.togregorian()
+  ```
+- Store original Persian date in `metadata` for auditability.
+
+**Single-Observation Sources (TGJU Reality):**
+- TGJU provides **current price only**, not historical data. Each scrape produces:
+  - 1 Bronze envelope (HTML)
+  - 1 Silver observation (parsed price + timestamp)
+  - 1 Gold level (no derived metrics from a single observation)
+- **Time series are built by daily scraping**, not one backfill. A 30-day moving
+  average requires 30 daily runs.
+- Do not derive growth metrics (RET1D, MA7, MA30) until sufficient history exists.
+
+**Playwright Usage:**
+- Use **synchronous** Playwright API (`from playwright.sync_api import sync_playwright`)
+  unless the connector genuinely needs async (most don't).
+- Set `headless=True` for production, `headless=False` for debugging.
+- Set page timeout to handle slow-loading domestic sites:
+  ```python
+  page.set_default_timeout(30_000)  # 30 seconds
+  ```
+- Rotate user-agents to avoid detection; store used agent in Bronze metadata.
+- Close browser in `disconnect()` or `__exit__()` to avoid leaking processes.
+
+**Testing Scrapers:**
+- **Unit tests:** Mock Playwright with `FakePage`/`FakeBrowser` that return
+  fixture HTML (see `tests/integration/test_tgju_pipeline.py` for reference).
+- **Integration tests:** Use fixture HTML, not live scraping (brittle, slow).
+- **Live tests:** Mark with `@pytest.mark.live` and skip by default. Gate behind
+  `RUN_LIVE_API_TESTS=1` environment variable.
+
+**Error Handling:**
+- Domestic sites change structure frequently. When selectors break:
+  1. Capture the new HTML as a fixture
+  2. Update selectors in the parser
+  3. Add regression test with old + new fixture
+- Log the full HTML on parsing errors (but truncate in production logs).
+- Use `ParsingError` for malformed HTML, `DataRetrievalError` for network issues.
+
 ### Orchestration
 
 - **Daily Jobs:** High-frequency sources (TGJU, TSETMC) run at 11 PM Iran time
@@ -421,6 +500,8 @@ class MySourceConnector(DataConnector):
 | `Makefile` | Common commands (format, lint, test, check, db-*) |
 | `src/connectors/base.py` | Abstract DataConnector protocol |
 | `src/connectors/world_bank.py` | World Bank connector + `python -m` pipeline entry point (reference implementation) |
+| `src/connectors/tgju_scraper.py` | TGJU scraper (Playwright + Persian handling) |
+| `src/connectors/tgju_parser.py` | TGJU HTML parser (Persian digits, date conversion) |
 | `src/etl/bronze.py` | Raw envelope persistence + `DataCollectionLog` |
 | `src/etl/silver.py` | Cleaning, outlier flagging, idempotent upsert |
 | `src/etl/gold.py` | Chain-linked publication + derived growth series |

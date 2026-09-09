@@ -94,11 +94,36 @@ class SilverPreparation:
         }
 
 
+def _default_parser(
+    rows: Sequence[Mapping[str, Any]],
+    indicator_id: str,
+    unit: str | None = None,
+    now: datetime | None = None,
+) -> pd.DataFrame:
+    """
+    Default parser for World Bank API payloads.
+
+    Filters rows by indicator, then delegates to :func:`rows_to_frame`.
+
+    Args:
+        rows: Observation objects from the stored Bronze payload
+        indicator_id: Indicator being transformed
+        unit: Resolved unit to stamp on each observation
+        now: Clock override for the future-period cutoff
+
+    Returns:
+        Parsed DataFrame with columns timestamp, value, indicator_id, unit, obs_status
+    """
+    relevant = [row for row in rows if _row_indicator(row) in (None, indicator_id)]
+    return rows_to_frame(relevant, indicator_id, unit, now=now)
+
+
 def prepare_silver_frame(
     rows: Sequence[Mapping[str, Any]],
     indicator_id: str,
     unit: str | None = None,
     now: datetime | None = None,
+    parser: Any = None,
 ) -> SilverPreparation:
     """
     Clean raw Bronze observation rows into Silver-ready records.
@@ -110,14 +135,17 @@ def prepare_silver_frame(
         indicator_id: Indicator being transformed
         unit: Resolved unit to stamp on each observation
         now: Clock override for the future-period cutoff
+        parser: Callable that parses rows into a DataFrame; defaults to World Bank behavior
 
     Returns:
         The cleaned frame plus null, duplicate, and outlier counts
     """
-    relevant = [row for row in rows if _row_indicator(row) in (None, indicator_id)]
-    parsed = rows_to_frame(relevant, indicator_id, unit, now=now)
+    if parser is None:
+        parser = _default_parser
 
-    processed = len(relevant)
+    parsed = parser(rows, indicator_id, unit, now)
+
+    processed = len(rows)
     future_records = max(processed - int(len(parsed)), 0)
 
     if parsed.empty:
@@ -247,6 +275,7 @@ def bronze_to_silver(
     frequency: str = FREQUENCY_ANNUAL,
     unit: str | None = None,
     now: datetime | None = None,
+    parser: Any = None,
 ) -> TransformResult:
     """
     Transform one Bronze payload into cleaned Silver observations.
@@ -259,6 +288,7 @@ def bronze_to_silver(
         frequency: Observation frequency
         unit: Resolved unit; falls back to the value parsed from the payload
         now: Clock override for the future-period cutoff
+        parser: Callable that parses rows into a DataFrame; defaults to World Bank behavior
 
     Returns:
         Counts and status for the transformation
@@ -278,7 +308,7 @@ def bronze_to_silver(
             raise DataRetrievalError(msg)
 
         rows = extract_rows(bronze_row.raw_data)
-        preparation = prepare_silver_frame(rows, indicator_id, unit, now=now)
+        preparation = prepare_silver_frame(rows, indicator_id, unit, now=now, parser=parser)
 
         records = _silver_records(
             preparation,

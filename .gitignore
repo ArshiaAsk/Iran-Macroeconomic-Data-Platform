@@ -117,6 +117,7 @@ data/bronze/
 docs/_build/
 site/
 .agents/
+.claude/
 
 # Alembic
 # Don't ignore migrations directory, but ignore any temporary files

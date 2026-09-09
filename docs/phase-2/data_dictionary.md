@@ -248,3 +248,181 @@ SELECT DISTINCT raw_data -> 'meta' ->> 'lastupdated' FROM bronze.bronze_raw;
 SELECT source_layer, target_layer, status, count(*), sum(records_failed)
 FROM metadata.transformation_log GROUP BY 1, 2, 3 ORDER BY 1, 2;
 ```
+
+
+---
+
+# TGJU Indicators (Phase 3)
+
+**Status:** ✅ IMPLEMENTED — scraper + parser + integration tests complete (September 2026).
+
+TGJU (tgju.org) provides **daily market prices** for foreign exchange, gold, and
+coins. Unlike the World Bank API, TGJU does **not provide historical data** — it
+shows the **current price only**. Time series are built by scraping daily and
+accumulating observations over time.
+
+## Provenance
+
+| Field | Value |
+|-------|-------|
+| Source | TGJU.org (Iran's leading FX/gold market tracker) |
+| Method | Web scraping (Playwright + headless browser) |
+| Update frequency | Daily (market business days) |
+| Language | Persian (Farsi) — prices use Persian digits |
+| Coverage | Current price only (1 observation per scrape) |
+| Historical data | Not available from source — built by daily runs |
+
+## Indicators
+
+**Phase 3 Implementation** covers 3 representative indicators for integration tests:
+
+| Indicator ID | Name | Unit | Domain | Type |
+|--------------|------|------|--------|------|
+| `price_dollar_rl` | US Dollar (Free Market) | IRR | `fx` | Currency |
+| `geram18` | 18-Karat Gold | IRR/gram | `gold` | Commodity |
+| `sekee` | Emami Gold Coin | IRR/coin | `gold` | Coin |
+
+**Full implementation** (Airflow orchestration, Phase 3 completion) will add:
+- Additional FX pairs (EUR, GBP, AED, TRY, CNY)
+- Gold varieties (24K, 17K)
+- Other coins (Azadi, Gerami, Half-Bahar)
+
+## Scraper Architecture
+
+### Single-Observation Reality
+
+TGJU pages show **one price** — the current market value. Each scrape produces:
+- 1 Bronze envelope (HTML + metadata)
+- 1 Silver observation (parsed price + timestamp)
+- 1 Gold level (published, no derived metrics from single observation)
+
+**Historical series** are built by running the scraper daily and accumulating
+observations. A 30-day moving average requires 30 daily runs, not one scrape.
+
+### Bronze Structure
+
+Unlike the World Bank API, TGJU scrapers store **HTML** in Bronze:
+
+```json
+{
+  "rows": [
+    {
+      "html": "<html>...</html>",
+      "url": "https://www.tgju.org/profile/price_dollar_rl",
+      "scraped_at": "2026-09-08T19:44:29.137+03:30"
+    }
+  ]
+}
+```
+
+The `rows` wrapper follows the Bronze convention: `extract_rows()` expects a
+list, even when the scraper produces one observation. The `metadata` column
+carries:
+
+| Key | Meaning |
+|-----|---------|
+| `indicator_id` | TGJU instrument identifier |
+| `scraped_at` | Collection timestamp (Tehran time) |
+| `user_agent` | Browser user-agent (rotated for politeness) |
+| `envelope_convention` | `raw_data = {rows: [{html, url, scraped_at}]}` |
+
+### Parser: Persian Number Handling
+
+TGJU displays prices in **Persian (Farsi) digits** (`۰۱۲۳۴۵۶۷۸۹` instead of
+`0123456789`). The parser (`src/connectors/tgju_parser.py`) converts them to
+Arabic numerals before parsing:
+
+```python
+PERSIAN_TO_ARABIC = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+cleaned = text.translate(PERSIAN_TO_ARABIC).replace(",", "")
+```
+
+Prices are extracted from structured `<div>` or `<span>` elements with
+`data-col="info.last_update.price"` or similar attributes. The parser is
+tested with 45 unit tests covering:
+- Normal prices (millions with commas)
+- Persian digit conversion
+- Missing/malformed elements
+- Timestamp extraction (Persian date → Gregorian)
+
+### Silver: Daily Observations
+
+- **Timestamps are scraped-time, not period-end.** A daily scrape at 11 PM
+  Tehran time is stored as that instant, not end-of-day. This preserves the
+  intraday sequencing for high-frequency sources.
+- **Units come from the parser.** TGJU does not provide a metadata API, so units
+  are inferred from the page structure (e.g., "IRR" for FX, "IRR/gram" for
+  gold).
+- **Re-runs upsert on `(indicator_id, timestamp)`** — if the same indicator is
+  scraped twice on the same day (e.g., morning + evening), the later observation
+  replaces the earlier one.
+
+### Gold: Levels Only (Initially)
+
+When only **one observation** exists for an indicator, Gold publishes the level
+but **does not derive** growth metrics (RET1D, MA7, MA30) — there is no prior
+day to difference against. Derived metrics appear after multiple daily runs
+accumulate history:
+
+| Metric | Requires | Status (Phase 3) |
+|--------|----------|------------------|
+| Level | 1 observation | ✅ Published |
+| RET1D (daily return) | 2+ observations | ⏳ After daily runs |
+| MA7 (7-day MA) | 7+ observations | ⏳ After weekly runs |
+| MA30 (30-day MA) | 30+ observations | ⏳ After monthly runs |
+
+The derivation strategy (`daily` for TGJU) is recorded in
+`metadata.transformation_log`. Once sufficient history exists, re-runs will
+publish derived series.
+
+## Testing
+
+**Integration tests** (`tests/integration/test_tgju_pipeline.py`, 16 tests):
+- Use **fixture HTML** (no live scraping) for reproducibility
+- Mock Playwright browser with synchronous `FakePage`/`FakeBrowser`
+- Verify Bronze→Silver→Gold roundtrip with FK integrity
+- Verify hypertable storage and audit trails
+- Include `@pytest.mark.live` test for real scraping (skipped by default)
+
+**Unit tests** (84 tests across parser + scraper):
+- Parser: 45 tests with fixture HTML (Persian digits, missing elements, dates)
+- Scraper: 39 tests with mocked Playwright (retries, discovery, validation)
+
+## Orchestration (Pending)
+
+Phase 3 **Airflow DAGs** (not yet implemented):
+- **Daily scrape:** Run at 11 PM Tehran time (market close)
+- **Retry logic:** 3 attempts with exponential backoff
+- **Alerting:** Slack/email on consecutive failures
+- **Rate limiting:** 1-2 requests/second, respect robots.txt
+
+## Known Limitations
+
+1. **No historical data:** TGJU does not provide archives — first run creates
+   only current prices. Wait 30 days to calculate 30-day MA.
+2. **Market hours:** TGJU reflects Tehran market hours (Sat–Wed, 9 AM–6 PM Iran
+   time). Prices outside market hours may be stale.
+3. **Website fragility:** TGJU may change HTML structure without notice. Parser
+   must be maintained when selectors break.
+4. **Sanctions impact:** International payment disruptions can create temporary
+   gaps in data availability.
+
+## Reproducing TGJU Tests
+
+```bash
+# Start database
+make db-up
+
+# Run integration tests (fixture-based, no network)
+poetry run pytest tests/integration/test_tgju_pipeline.py -v
+
+# Run live scraper test (hits real TGJU website)
+RUN_LIVE_API_TESTS=1 poetry run pytest tests/integration/test_tgju_pipeline.py::test_live_tgju_scrape_returns_daily_prices -v
+
+# Check what landed in the database
+docker compose exec postgres psql -U iran_macro -d iran_macro_db_test -c "
+  SELECT indicator_id, count(*) FROM silver.silver_cleaned
+  WHERE indicator_id LIKE '%dollar%' OR indicator_id LIKE '%gold%'
+  GROUP BY 1 ORDER BY 1;
+"
+```
