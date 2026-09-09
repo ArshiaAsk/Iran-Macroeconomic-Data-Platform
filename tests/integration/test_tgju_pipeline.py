@@ -39,8 +39,8 @@ from src.connectors.tgju_scraper import (
     TgjuScraper,
 )
 from src.database.connection import DatabaseConnection, init_database
-from src.etl.gold import load_gold_series
 from src.etl.gold import TRANSFORMATION_TYPE as GOLD_TRANSFORMATION
+from src.etl.gold import load_gold_series
 from src.etl.lineage import LAYER_BRONZE, LAYER_GOLD, LAYER_SILVER, STATUS_SUCCESS
 from src.etl.pipeline import PipelineSummary
 from src.etl.silver import TRANSFORMATION_TYPE as SILVER_TRANSFORMATION
@@ -300,7 +300,6 @@ def test_pipeline_reports_every_indicator_collected(published: PipelineSummary) 
     assert all(outcome.records_failed == 0 for outcome in published.outcomes)
 
 
-
 # ---------------------------------------------------------------- bronze layer
 
 
@@ -348,7 +347,6 @@ def test_collection_log_records_each_fetch(published: PipelineSummary, reader: S
         assert row.source_name == SOURCE_NAME
         assert row.status == STATUS_SUCCESS
         assert row.records_collected == ROWS_PER_INDICATOR
-
 
 
 # ---------------------------------------------------------------- silver layer
@@ -404,7 +402,6 @@ def test_silver_rows_resolve_to_their_bronze_envelope(
     assert orphans == 0
 
 
-
 # ------------------------------------------------------------------ gold layer
 
 
@@ -443,8 +440,7 @@ def test_gold_rows_carry_the_discovered_domain(
         stored = set(
             scalars(
                 reader,
-                "SELECT DISTINCT domain FROM gold.gold_analytical "
-                "WHERE indicator_id = :level",
+                "SELECT DISTINCT domain FROM gold.gold_analytical " "WHERE indicator_id = :level",
                 level=indicator_id,
             )
         )
@@ -497,7 +493,6 @@ def test_load_gold_series_reads_the_published_levels(
     assert len(frame) == ROWS_PER_INDICATOR
     assert frame["value"].notna().all()
     assert set(frame["domain"]) == {DOMAINS[USD_FREE]}
-
 
 
 # -------------------------------------------------------------- audit trail
@@ -567,7 +562,6 @@ def test_catalog_records_the_observed_coverage(
         assert row.frequency == FREQUENCY_DAILY
 
 
-
 # -------------------------------------------------------------- idempotency
 
 
@@ -613,6 +607,70 @@ def test_rerun_upserts_silver_and_republishes_gold(
     )
     assert published.rows_written_silver == second.rows_written_silver
 
+
+def test_same_day_scrapes_upsert_not_append(
+    published: PipelineSummary,
+    reader: Session,
+) -> None:
+    """
+    Multiple scrapes on the same day update the same Silver observation.
+
+    Regression test for idempotency defect (2026-09-09): TGJU parser originally
+    used scrape-time as the observation timestamp, so each scrape created a new
+    Silver row even when fetching the same "current price". The fix normalizes
+    timestamps to the start of day (00:00 UTC) so the Silver upsert correctly
+    identifies duplicate observations on ``(indicator_id, timestamp)``.
+
+    This test confirms that:
+    1. Silver upserts preserve row ids (no new rows created)
+    2. Silver row timestamps are normalized to start of day
+    3. Gold deletes and reinserts with same count (no derived metrics yet)
+    4. Bronze appends (by design - immutable audit trail)
+    """
+    # Capture initial state
+    silver_ids_before = set(scalars(reader, "SELECT id FROM silver.silver_cleaned"))
+    silver_timestamps_before = set(
+        scalars(reader, "SELECT DISTINCT timestamp FROM silver.silver_cleaned")
+    )
+    gold_before = count(reader, "gold.gold_analytical")
+
+    # All timestamps should be normalized to start of day (00:00:00)
+    for ts in silver_timestamps_before:
+        assert ts.hour == 0 and ts.minute == 0 and ts.second == 0 and ts.microsecond == 0
+
+    reader.rollback()
+
+    # Rerun the same pipeline (simulates scraping again on the same day)
+    second = run_pipeline()
+
+    assert second.exit_code == 0
+
+    # Silver: Same row ids (upsert, not append)
+    silver_ids_after = set(scalars(reader, "SELECT id FROM silver.silver_cleaned"))
+    assert silver_ids_after == silver_ids_before
+
+    # Silver: Same timestamps (still normalized to start of day)
+    silver_timestamps_after = set(
+        scalars(reader, "SELECT DISTINCT timestamp FROM silver.silver_cleaned")
+    )
+    assert silver_timestamps_after == silver_timestamps_before
+
+    # Silver: Same row count (no duplicates)
+    assert count(reader, "silver.silver_cleaned") == len(INDICATORS)
+
+    # Gold: Same row count (delete-reinsert, but no new derived metrics)
+    assert count(reader, "gold.gold_analytical") == gold_before
+
+    # Bronze: Doubled (append-only by design)
+    assert count(reader, "bronze.bronze_raw") == len(INDICATORS) * 2
+
+    # Lineage: Silver rows now point to the second Bronze envelope
+    bronze_ids_after = set(scalars(reader, "SELECT DISTINCT bronze_id FROM silver.silver_cleaned"))
+    assert len(bronze_ids_after) == len(INDICATORS)
+
+    # The new Bronze ids are different from those created in the first run
+    bronze_ids_first_run = [outcome.bronze_id for outcome in published.outcomes]
+    assert all(bid not in bronze_ids_first_run for bid in bronze_ids_after)
 
 
 # --------------------------------------------------------------- live scraper

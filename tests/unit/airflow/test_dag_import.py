@@ -27,7 +27,7 @@ def airflow_dags_path():
 def ensure_airflow_in_path(airflow_dags_path):
     """
     Add the airflow/dags directory to sys.path for DAG imports.
-    
+
     Airflow's DagBag does this automatically, but direct imports in tests need it.
     """
     dags_str = str(airflow_dags_path)
@@ -81,7 +81,9 @@ def test_tgju_backfill_dag_is_manual_trigger_only(ensure_airflow_in_path):
     """Test that tgju_backfill DAG is manual trigger only (no schedule)."""
     import tgju_backfill
 
-    assert tgju_backfill.dag.schedule is None, "Backfill DAG should have no schedule (manual trigger only)"
+    assert (
+        tgju_backfill.dag.schedule is None
+    ), "Backfill DAG should have no schedule (manual trigger only)"
 
 
 def test_tgju_daily_dag_has_catchup_disabled(ensure_airflow_in_path):
@@ -122,7 +124,9 @@ def test_tgju_daily_dag_max_active_runs_is_one(ensure_airflow_in_path):
     """Test that tgju_daily DAG prevents concurrent runs."""
     import tgju_daily
 
-    assert tgju_daily.dag.max_active_runs == 1, "max_active_runs should be 1 to prevent concurrent scraping"
+    assert (
+        tgju_daily.dag.max_active_runs == 1
+    ), "max_active_runs should be 1 to prevent concurrent scraping"
 
 
 def test_tgju_daily_dag_has_retries_configured(ensure_airflow_in_path):

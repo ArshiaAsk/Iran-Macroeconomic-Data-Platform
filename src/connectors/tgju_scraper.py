@@ -283,9 +283,7 @@ class TgjuScraper(DataConnector):
             )
             discovered.append(meta)
 
-        log_with_context(
-            logger, "INFO", "tgju discovery", discovered_count=len(discovered)
-        )
+        log_with_context(logger, "INFO", "tgju discovery", discovered_count=len(discovered))
         return discovered
 
     def fetch(
@@ -443,7 +441,7 @@ def run_tgju_pipeline(
     Raises:
         ConnectionError: If TGJU cannot be reached at all
     """
-    from src.database.connection import get_db
+    from src.database.connection import get_db, init_database
     from src.etl.pipeline import (  # local imports avoid circular dependency
         PipelineSummary,
         upsert_indicator_catalog,
@@ -460,6 +458,16 @@ def run_tgju_pipeline(
 
     summary = PipelineSummary(dry_run=dry_run)
     targets = connector.config.paths
+
+    # Keep the CLI/programmatic runner consistent with the ETL pipeline:
+    # initialize the shared database singleton before the first get_db() call.
+    # Dry runs intentionally avoid creating a database engine.
+    if not dry_run:
+        try:
+            get_db()
+        except RuntimeError:
+            config = get_config()
+            init_database(config.database.url, echo=config.debug)
 
     # Map paths to indicator_ids
     indicator_ids = []
@@ -581,13 +589,13 @@ def _tgju_parser(
                 "obs_status": pd.Series(dtype="object"),
             }
         )
-    
+
     # Extract HTML from the first (and only) row
     row = rows[0]
     if isinstance(row, dict) and "html" in row:
         html = row["html"]
         return parse_tgju_html(html, indicator_id, now=now)
-    
+
     # Fallback for unexpected structure
     return pd.DataFrame(
         {
@@ -618,7 +626,13 @@ def _persist_indicator_tgju(
         source_name=SOURCE_NAME,
         source_type=SOURCE_TYPE,
         raw_envelope={
-            "rows": [{"html": fetched.raw_html, "url": fetched.request_url, "scraped_at": fetched.scraped_at.isoformat()}]
+            "rows": [
+                {
+                    "html": fetched.raw_html,
+                    "url": fetched.request_url,
+                    "scraped_at": fetched.scraped_at.isoformat(),
+                }
+            ]
         },
         request_url=fetched.request_url,
         http_status_code=None,  # Playwright doesn't expose status code easily in our usage
@@ -711,11 +725,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         log_format=config.logging.format,
     )
 
-    paths = (
-        tuple(p.strip() for p in args.paths.split(",") if p.strip())
-        if args.paths
-        else None
-    )
+    paths = tuple(p.strip() for p in args.paths.split(",") if p.strip()) if args.paths else None
 
     try:
         summary = run_tgju_pipeline(paths=paths, dry_run=args.dry_run)

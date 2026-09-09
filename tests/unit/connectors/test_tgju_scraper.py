@@ -8,7 +8,7 @@ this suite passes with no network access and no actual browser.
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 from uuid import uuid4
 
 import pandas as pd
@@ -23,6 +23,7 @@ from src.connectors.tgju_scraper import (
     _domain_for_tgju,
     _unit_for_tgju,
     empty_frame,
+    run_tgju_pipeline,
 )
 from src.utils.exceptions import ConnectionError as PlatformConnectionError
 from src.utils.exceptions import DataRetrievalError
@@ -174,6 +175,55 @@ def test_empty_frame_has_column_contract() -> None:
 
     assert list(frame.columns) == ["timestamp", "value", "indicator_id", "unit", "obs_status"]
     assert frame.empty
+
+
+def test_pipeline_initializes_shared_database_before_writes() -> None:
+    """The TGJU runner bootstraps the shared DB singleton like the ETL CLI."""
+    scraper = build_scraper()
+    fake_db = MagicMock()
+    fake_db.get_session.return_value.__enter__.return_value = Mock()
+    with (
+        patch(
+            "src.database.connection.get_db", side_effect=[RuntimeError("not initialized"), fake_db]
+        ),
+        patch("src.database.connection.init_database", return_value=fake_db) as init_db,
+        patch("src.connectors.tgju_scraper._collect_one_tgju") as collect,
+        patch("src.etl.pipeline.upsert_indicator_catalog", return_value=1),
+        patch.object(scraper, "connect", return_value=True),
+    ):
+        collect.return_value = Mock(
+            status="success",
+            rows_fetched=0,
+            rows_written_silver=0,
+            rows_written_gold=0,
+            records_failed=0,
+            is_chain_linked=False,
+        )
+        run_tgju_pipeline(paths=("price_dollar_rl",), connector=scraper)
+
+    init_db.assert_called_once()
+
+
+def test_pipeline_dry_run_does_not_initialize_database() -> None:
+    """Dry runs fetch and parse without creating a database engine."""
+    scraper = build_scraper()
+    with (
+        patch("src.database.connection.get_db", side_effect=AssertionError("DB access")),
+        patch("src.database.connection.init_database") as init_db,
+        patch("src.connectors.tgju_scraper._collect_one_tgju") as collect,
+        patch.object(scraper, "connect", return_value=True),
+    ):
+        collect.return_value = Mock(
+            status="success",
+            rows_fetched=0,
+            rows_written_silver=0,
+            rows_written_gold=0,
+            records_failed=0,
+            is_chain_linked=False,
+        )
+        run_tgju_pipeline(paths=("price_dollar_rl",), connector=scraper, dry_run=True)
+
+    init_db.assert_not_called()
 
 
 # --------------------------------------------------------------- connect()
@@ -436,8 +486,12 @@ def test_fetch_ignores_date_range_for_current_snapshot() -> None:
     browser = FakeBrowser(page)
     scraper = build_scraper(browser=browser)
 
-    frame_wide = scraper.fetch(USD, datetime(2020, 1, 1, tzinfo=UTC), datetime(2026, 12, 31, tzinfo=UTC))
-    frame_narrow = scraper.fetch(USD, datetime(2026, 9, 8, tzinfo=UTC), datetime(2026, 9, 8, tzinfo=UTC))
+    frame_wide = scraper.fetch(
+        USD, datetime(2020, 1, 1, tzinfo=UTC), datetime(2026, 12, 31, tzinfo=UTC)
+    )
+    frame_narrow = scraper.fetch(
+        USD, datetime(2026, 9, 8, tzinfo=UTC), datetime(2026, 9, 8, tzinfo=UTC)
+    )
 
     # Both return the same current price
     assert len(frame_wide) == 1

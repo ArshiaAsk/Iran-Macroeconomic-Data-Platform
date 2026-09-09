@@ -10,7 +10,7 @@ All functions are deterministic and side-effect-free for easy testing.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import jdatetime
 import pandas as pd
@@ -56,14 +56,14 @@ def normalise_digits(text: str) -> str:
     """
     # Translate Persian and Arabic-Indic digits to ASCII
     normalized = text.translate(PERSIAN_TO_ASCII).translate(ARABIC_INDIC_TO_ASCII)
-    
+
     # Remove thousand separators: comma, Arabic comma, Persian separator
     # Keep decimal point (.)
     normalized = normalized.replace(",", "")  # ASCII comma
     normalized = normalized.replace("،", "")  # Arabic comma U+060C
     normalized = normalized.replace("٬", "")  # Persian separator U+066C
     normalized = normalized.replace(" ", "")  # Whitespace
-    
+
     return normalized
 
 
@@ -126,41 +126,51 @@ def jalali_to_gregorian(
     # Normalize digits first
     normalized_date = normalise_digits(date_text)
     normalized_time = normalise_digits(time_text) if time_text else None
-    
+
     # Extract numeric components from date
     # Pattern: optional weekday, day (1-2 digits), month name, year (4 digits)
     # Month names in Persian (Jalali calendar)
     persian_months = {
-        "فروردین": 1, "اردیبهشت": 2, "خرداد": 3,
-        "تیر": 4, "مرداد": 5, "شهریور": 6,
-        "مهر": 7, "آبان": 8, "آذر": 9,
-        "دی": 10, "بهمن": 11, "اسفند": 12,
+        "فروردین": 1,
+        "اردیبهشت": 2,
+        "خرداد": 3,
+        "تیر": 4,
+        "مرداد": 5,
+        "شهریور": 6,
+        "مهر": 7,
+        "آبان": 8,
+        "آذر": 9,
+        "دی": 10,
+        "بهمن": 11,
+        "اسفند": 12,
     }
-    
+
     # Find month name in the text
     month = None
     for month_name, month_num in persian_months.items():
         if month_name in date_text:
             month = month_num
             break
-    
+
     if month is None:
         msg = f"Cannot find month name in date text: '{date_text}'"
         raise ParsingError(msg)
-    
+
     # Extract year and day using regex on normalized text
     # Looking for 4-digit year and 1-2 digit day
     # Use non-word-boundary pattern since Persian text may not have clear boundaries
     year_match = re.search(r"(\d{4})", normalized_date)
     day_match = re.search(r"(\d{1,2})", normalized_date)
-    
+
     if not year_match or not day_match:
-        msg = f"Cannot parse day/year from date text: '{date_text}' (normalized: '{normalized_date}')"
+        msg = (
+            f"Cannot parse day/year from date text: '{date_text}' (normalized: '{normalized_date}')"
+        )
         raise ParsingError(msg)
-    
+
     year = int(year_match.group(1))
     day = int(day_match.group(1))
-    
+
     # Parse time if provided
     hour, minute, second = 0, 0, 0
     if normalized_time:
@@ -170,25 +180,26 @@ def jalali_to_gregorian(
             minute = int(time_parts[1])
             if len(time_parts) >= 3:
                 second = int(time_parts[2])
-    
+
     try:
         # Create Jalali datetime
         jalali_dt = jdatetime.datetime(year, month, day, hour, minute, second)
-        
+
         # Convert to Gregorian
         gregorian_dt = jalali_dt.togregorian()
-        
+
         # Make timezone-aware (assume Tehran timezone for input, convert to UTC)
         # jdatetime returns naive datetime, so we localize it first
         import zoneinfo
+
         tehran_tz = zoneinfo.ZoneInfo(tz)
         localized_dt = gregorian_dt.replace(tzinfo=tehran_tz)
-        
+
         # Convert to UTC
-        utc_dt: datetime = localized_dt.astimezone(timezone.utc)
-        
+        utc_dt: datetime = localized_dt.astimezone(UTC)
+
         return utc_dt
-        
+
     except ValueError as e:
         msg = f"Cannot convert Jalali date to Gregorian: y={year}, m={month}, d={day}"
         raise ParsingError(msg) from e
@@ -205,6 +216,12 @@ def parse_tgju_html(
 
     Extracts the current price from the "در یک نگاه" (at a glance) table.
     Returns a single-row DataFrame with the most recent price observation.
+
+    **Idempotency:** The observation timestamp is normalized to the start of the
+    day (00:00 UTC) so multiple scrapes on the same day update the same Silver
+    row rather than creating duplicates. TGJU provides "today's price", not
+    "this second's price". The Silver upsert will replace earlier scrapes from
+    the same day with the latest value, preserving idempotency.
 
     Args:
         html: Raw HTML content from TGJU price page
@@ -224,36 +241,36 @@ def parse_tgju_html(
         2255000.0
     """
     soup = BeautifulSoup(html, "lxml")
-    
+
     # Look for the "در یک نگاه" section (at a glance)
     # This section contains the main price table
-    
+
     # Strategy: Find table cells with the label "نرخ فعلی" (current rate)
     # and extract the adjacent cell value
-    
+
     price_value = None
     timestamp_text = None
     date_text = None
-    
+
     # Find all table rows
     for row in soup.find_all("tr"):
         cells = row.find_all("td")
         if len(cells) >= 2:
             label = cells[0].get_text(strip=True)
             value = cells[1].get_text(strip=True)
-            
+
             if "نرخ فعلی" in label and price_value is None:
                 # Found current price
                 price_value = value
             elif "زمان ثبت آخرین نرخ" in label:
                 # Found timestamp
                 timestamp_text = value
-    
+
     # Also look for date in metadata section
     date_div = soup.find("div", class_="date")
     if date_div:
         date_text = date_div.get_text(strip=True)
-    
+
     # If no price found, raise error
     if price_value is None:
         # Check if this is an error page
@@ -261,29 +278,34 @@ def parse_tgju_html(
         if error_msg:
             msg = f"TGJU page shows error: {error_msg.get_text(strip=True)}"
             raise ParsingError(msg)
-        
+
         msg = f"Cannot find price data for {indicator_id} in HTML"
         raise ParsingError(msg)
-    
+
     # Parse the price
     try:
         price = parse_price(price_value)
     except ParsingError:
         msg = f"Found price cell but cannot parse value: '{price_value}'"
         raise ParsingError(msg) from None
-    
-    # Determine timestamp
+
+    # Determine timestamp and normalize to start of day for idempotency
     if date_text and timestamp_text:
-        # Have both date and time
+        # Have both date and time - parse it
         try:
-            timestamp = jalali_to_gregorian(date_text, time_text=timestamp_text)
+            raw_timestamp = jalali_to_gregorian(date_text, time_text=timestamp_text)
         except ParsingError:
             # Fall back to current time
-            timestamp = now or datetime.now(timezone.utc)
+            raw_timestamp = now or datetime.now(UTC)
     else:
         # No date/time found, use current time
-        timestamp = now or datetime.now(timezone.utc)
-    
+        raw_timestamp = now or datetime.now(UTC)
+
+    # Normalize to start of day (00:00 UTC) for idempotent daily scraping.
+    # Multiple scrapes on the same day will share the same timestamp and trigger
+    # the Silver upsert, updating the existing row with the latest price.
+    timestamp = raw_timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+
     # Build DataFrame
     # All TGJU prices are in Iranian Rials (IRR)
     data = {
@@ -293,5 +315,5 @@ def parse_tgju_html(
         "unit": ["IRR"],
         "obs_status": ["A"],  # A = actual/observed
     }
-    
+
     return pd.DataFrame(data)
