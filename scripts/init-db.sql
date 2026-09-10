@@ -12,3 +12,6 @@ GRANT ALL PRIVILEGES ON SCHEMA bronze TO iran_macro;
 GRANT ALL PRIVILEGES ON SCHEMA silver TO iran_macro;
 GRANT ALL PRIVILEGES ON SCHEMA gold TO iran_macro;
 GRANT ALL PRIVILEGES ON SCHEMA metadata TO iran_macro;
+
+-- Note: airflow_db should be created separately as a distinct database
+-- Run manually: CREATE DATABASE airflow_db OWNER iran_macro;

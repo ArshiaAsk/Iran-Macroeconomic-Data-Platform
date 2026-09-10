@@ -4,10 +4,9 @@ Tests Persian digit normalization, price parsing, Jalali to Gregorian conversion
 and HTML parsing with fixtures.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from src.connectors.tgju_parser import (
@@ -144,41 +143,41 @@ class TestJalaliToGregorian:
         # سه شنبه ۱۷ شهریور ۱۴۰۵ -> Tuesday, 17 Shahrivar 1405
         # At midnight Tehran time (UTC+3:30) = 20:30 UTC previous day
         result = jalali_to_gregorian("سه شنبه ۱۷ شهریور ۱۴۰۵")
-        assert result == datetime(2026, 9, 7, 20, 30, tzinfo=timezone.utc)
+        assert result == datetime(2026, 9, 7, 20, 30, tzinfo=UTC)
 
     def test_jalali_date_without_weekday(self):
         """Convert Jalali date without weekday."""
         result = jalali_to_gregorian("۱۷ شهریور ۱۴۰۵")
-        assert result == datetime(2026, 9, 7, 20, 30, tzinfo=timezone.utc)
+        assert result == datetime(2026, 9, 7, 20, 30, tzinfo=UTC)
 
     def test_jalali_date_first_of_year(self):
         """Convert first day of Jalali year (Nowruz)."""
         # ۱ فروردین ۱۴۰۵ -> 2026-03-21 at midnight Tehran = 2026-03-20 20:30 UTC
         result = jalali_to_gregorian("۱ فروردین ۱۴۰۵")
-        assert result == datetime(2026, 3, 20, 20, 30, tzinfo=timezone.utc)
+        assert result == datetime(2026, 3, 20, 20, 30, tzinfo=UTC)
 
     def test_jalali_date_last_day_of_year(self):
         """Convert last day of Jalali year."""
         # ۲۹ اسفند ۱۴۰۴ -> 2026-03-20 at midnight Tehran = 2026-03-19 20:30 UTC
         result = jalali_to_gregorian("۲۹ اسفند ۱۴۰۴")
-        assert result == datetime(2026, 3, 19, 20, 30, tzinfo=timezone.utc)
+        assert result == datetime(2026, 3, 19, 20, 30, tzinfo=UTC)
 
     def test_jalali_month_names(self):
         """Test all Jalali month names."""
         # All dates at midnight Tehran time = 20:30 UTC previous day
         months = [
-            ("۱ فروردین ۱۴۰۵", datetime(2026, 3, 20, 20, 30, tzinfo=timezone.utc)),
-            ("۱ اردیبهشت ۱۴۰۵", datetime(2026, 4, 20, 20, 30, tzinfo=timezone.utc)),
-            ("۱ خرداد ۱۴۰۵", datetime(2026, 5, 21, 20, 30, tzinfo=timezone.utc)),
-            ("۱ تیر ۱۴۰۵", datetime(2026, 6, 21, 20, 30, tzinfo=timezone.utc)),
-            ("۱ مرداد ۱۴۰۵", datetime(2026, 7, 22, 20, 30, tzinfo=timezone.utc)),
-            ("۱ شهریور ۱۴۰۵", datetime(2026, 8, 22, 20, 30, tzinfo=timezone.utc)),
-            ("۱ مهر ۱۴۰۵", datetime(2026, 9, 22, 20, 30, tzinfo=timezone.utc)),
-            ("۱ آبان ۱۴۰۵", datetime(2026, 10, 22, 20, 30, tzinfo=timezone.utc)),
-            ("۱ آذر ۱۴۰۵", datetime(2026, 11, 21, 20, 30, tzinfo=timezone.utc)),
-            ("۱ دی ۱۴۰۵", datetime(2026, 12, 21, 20, 30, tzinfo=timezone.utc)),
-            ("۱ بهمن ۱۴۰۵", datetime(2027, 1, 20, 20, 30, tzinfo=timezone.utc)),
-            ("۱ اسفند ۱۴۰۵", datetime(2027, 2, 19, 20, 30, tzinfo=timezone.utc)),
+            ("۱ فروردین ۱۴۰۵", datetime(2026, 3, 20, 20, 30, tzinfo=UTC)),
+            ("۱ اردیبهشت ۱۴۰۵", datetime(2026, 4, 20, 20, 30, tzinfo=UTC)),
+            ("۱ خرداد ۱۴۰۵", datetime(2026, 5, 21, 20, 30, tzinfo=UTC)),
+            ("۱ تیر ۱۴۰۵", datetime(2026, 6, 21, 20, 30, tzinfo=UTC)),
+            ("۱ مرداد ۱۴۰۵", datetime(2026, 7, 22, 20, 30, tzinfo=UTC)),
+            ("۱ شهریور ۱۴۰۵", datetime(2026, 8, 22, 20, 30, tzinfo=UTC)),
+            ("۱ مهر ۱۴۰۵", datetime(2026, 9, 22, 20, 30, tzinfo=UTC)),
+            ("۱ آبان ۱۴۰۵", datetime(2026, 10, 22, 20, 30, tzinfo=UTC)),
+            ("۱ آذر ۱۴۰۵", datetime(2026, 11, 21, 20, 30, tzinfo=UTC)),
+            ("۱ دی ۱۴۰۵", datetime(2026, 12, 21, 20, 30, tzinfo=UTC)),
+            ("۱ بهمن ۱۴۰۵", datetime(2027, 1, 20, 20, 30, tzinfo=UTC)),
+            ("۱ اسفند ۱۴۰۵", datetime(2027, 2, 19, 20, 30, tzinfo=UTC)),
         ]
         for jalali_str, expected in months:
             assert jalali_to_gregorian(jalali_str) == expected
@@ -186,12 +185,12 @@ class TestJalaliToGregorian:
     def test_ascii_digits_in_date(self):
         """Convert Jalali date with ASCII digits."""
         result = jalali_to_gregorian("17 شهریور 1405")
-        assert result == datetime(2026, 9, 7, 20, 30, tzinfo=timezone.utc)
+        assert result == datetime(2026, 9, 7, 20, 30, tzinfo=UTC)
 
     def test_result_is_utc_aware(self):
         """Result datetime is UTC-aware."""
         result = jalali_to_gregorian("۱۷ شهریور ۱۴۰۵")
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
 
     def test_empty_string_raises_error(self):
         """Empty string raises ParsingError."""
@@ -288,7 +287,7 @@ class TestIntegration:
         assert result["indicator_id"].iloc[0] == "TGJU.USD.FREE"
         assert result["unit"].iloc[0] == "IRR"
         assert result["obs_status"].iloc[0] == "A"
-        assert result["timestamp"].iloc[0].tzinfo == timezone.utc
+        assert result["timestamp"].iloc[0].tzinfo == UTC
 
     def test_fixtures_represent_real_tgju_structure(self):
         """All fixtures parse without errors (sanity check)."""

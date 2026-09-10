@@ -82,6 +82,7 @@ airflow/webserver_config.py
 airflow/*.pid
 airflow/*.err
 airflow/*.log
+airflow/simple_auth_manager_passwords.json
 
 # Environment variables
 .env
