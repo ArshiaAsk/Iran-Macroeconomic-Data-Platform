@@ -8,6 +8,7 @@ Catchup: Disabled (no backfill on DAG activation)
 from datetime import timedelta
 
 import pendulum
+
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 
@@ -42,10 +43,11 @@ def _run_tgju_scrape() -> None:
         # Raise so Airflow marks the task as failed and triggers retries/callbacks
         from airflow.exceptions import AirflowException
 
-        raise AirflowException(
+        msg = (
             f"TGJU scrape failed for {len(summary.failed)} instruments: "
             f"{[o.indicator_id for o in summary.failed]}"
         )
+        raise AirflowException(msg)
 
 
 def _on_failure_callback(context: dict[str, object]) -> None:

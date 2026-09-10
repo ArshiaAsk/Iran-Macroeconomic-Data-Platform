@@ -466,8 +466,8 @@ def run_tgju_pipeline(
         try:
             get_db()
         except RuntimeError:
-            config = get_config()
-            init_database(config.database.url, echo=config.debug)
+            app_config = get_config()
+            init_database(app_config.database.url, echo=app_config.debug)
 
     # Map paths to indicator_ids
     indicator_ids = []

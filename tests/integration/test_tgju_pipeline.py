@@ -77,7 +77,7 @@ LAYER_TABLES = (
 )
 
 LIVE_FLAG = "RUN_LIVE_API_TESTS"
-MIN_LIVE_OBSERVATIONS = 10
+MIN_LIVE_OBSERVATIONS = 1  # TGJU only returns current price, not historical
 HTTP_OK = 200
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "tgju"
@@ -636,7 +636,10 @@ def test_same_day_scrapes_upsert_not_append(
 
     # All timestamps should be normalized to start of day (00:00:00)
     for ts in silver_timestamps_before:
-        assert ts.hour == 0 and ts.minute == 0 and ts.second == 0 and ts.microsecond == 0
+        assert ts.hour == 0
+        assert ts.minute == 0
+        assert ts.second == 0
+        assert ts.microsecond == 0
 
     reader.rollback()
 
@@ -701,4 +704,5 @@ def test_live_tgju_scrape_returns_daily_prices() -> None:
     assert result.frame["timestamp"].is_monotonic_increasing
     assert result.frame["value"].notna().sum() >= MIN_LIVE_OBSERVATIONS
     assert result.scraped_at is not None
-    assert result.raw_html is not None and len(result.raw_html) > 1000
+    assert result.raw_html is not None
+    assert len(result.raw_html) > 1000

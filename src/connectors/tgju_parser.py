@@ -62,9 +62,7 @@ def normalise_digits(text: str) -> str:
     normalized = normalized.replace(",", "")  # ASCII comma
     normalized = normalized.replace("،", "")  # Arabic comma U+060C
     normalized = normalized.replace("٬", "")  # Persian separator U+066C
-    normalized = normalized.replace(" ", "")  # Whitespace
-
-    return normalized
+    return normalized.replace(" ", "")  # Whitespace
 
 
 def parse_price(text: str) -> float:

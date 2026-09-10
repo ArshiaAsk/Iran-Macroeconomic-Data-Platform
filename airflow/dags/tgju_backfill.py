@@ -8,6 +8,7 @@ Purpose: Load historical TGJU data over a bounded date range
 from datetime import datetime
 
 import pendulum
+
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 
@@ -25,7 +26,6 @@ def _run_tgju_backfill(**context: object) -> None:
         AirflowException: On pipeline failure or invalid configuration
     """
     from airflow.exceptions import AirflowException
-
     from src.connectors.tgju_scraper import run_tgju_pipeline
     from src.utils.logging import log_with_context, setup_logging
 
@@ -42,22 +42,23 @@ def _run_tgju_backfill(**context: object) -> None:
 
     # Validate required parameters
     if not start_date_str or not end_date_str:
-        raise AirflowException(
+        msg = (
             "Backfill requires start_date and end_date in dag_run.conf. "
             'Example: {"start_date": "2024-01-01", "end_date": "2024-12-31"}'
         )
+        raise AirflowException(msg)
 
     # Parse dates
     try:
         start_date = datetime.fromisoformat(start_date_str)
         end_date = datetime.fromisoformat(end_date_str)
     except ValueError as exc:
-        raise AirflowException(f"Invalid date format: {exc}. Use ISO8601 (YYYY-MM-DD)") from exc
+        msg = f"Invalid date format: {exc}. Use ISO8601 (YYYY-MM-DD)"
+        raise AirflowException(msg) from exc
 
     if start_date > end_date:
-        raise AirflowException(
-            f"start_date ({start_date_str}) must be before end_date ({end_date_str})"
-        )
+        msg = f"start_date ({start_date_str}) must be before end_date ({end_date_str})"
+        raise AirflowException(msg)
 
     # Parse paths if provided
     paths = tuple(p.strip() for p in paths_str.split(",") if p.strip()) if paths_str else None
@@ -96,7 +97,8 @@ def _run_tgju_backfill(**context: object) -> None:
     )
 
     if summary.failed:
-        raise AirflowException(f"TGJU backfill failed for {len(summary.failed)} instruments")
+        msg = f"TGJU backfill failed for {len(summary.failed)} instruments"
+        raise AirflowException(msg)
 
 
 def _on_failure_callback(context: dict[str, object]) -> None:

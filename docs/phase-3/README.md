@@ -20,6 +20,7 @@
 ### Components
 - ✅ **TGJU Parser** (`src/connectors/tgju_parser.py`) - Persian number handling, HTML extraction
 - ✅ **TGJU Scraper** (`src/connectors/tgju_scraper.py`) - Playwright browser automation
+- ✅ **Airflow DAGs** (`airflow/dags/`) - Daily scraper (23:00 Tehran) + manual backfill
 - ✅ **Integration Tests** (`tests/integration/test_tgju_pipeline.py`) - End-to-end pipeline validation
 - ✅ **Unit Tests** - 84 tests (45 parser + 39 scraper)
 
@@ -119,6 +120,13 @@ the historical series.
   ]
 }
 ```
+
+### 5. Airflow Orchestration
+- **Daily DAG:** `tgju_daily` runs at 23:00 Asia/Tehran (after market close)
+- **Backfill DAG:** `tgju_backfill` for manual historical runs (triggers current scrape repeatedly)
+- **Retry logic:** 3 retries with exponential backoff (5m, 15m, 30m)
+- **Local deployment:** LocalExecutor with standalone mode
+- **See:** `airflow/README.md` for complete setup and operation guide
 
 ---
 

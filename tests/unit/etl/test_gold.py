@@ -781,7 +781,7 @@ def test_daily_strategy_skips_first_29_ma() -> None:
 def test_daily_derived_series_have_correct_indicator_ids() -> None:
     """Daily derived series use derived_ret1d_indicator_id and derived_ma30_indicator_id."""
     session = FakeSession()
-    rows = seed_daily_silver(session, indicator_id="TGJU.USD.FREE", days=35)
+    seed_daily_silver(session, indicator_id="TGJU.USD.FREE", days=35)
     catalog_entry_daily(session, "TGJU.USD.FREE", domain="fx", frequency="daily")
 
     silver_to_gold(session, "TGJU.USD.FREE", derivation_strategy="daily", derived_prefix="TGJU")
@@ -840,7 +840,7 @@ def test_daily_strategy_does_not_publish_yoy() -> None:
 def test_yoy_strategy_does_not_publish_daily_metrics() -> None:
     """derivation_strategy='yoy' does not emit RET1D or MA30."""
     session = FakeSession()
-    rows = seed_silver(session, rebased_levels())
+    seed_silver(session, rebased_levels())
     session.add(catalog_entry("gdp", base_years=[2000, 2005]))
 
     silver_to_gold(session, GDP, derivation_strategy="yoy", derived_prefix="WB")
@@ -856,7 +856,7 @@ def test_yoy_strategy_does_not_publish_daily_metrics() -> None:
 def test_daily_strategy_with_custom_prefix() -> None:
     """Daily strategy respects derived_prefix parameter."""
     session = FakeSession()
-    rows = seed_daily_silver(session, indicator_id="CUSTOM.INDICATOR", days=35)
+    seed_daily_silver(session, indicator_id="CUSTOM.INDICATOR", days=35)
     catalog_entry_daily(session, "CUSTOM.INDICATOR", domain="test", frequency="daily")
 
     silver_to_gold(

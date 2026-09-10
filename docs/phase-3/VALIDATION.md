@@ -221,6 +221,8 @@ TOTAL                             1874    655    83.06%
 poetry run pytest tests/integration/test_tgju_pipeline.py::test_pipeline_reports_every_indicator_collected -v
 
 # Query database
+make db-shell 
+or
 docker compose exec postgres psql -U iran_macro -d iran_macro_db_test -c "
   SELECT 
     'bronze' AS layer, COUNT(*) FROM bronze.bronze_raw
@@ -257,20 +259,36 @@ FROM bronze.bronze_raw
 WHERE source_name = 'tgju';
 
 -- Check Silver observations
-SELECT 
-  indicator_id, timestamp, value, unit, is_outlier
+SELECT
+    indicator_id,
+    timestamp,
+    value,
+    unit,
+    is_outlier
 FROM silver.silver_cleaned
-WHERE indicator_id IN ('price_dollar_rl', 'geram18', 'sekee')
-ORDER BY indicator_id;
+WHERE indicator_id IN (
+    'TGJU.USD.FREE',
+    'TGJU.GOLD.18K',
+    'TGJU.GOLD.EMAMI'
+)
+ORDER BY indicator_id, timestamp;
 
 -- Check Gold publication
-SELECT 
-  indicator_id, timestamp, value, original_value, 
-  is_chain_linked, 
-  metadata->>'derivation_strategy' AS derivation_strategy
+SELECT
+    indicator_id,
+    timestamp,
+    value,
+    original_value,
+    is_chain_linked,
+    chain_linking_confidence,
+    unit
 FROM gold.gold_analytical
-WHERE indicator_id IN ('price_dollar_rl', 'geram18', 'sekee')
-ORDER BY indicator_id;
+WHERE indicator_id IN (
+    'TGJU.USD.FREE',
+    'TGJU.GOLD.18K',
+    'TGJU.GOLD.EMAMI'
+)
+ORDER BY indicator_id, timestamp;
 ```
 
 ---

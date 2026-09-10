@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
-from uuid import uuid4
 
 import pandas as pd
 import pytest
