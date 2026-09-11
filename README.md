@@ -137,9 +137,16 @@ make check
 ### 7. Launch Dashboard (Phase 7)
 
 ```bash
-# Start Streamlit dashboard
-streamlit run dashboard/app.py
+# Start the local Streamlit dashboard
+make dashboard
+
+# Or invoke Streamlit directly
+poetry run streamlit run dashboard/app.py
 ```
+
+See [`docs/phase-7/README.md`](docs/phase-7/README.md) for the page guide,
+exports, browser setup for PNG/SVG charts, troubleshooting, and current data
+limitations.
 
 ---
 
@@ -198,7 +205,7 @@ iran-macro-platform/
 │   ├── database/            # Schema and connection management
 │   └── utils/               # Config, logging, validation, retry/backoff
 ├── alembic/                 # Migration environment and versions
-├── dashboard/               # Streamlit app (Phase 7 — not built yet)
+├── dashboard/               # Streamlit multi-page dashboard
 ├── airflow/                 # DAG definitions (Phase 3 — not built yet)
 ├── tests/
 │   ├── unit/                # Unit tests (no network, no database)
@@ -208,7 +215,8 @@ iran-macro-platform/
 │   ├── research/            # Research documents
 │   ├── plans/               # Phase implementation plans
 │   ├── phase-1/             # Phase 1 validation + implementation report
-│   └── phase-2/             # Phase 2 Indicator catalog (observed coverage)
+│   ├── phase-2/             # Phase 2 Indicator catalog (observed coverage)
+│   └── phase-7/             # Dashboard runbook
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies
@@ -421,9 +429,9 @@ poetry cache clear . --all
 - [ ] HBSIR household survey connector
 
 ### Phase 7: Dashboard (Week 7-8)
-- [ ] Streamlit multi-page app
-- [ ] Domain-specific analytics
-- [ ] Export functionality
+- [x] Streamlit multi-page app
+- [x] Domain-specific analytics
+- [x] Export functionality
 
 ### Phase 8: Production Readiness (Week 8)
 - [ ] CI/CD pipeline
@@ -465,4 +473,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** [Your Name]  
-**Project Status:** Phase 3 complete and validated — Phase 4 (IMF/EIA/OPEC APIs) or Phase 7 (Dashboard) next
+**Project Status:** Phase 7 dashboard implemented and validated — Phase 4 (IMF/EIA/OPEC APIs) next

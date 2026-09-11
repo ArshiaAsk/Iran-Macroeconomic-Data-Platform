@@ -23,9 +23,11 @@ jdatetime = "^5.0.0"
 beautifulsoup4 = "^4.12.0"
 lxml = "^5.0.0"
 streamlit = "^1.29.0"
-plotly = "^5.18.0"
+plotly = "^6.1.1"
 apache-airflow = {version = "^3.3.0", optional = true}  # Airflow 3.x: requires SQLAlchemy >= 2.0.50
 asyncpg = "^0.31.0"
+openpyxl = "^3.1.0"
+kaleido = "^1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
@@ -116,6 +118,7 @@ module = [
     "bs4.*",
     "streamlit.*",
     "plotly.*",
+    "kaleido.*",
     "airflow.*",
 ]
 ignore_missing_imports = true
