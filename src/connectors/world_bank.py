@@ -27,7 +27,7 @@ import argparse
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
@@ -40,6 +40,7 @@ from src.utils.config import get_config
 from src.utils.exceptions import ConnectionError as PlatformConnectionError
 from src.utils.exceptions import DataRetrievalError, ParsingError
 from src.utils.logging import get_logger, log_with_context
+from src.utils.periods import annual_period_end
 from src.utils.retry import RateLimiter, RetryPolicy
 from src.utils.validation import ValidationResult, validate_data_quality
 
@@ -63,7 +64,6 @@ USER_AGENT = "iran-macro-platform/0.1 (research; +https://github.com/ArshiaAsk)"
 # silver.unit / gold.unit / metadata.indicator_catalog.unit are String(50).
 UNIT_MAX_LENGTH = 50
 DEFAULT_DOMAIN = "unclassified"
-ANNUAL_DATE_LENGTH = 4
 ENVELOPE_LENGTH = 2
 
 FRAME_COLUMNS = ("timestamp", "value", "indicator_id", "unit", "obs_status")
@@ -220,11 +220,7 @@ def _parse_annual_timestamp(date_value: Any) -> datetime:
     Raises:
         ParsingError: If the value is not a bare four-digit year
     """
-    text = str(date_value).strip()
-    if len(text) != ANNUAL_DATE_LENGTH or not text.isdigit():
-        msg = f"expected a four-digit annual date, got {date_value!r}"
-        raise ParsingError(msg)
-    return datetime(int(text), 12, 31, tzinfo=UTC)
+    return annual_period_end(date_value)
 
 
 def _coerce_value(raw_value: Any) -> float | None:

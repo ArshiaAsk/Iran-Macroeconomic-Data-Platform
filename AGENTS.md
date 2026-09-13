@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phase 1 (foundation), Phase 2 (World Bank connector, ETL pipeline, chain-linking), and Phase 3 (TGJU scraper + Airflow) complete; Phase 4 (IMF/EIA/OPEC APIs) or Phase 7 (Dashboard) next
+* **Lifecycle Stage:** Active implementation — Phases 1–4 and 7 complete. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors; the OPEC basket is **deferred** (Cloudflare blocks programmatic access — see `docs/phase-4/VALIDATION.md`). Phase 5 (CBI/SCI domestic scrapers) is next
 
 ## Tech Stack
 
@@ -81,12 +81,15 @@ iran-macro-platform/
 ├── src/
 │   ├── connectors/          # Data source connectors (APIs + scrapers)
 │   │   ├── base.py          # Abstract DataConnector protocol
-│   │   ├── world_bank.py    # World Bank API connector ✓ IMPLEMENTED
-│   │   └── ...              # imf.py, tgju_scraper.py, cbi_scraper.py — later phases
+│   │   ├── world_bank.py    # World Bank API connector ✓ (reference implementation)
+│   │   ├── imf.py           # IMF DataMapper connector (annual WEO + forecasts) ✓
+│   │   ├── eia.py           # EIA Open Data v2 connector (monthly energy) ✓
+│   │   ├── tgju_scraper.py  # TGJU Playwright scraper ✓
+│   │   └── ...              # cbi_scraper.py, sci_scraper.py — later phases
 │   ├── etl/                 # Bronze/Silver/Gold transformations ✓ IMPLEMENTED
 │   ├── chain_linking/       # Base year adjustment algorithms ✓ IMPLEMENTED
 │   ├── database/            # Schema, connection, hypertable setup
-│   └── utils/               # Validation, logging, configuration, retry
+│   └── utils/               # Validation, logging, config, retry, period helpers ✓
 ├── alembic/                 # Migration environment and versions
 ├── dashboard/               # Streamlit app — Phase 7
 ├── airflow/                 # DAG definitions — Phase 3
@@ -98,7 +101,9 @@ iran-macro-platform/
 │   ├── research/            # Research documents
 │   ├── plans/               # Per-phase implementation plans
 │   ├── phase-1/             # Phase 1 validation + implementation report
-│   └── phase-2/             # Phase 2 Indicator catalog ✓ CREATED
+│   ├── phase-2/             # Indicator catalog (observed coverage)
+│   ├── phase-3/             # TGJU scraper reports
+│   └── phase-4/             # IMF/EIA reports + OPEC gate record ✓
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
@@ -111,7 +116,7 @@ iran-macro-platform/
 ```text
 ┌─────────────────────────────────────────────────────────┐
 │ DATA SOURCES (9+ heterogeneous sources)                 │
-│ • APIs: World Bank, IMF, EIA, OPEC                     │
+│ • APIs: World Bank, IMF, EIA (OPEC deferred)           │
 │ • Scraped: CBI TSD, SCI, TGJU                          │
 │ • Packages: TSETMC (finpy-tse), HBSIR                  │
 └───────────────────────┬─────────────────────────────────┘
@@ -250,6 +255,25 @@ class MySourceConnector(DataConnector):
   hardcoded URLs, timeouts, or page sizes in the logic.
 - **The pipeline runner is separate** (`src/etl/pipeline.py`) and uses one
   committed session per indicator, so one bad indicator cannot abort the batch.
+- **New API sources plug into the generic runner.** `run_pipeline(connector,
+  spec)` is driven by a `SourceSpec`: source name/type, frequency, derived-series
+  namespace, per-indicator derivation overrides, forecast support, and the
+  Bronze-row parser. Add a connector plus a `build_spec()` — do not fork the
+  runner. World Bank remains a thin wrapper (`run_world_bank_pipeline`).
+- **Forecasts are explicit and opt-in.** A source that legitimately stores
+  future-dated periods (IMF WEO) sets `SourceSpec.supports_forecasts=True`;
+  Silver then keeps those rows, counts them, and records `observation_type` in
+  the row metadata. Every other source keeps rejecting future dates. The IMF
+  `actual`/`estimate`/`forecast` label is an **explicit project convention**
+  derived from the WEO vintage year — not an IMF-provided field.
+- **Period and frequency maths live in shared helpers.** `src/utils/periods.py`
+  provides `annual_period_end` / `month_period_end` / `parse_period` /
+  `year_earlier` (month-end snapping makes monthly YoY exact across leap years);
+  `src/etl/frequency.py` aggregates daily series to month-end. Do not
+  re-implement period logic in a connector.
+- **Secrets never reach Bronze or logs.** Build the persisted `request_url`
+  without the API key and scrub it from error/retry text (see
+  `src/connectors/eia.py`).
 
 ### Scraper-Specific Patterns (TGJU Reference)
 
@@ -500,14 +524,21 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | `Makefile` | Common commands (format, lint, test, check, db-*) |
 | `src/connectors/base.py` | Abstract DataConnector protocol |
 | `src/connectors/world_bank.py` | World Bank connector + `python -m` pipeline entry point (reference implementation) |
+| `src/connectors/imf.py` | IMF DataMapper connector (annual WEO + forecasts) |
+| `src/connectors/imf_parser.py` | IMF payload → Silver frame parser (vintage-based observation labels) |
+| `src/connectors/eia.py` | EIA Open Data v2 connector (monthly energy, API-key auth, paging) |
+| `src/connectors/eia_parser.py` | EIA payload → Silver frame parser (string values, month-end) |
 | `src/connectors/tgju_scraper.py` | TGJU scraper (Playwright + Persian handling) |
 | `src/connectors/tgju_parser.py` | TGJU HTML parser (Persian digits, date conversion) |
 | `src/etl/bronze.py` | Raw envelope persistence + `DataCollectionLog` |
 | `src/etl/silver.py` | Cleaning, outlier flagging, idempotent upsert |
 | `src/etl/gold.py` | Chain-linked publication + derived growth series |
 | `src/etl/lineage.py` | `TransformationLog` audit trail (records failures out of band) |
-| `src/etl/pipeline.py` | Bronze → Silver → Gold runner, one session per indicator |
+| `src/etl/pipeline.py` | Generic Bronze → Silver → Gold runner (`SourceSpec`), one session per indicator |
+| `src/etl/frequency.py` | Daily → month-end aggregation (last observation, no fill) |
+| `src/utils/periods.py` | Annual/monthly period-end + exact prior-year alignment |
 | `src/utils/retry.py` | Retry/backoff policy and rate limiter |
+| `docs/phase-4/VALIDATION.md` | Phase 4 validation results + OPEC gate record |
 | `src/database/schema.py` | SQLAlchemy models for all layers |
 | `src/database/connection.py` | Engine, session management, hypertable setup |
 | `alembic/versions/20260817_1456_initial_schema.py` | Initial migration (all 4 schemas + hypertable) |
@@ -553,6 +584,7 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | Research & Data Sources | `docs/research/init-research.md` |
 | Product Requirements | `PRD.md` |
 | Loaded indicators, units, observed coverage | `docs/phase-2/data_dictionary.md` |
+| Phase 4 validation + OPEC gate decision | `docs/phase-4/VALIDATION.md` |
 | Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents
@@ -567,12 +599,13 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 ### When Adding New Connectors
 
 1. **Follow connector protocol:** Inherit from `DataConnector`, implement all abstract methods (connect, discover, fetch, validate)
-2. **Copy the reference implementation:** `src/connectors/world_bank.py` — inject the session, `RetryPolicy`, and `RateLimiter` so unit tests need no network and no sleeps
-3. **Bronze first:** Store raw responses before parsing (allows re-parsing without re-scraping)
-4. **Test with fixtures:** Don't hit live APIs in unit tests; capture real payloads under `tests/fixtures/<source>/` and gate any live test behind `RUN_LIVE_API_TESTS=1` and `@pytest.mark.live()`
-5. **Make re-runs idempotent:** Silver upserts on `(indicator_id, timestamp)`; Gold deletes and reinserts per indicator
-6. **Document limitations:** Note data gaps, frequency, update schedules in docstrings, and add the indicators to `docs/phase-2/data_dictionary.md` with coverage observed from a real run
-7. **Handle errors gracefully:** Use custom exception hierarchy (ConnectionError, DataRetrievalError, ValidationError)
+2. **Copy the reference implementation:** `src/connectors/world_bank.py` — inject the session, `RetryPolicy`, and `RateLimiter` so unit tests need no network and no sleeps. `src/connectors/imf.py` (annual + forecasts) and `src/connectors/eia.py` (monthly + API key + paging) are worked examples of the same shape
+3. **Add a `build_spec()`, not a runner:** describe the source with `SourceSpec` (frequency, derived prefix, per-indicator overrides, `supports_forecasts`, parser) and call `run_cli`/`run_pipeline`
+4. **Bronze first:** Store raw responses before parsing (allows re-parsing without re-scraping). Use the `{"rows", "meta", "raw_response"}` envelope for API sources and `{"rows": [{"html", ...}]}` for scrapers
+5. **Test with fixtures:** Don't hit live APIs in unit tests; capture real payloads under `tests/fixtures/<source>/` and gate any live test behind `RUN_LIVE_API_TESTS=1` and `@pytest.mark.live()`
+6. **Make re-runs idempotent:** Silver upserts on `(indicator_id, timestamp)`; Gold deletes and reinserts per indicator
+7. **Document limitations:** Note data gaps, frequency, update schedules in docstrings, and add the indicators to `docs/phase-2/data_dictionary.md` with coverage observed from a real run. If a source is blocked, do not work around it — record the evidence and defer
+8. **Handle errors gracefully:** Use custom exception hierarchy (ConnectionError, DataRetrievalError, ValidationError); never let an API key reach Bronze or the logs
 
 ### When Debugging Scrapers
 

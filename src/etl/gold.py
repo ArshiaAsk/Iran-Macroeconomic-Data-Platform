@@ -57,6 +57,7 @@ from src.etl.lineage import (
 )
 from src.etl.silver import SilverSeries, load_silver_series
 from src.utils.logging import get_logger, log_with_context
+from src.utils.periods import year_earlier
 
 logger = get_logger(__name__)
 
@@ -80,6 +81,28 @@ DEFAULT_DOMAIN = "unclassified"
 PERCENT = 100.0
 
 
+def _namespaced(indicator_id: str, prefix: str, suffix: str) -> str:
+    """
+    Build a derived indicator id without double-prefixing a namespaced source.
+
+    Source indicator ids from namespaced connectors already carry their source
+    prefix (e.g. ``TGJU.USD.FREE``). Prepending the prefix again would produce
+    ``TGJU.TGJU.USD.FREE.RET1D``, so ids that already start with the namespace
+    are left untouched.
+
+    Args:
+        indicator_id: Source indicator code, namespaced or bare
+        prefix: Source namespace (e.g. ``WB`` or ``TGJU``)
+        suffix: Derived-series suffix (e.g. ``YOY`` or ``RET1D``)
+
+    Returns:
+        e.g. ``WB.NY.GDP.MKTP.KD.YOY`` or ``TGJU.USD.FREE.RET1D``
+    """
+    if indicator_id.startswith(f"{prefix}."):
+        return f"{indicator_id}.{suffix}"
+    return f"{prefix}.{indicator_id}.{suffix}"
+
+
 def derived_growth_indicator_id(indicator_id: str, prefix: str = DERIVED_PREFIX) -> str:
     """
     Namespaced id for an indicator's derived year-over-year growth series.
@@ -91,7 +114,7 @@ def derived_growth_indicator_id(indicator_id: str, prefix: str = DERIVED_PREFIX)
     Returns:
         e.g. ``WB.NY.GDP.MKTP.KD.YOY`` or ``TGJU.USD.FREE.YOY``
     """
-    return f"{prefix}.{indicator_id}.{DERIVED_YOY_SUFFIX}"
+    return _namespaced(indicator_id, prefix, DERIVED_YOY_SUFFIX)
 
 
 def derived_ret1d_indicator_id(indicator_id: str, prefix: str) -> str:
@@ -105,7 +128,7 @@ def derived_ret1d_indicator_id(indicator_id: str, prefix: str) -> str:
     Returns:
         e.g. ``TGJU.USD.FREE.RET1D``
     """
-    return f"{prefix}.{indicator_id}.{DERIVED_RET1D_SUFFIX}"
+    return _namespaced(indicator_id, prefix, DERIVED_RET1D_SUFFIX)
 
 
 def derived_ma30_indicator_id(indicator_id: str, prefix: str) -> str:
@@ -119,7 +142,7 @@ def derived_ma30_indicator_id(indicator_id: str, prefix: str) -> str:
     Returns:
         e.g. ``TGJU.USD.FREE.MA30``
     """
-    return f"{prefix}.{indicator_id}.{DERIVED_MA30_SUFFIX}"
+    return _namespaced(indicator_id, prefix, DERIVED_MA30_SUFFIX)
 
 
 def _resolve_catalog_entry(session: Session, indicator_id: str) -> IndicatorCatalog | None:
@@ -235,34 +258,73 @@ def _growth_records(
     """
     derived_id = derived_growth_indicator_id(series.indicator_id, prefix=prefix)
 
-    growth = linked[VALUE_COLUMN].pct_change(fill_method=None) * PERCENT
-    original_growth = linked[ORIGINAL_VALUE_COLUMN].pct_change(fill_method=None) * PERCENT
-    scale_changed = linked[SCALE_FACTOR_COLUMN].diff().abs() > SCALE_EPSILON
+    # Year-over-year means the *same period one year earlier*, never the
+    # previous row: for monthly and quarterly series a positional lag would
+    # silently publish MoM/QoQ as YoY. Look-ups are keyed by exact timestamp,
+    # so a missing prior-year period yields no rate instead of a fabricated one.
+    timestamps = linked[TIMESTAMP_COLUMN]
+    values = {
+        pd.Timestamp(ts): value for ts, value in zip(timestamps, linked[VALUE_COLUMN], strict=True)
+    }
+    original_values = {
+        pd.Timestamp(ts): value
+        for ts, value in zip(timestamps, linked[ORIGINAL_VALUE_COLUMN], strict=True)
+    }
+    scale_factors = {
+        pd.Timestamp(ts): value
+        for ts, value in zip(timestamps, linked[SCALE_FACTOR_COLUMN], strict=True)
+    }
+    linked_flags = {
+        pd.Timestamp(ts): bool(value)
+        for ts, value in zip(timestamps, linked[IS_LINKED_COLUMN], strict=True)
+    }
 
     records: list[dict[str, Any]] = []
-    timestamps = linked[TIMESTAMP_COLUMN]
 
-    for position in range(1, len(linked)):
-        rate = growth.iloc[position]
+    for position in range(len(linked)):
+        current_ts = pd.Timestamp(timestamps.iloc[position])
+        prior_ts = pd.Timestamp(year_earlier(current_ts))
+        current_value = values[current_ts]
+        prior_value = values.get(prior_ts)
+        if prior_value is None or not np.isfinite(current_value) or not np.isfinite(prior_value):
+            continue
+
+        rate = (current_value / prior_value - 1) * PERCENT
         if not np.isfinite(rate):
             continue
 
-        timestamp = pd.Timestamp(timestamps.iloc[position]).to_pydatetime()
+        timestamp = current_ts.to_pydatetime()
         # Derived rates attribute to the later period's Silver row: it is the
         # observation that completes the comparison.
         silver_id = series.silver_ids.get(timestamp)
         if silver_id is None:
             continue
 
-        previous = pd.Timestamp(timestamps.iloc[position - 1]).to_pydatetime()
-        crossed_break = bool(scale_changed.iloc[position])
-        raw_rate = original_growth.iloc[position]
+        previous = prior_ts.to_pydatetime()
+        current_scale = scale_factors.get(current_ts)
+        prior_scale = scale_factors.get(prior_ts)
+        crossed_break = bool(
+            current_scale is not None
+            and prior_scale is not None
+            and abs(current_scale - prior_scale) > SCALE_EPSILON
+        )
+
+        current_original = original_values.get(current_ts)
+        prior_original = original_values.get(prior_ts)
+        raw_rate = np.nan
+        if (
+            current_original is not None
+            and prior_original is not None
+            and np.isfinite(current_original)
+            and np.isfinite(prior_original)
+            and prior_original != 0
+        ):
+            raw_rate = (current_original / prior_original - 1) * PERCENT
+
         # A rate is chain-linked if either period it spans was rescaled. Scored
         # per row for the same reason levels are: a rate computed entirely on the
         # current base was never linked, so it carries no linking confidence.
-        is_linked = bool(
-            linked[IS_LINKED_COLUMN].iloc[position] or linked[IS_LINKED_COLUMN].iloc[position - 1]
-        )
+        is_linked = bool(linked_flags.get(current_ts, False) or linked_flags.get(prior_ts, False))
 
         records.append(
             {

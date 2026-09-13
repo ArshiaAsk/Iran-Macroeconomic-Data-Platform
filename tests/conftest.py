@@ -21,6 +21,8 @@ from src.database.connection import DatabaseConnection
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures"
 WORLD_BANK_FIXTURES = FIXTURE_ROOT / "world_bank"
+IMF_FIXTURES = FIXTURE_ROOT / "imf"
+EIA_FIXTURES = FIXTURE_ROOT / "eia"
 
 HTTP_OK = 200
 HTTP_NOT_FOUND = 404
@@ -44,6 +46,32 @@ def load_world_bank_fixture(name: str) -> Any:
         The parsed JSON payload, exactly as the API returned it
     """
     return json.loads((WORLD_BANK_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_imf_fixture(name: str) -> Any:
+    """
+    Load one captured IMF DataMapper response by fixture stem.
+
+    Args:
+        name: File stem under ``tests/fixtures/imf`` (no ``.json``)
+
+    Returns:
+        The parsed JSON payload, exactly as the API returned it
+    """
+    return json.loads((IMF_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_eia_fixture(name: str) -> Any:
+    """
+    Load one captured EIA v2 response by fixture stem.
+
+    Args:
+        name: File stem under ``tests/fixtures/eia`` (no ``.json``)
+
+    Returns:
+        The parsed JSON payload, exactly as the API returned it
+    """
+    return json.loads((EIA_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -157,6 +185,127 @@ def world_bank_session_for(
             if path.exists():
                 metadata[code] = load_world_bank_fixture(f"{code}_metadata")
     return make_world_bank_session(data=data, metadata=metadata)
+
+
+def make_imf_session(
+    data: Mapping[str, Any] | None = None,
+    indicators: Any = None,
+    countries: Any = None,
+) -> FakeHTTPSession:
+    """
+    Build a fake IMF DataMapper session backed by captured payloads.
+
+    Args:
+        data: Indicator code -> ``/{code}`` payload. Unrouted codes get the
+            captured invalid-indicator payload (HTTP 200, no ``values``).
+        indicators: Payload for ``/indicators``; defaults to the captured fixture
+        countries: Payload for ``/countries``; defaults to the captured fixture
+
+    Returns:
+        A session that answers the DataMapper routes the connector uses
+    """
+    data_routes = dict(data or {})
+    indicators_payload = load_imf_fixture("indicators") if indicators is None else indicators
+    countries_payload = load_imf_fixture("countries_normal") if countries is None else countries
+
+    def router(url: str, params: dict[str, Any]) -> Any:
+        if url.endswith("/indicators"):
+            return indicators_payload
+        if url.endswith("/countries"):
+            return countries_payload
+        code = url.rsplit("/", 1)[1]
+        if code in data_routes:
+            return data_routes[code]
+        return load_imf_fixture("missing_indicator")
+
+    return FakeHTTPSession(router=router)
+
+
+def imf_session_for(indicators: Sequence[str]) -> FakeHTTPSession:
+    """
+    Convenience builder: serve the ``{id}_normal`` fixture for each indicator.
+
+    Args:
+        indicators: Indicator codes with a captured ``{id}_normal.json`` fixture
+
+    Returns:
+        A fake session covering the probe, discovery, and each data fetch
+    """
+    data = {code: load_imf_fixture(f"{code}_normal") for code in indicators}
+    return make_imf_session(data=data)
+
+
+EIA_TEST_KEY = "TEST_KEY"
+
+
+def _page_eia_payload(payload: Any, params: Mapping[str, Any]) -> Any:
+    """Serve ``length``/``offset`` slices of a captured EIA payload."""
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("response"), Mapping):
+        return payload
+    response = dict(payload["response"])
+    rows = response.get("data")
+    if not isinstance(rows, list):
+        return payload
+    offset = int(params.get("offset", 0) or 0)
+    length = int(params.get("length", len(rows)) or len(rows))
+    paged = dict(payload)
+    paged["response"] = {**response, "data": rows[offset : offset + length]}
+    return paged
+
+
+def make_eia_session(
+    data: Mapping[str, Any] | None = None,
+    valid_key: str = EIA_TEST_KEY,
+) -> FakeHTTPSession:
+    """
+    Build a fake EIA v2 session backed by captured payloads.
+
+    The router enforces the same auth contract as the real API (403 for a
+    missing or wrong key) and honours ``length``/``offset`` so paging is
+    genuinely exercised rather than mocked away.
+
+    Args:
+        data: ``productId`` -> captured ``/international/data/`` payload
+        valid_key: The key the fake API accepts
+
+    Returns:
+        A session that answers the DataMapper routes the connector uses
+    """
+    fixtures = {str(key): value for key, value in (data or {}).items()}
+
+    def router(url: str, params: dict[str, Any]) -> Any:
+        key = params.get("api_key")
+        if not key:
+            return FakeResponse(load_eia_fixture("API_KEY_MISSING"), status_code=403)
+        if key != valid_key:
+            return FakeResponse(load_eia_fixture("API_KEY_INVALID"), status_code=403)
+        product_id = params.get("facets[productId][]")
+        payload = fixtures.get(str(product_id)) if product_id is not None else None
+        if payload is None:
+            return load_eia_fixture("unknown_facet")
+        return _page_eia_payload(payload, params)
+
+    return FakeHTTPSession(router=router)
+
+
+def eia_session_for(indicators: Sequence[str]) -> FakeHTTPSession:
+    """
+    Convenience builder: serve the ``{NAME}_normal`` fixture for each indicator.
+
+    Args:
+        indicators: Platform indicator ids (``EIA.IRN.CRUDE_PRODUCTION``)
+
+    Returns:
+        A fake session covering the auth probe and each indicator's pages
+    """
+    from src.connectors.eia import EIA_INDICATORS
+
+    data = {}
+    for code in indicators:
+        registry = EIA_INDICATORS[code]
+        fixture = code.rsplit(".", 1)[-1]
+        data[registry.product_id] = load_eia_fixture(f"{fixture}_normal")
+    return make_eia_session(data=data)
 
 
 class FakeResult:

@@ -1,5 +1,11 @@
 """
-End-to-end World Bank collection: discover -> Bronze -> Silver -> Gold.
+Generic end-to-end collection: discover -> Bronze -> Silver -> Gold.
+
+A source is described by a :class:`SourceSpec` (source name/type, frequency,
+derived-series namespace, per-indicator derivation, forecast support, parser)
+and a connector that implements :class:`SeriesConnector`. World Bank is the
+reference caller via :func:`run_world_bank_pipeline`; TGJU keeps its own
+HTML-specific runner. New API sources only add a connector + a spec.
 
 Orchestration contract
 ----------------------
@@ -20,10 +26,10 @@ Orchestration contract
 """
 
 import argparse
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 import pandas as pd
@@ -37,12 +43,11 @@ from src.connectors.world_bank import (
     SOURCE_TYPE,
     WorldBankConfig,
     WorldBankConnector,
-    WorldBankFetchResult,
 )
 from src.database.connection import get_db, init_database
 from src.database.schema import IndicatorCatalog, utc_now
 from src.etl.bronze import write_bronze
-from src.etl.gold import silver_to_gold
+from src.etl.gold import DERIVED_PREFIX, silver_to_gold
 from src.etl.lineage import STATUS_FAILED, STATUS_SUCCESS
 from src.etl.silver import bronze_to_silver
 from src.utils.config import get_config
@@ -69,6 +74,92 @@ INDICATOR_ERRORS: tuple[type[Exception], ...] = (
     ParsingError,
     ValidationError,
     ChainLinkingError,
+)
+
+
+@runtime_checkable
+class FetchResult(Protocol):
+    """What a connector hands back for one indicator's fetch."""
+
+    # Read-only properties rather than attributes: a protocol attribute is
+    # invariant, so a connector returning ``str`` for a ``str | None`` field
+    # would not match. A concrete attribute satisfies a read-only property.
+    @property
+    def indicator_id(self) -> str:
+        ...
+
+    @property
+    def frame(self) -> pd.DataFrame:
+        ...
+
+    @property
+    def raw_envelope(self) -> Any:
+        ...
+
+    @property
+    def request_url(self) -> str | None:
+        ...
+
+    @property
+    def http_status_code(self) -> int | None:
+        ...
+
+    def collection_metadata(self) -> dict[str, Any]:
+        """Provenance dict for ``bronze_raw.metadata``."""
+        ...
+
+
+class SeriesConnector(Protocol):
+    """The connector surface :func:`run_pipeline` drives."""
+
+    def connect(self) -> bool:
+        ...
+
+    def discover(self) -> list[IndicatorMetadata]:
+        ...
+
+    def fetch_series(self, indicator_id: str) -> FetchResult:
+        ...
+
+    def disconnect(self) -> None:
+        ...
+
+
+@dataclass(frozen=True)
+class IndicatorDerivation:
+    """How one indicator's derived Gold series should be produced."""
+
+    derivation_strategy: str | None = None
+    include_growth: bool = True
+
+
+@dataclass(frozen=True)
+class SourceSpec:
+    """
+    Everything the generic runner needs to know about a source.
+
+    ``parser`` is the pure Bronze-row -> DataFrame function used by Silver; it
+    defaults to the World Bank-shaped parser. ``overrides`` lets a source opt
+    individual indicators out of (or into) derived series -- IMF rate
+    indicators, for example, are already percentages.
+    """
+
+    source_name: str
+    source_type: str
+    frequency: str
+    derived_prefix: str
+    indicators: tuple[str, ...] = ()
+    default_derivation: IndicatorDerivation = field(default_factory=IndicatorDerivation)
+    overrides: Mapping[str, IndicatorDerivation] = field(default_factory=dict)
+    supports_forecasts: bool = False
+    parser: Callable[..., pd.DataFrame] | None = None
+
+
+WORLD_BANK_SPEC = SourceSpec(
+    source_name=SOURCE_NAME,
+    source_type=SOURCE_TYPE,
+    frequency=FREQUENCY_ANNUAL,
+    derived_prefix=DERIVED_PREFIX,
 )
 
 
@@ -279,9 +370,15 @@ def _domain_for(discovered: Sequence[IndicatorMetadata], indicator_id: str) -> s
     return None
 
 
+def _derivation_for(spec: SourceSpec, indicator_id: str) -> IndicatorDerivation:
+    """Resolve an indicator's derivation, falling back to the source default."""
+    return spec.overrides.get(indicator_id, spec.default_derivation)
+
+
 def _persist_indicator(
     session: Session,
-    fetched: WorldBankFetchResult,
+    spec: SourceSpec,
+    fetched: FetchResult,
     outcome: IndicatorOutcome,
     domain: str | None,
     unit: str | None,
@@ -289,8 +386,8 @@ def _persist_indicator(
     """Write one fetched series through Bronze, Silver, and Gold."""
     bronze_id = write_bronze(
         session,
-        source_name=SOURCE_NAME,
-        source_type=SOURCE_TYPE,
+        source_name=spec.source_name,
+        source_type=spec.source_type,
         raw_envelope=fetched.raw_envelope,
         request_url=fetched.request_url,
         http_status_code=fetched.http_status_code,
@@ -298,13 +395,17 @@ def _persist_indicator(
     )
     outcome.bronze_id = bronze_id
 
+    derivation = _derivation_for(spec, fetched.indicator_id)
+    strategy = derivation.derivation_strategy or spec.default_derivation.derivation_strategy
     silver = bronze_to_silver(
         session,
         bronze_id=bronze_id,
         indicator_id=fetched.indicator_id,
-        source_name=SOURCE_NAME,
-        frequency=FREQUENCY_ANNUAL,
+        source_name=spec.source_name,
+        frequency=spec.frequency,
         unit=unit,
+        parser=spec.parser,
+        allow_future=spec.supports_forecasts,
     )
     outcome.rows_written_silver = silver.records_written
     outcome.records_failed = silver.records_failed
@@ -312,7 +413,14 @@ def _persist_indicator(
     start, end = _observed_range(fetched.frame)
     update_catalog_availability(session, fetched.indicator_id, start, end)
 
-    gold = silver_to_gold(session, indicator_id=fetched.indicator_id, domain=domain)
+    gold = silver_to_gold(
+        session,
+        indicator_id=fetched.indicator_id,
+        domain=domain,
+        include_growth=derivation.include_growth,
+        derived_prefix=spec.derived_prefix,
+        derivation_strategy=strategy or "yoy",
+    )
     outcome.rows_written_gold = gold.records_written
     outcome.is_chain_linked = bool(gold.details.get("is_chain_linked"))
 
@@ -345,30 +453,69 @@ def run_world_bank_pipeline(
     elif indicators:
         connector.config.indicators = tuple(indicators)
 
-    summary = PipelineSummary(dry_run=dry_run)
-    targets = connector.config.indicators
-
     try:
-        connector.connect()
-        discovered = connector.discover()
-
-        if not dry_run:
-            with get_db().get_session() as session:
-                seeded = upsert_indicator_catalog(session, discovered)
-            log_with_context(logger, "INFO", "indicator catalog refreshed", rows=seeded)
-
-        for indicator_id in targets:
-            summary.outcomes.append(
-                _collect_one(connector, indicator_id, discovered, dry_run=dry_run)
-            )
+        return run_pipeline(
+            connector,
+            WORLD_BANK_SPEC,
+            indicators=connector.config.indicators,
+            dry_run=dry_run,
+        )
     finally:
         if owns_connector:
             connector.disconnect()
 
+
+def run_pipeline(
+    connector: SeriesConnector,
+    spec: SourceSpec,
+    indicators: Sequence[str] | None = None,
+    dry_run: bool = False,
+) -> PipelineSummary:
+    """
+    Run one source end to end, containing per-indicator failures.
+
+    The runner connects the connector but does not close it: the caller owns the
+    connector's lifecycle (the World Bank wrapper above closes one it built).
+
+    Args:
+        connector: Connector implementing :class:`SeriesConnector`
+        spec: Source description driving frequency, derivation, and parsing
+        indicators: Indicator codes to collect; defaults to ``spec.indicators``
+        dry_run: Fetch and report without opening a session or writing a row
+
+    Returns:
+        Per-indicator outcomes plus an aggregate exit code
+
+    Raises:
+        ConnectionError: If the source cannot be reached at all
+    """
+    targets = tuple(indicators) if indicators is not None else spec.indicators
+    summary = PipelineSummary(source_name=spec.source_name, dry_run=dry_run)
+
+    connector.connect()
+    discovered = connector.discover()
+
+    if not dry_run:
+        with get_db().get_session() as session:
+            seeded = upsert_indicator_catalog(session, discovered)
+        log_with_context(
+            logger,
+            "INFO",
+            "indicator catalog refreshed",
+            source=spec.source_name,
+            rows=seeded,
+        )
+
+    for indicator_id in targets:
+        summary.outcomes.append(
+            _collect_one(connector, spec, indicator_id, discovered, dry_run=dry_run)
+        )
+
     log_with_context(
         logger,
         "INFO" if not summary.failed else "WARNING",
-        "world bank pipeline complete",
+        "pipeline complete",
+        source=spec.source_name,
         dry_run=dry_run,
         indicators=len(summary.outcomes),
         succeeded=len(summary.succeeded),
@@ -380,7 +527,8 @@ def run_world_bank_pipeline(
 
 
 def _collect_one(
-    connector: WorldBankConnector,
+    connector: SeriesConnector,
+    spec: SourceSpec,
     indicator_id: str,
     discovered: Sequence[IndicatorMetadata],
     dry_run: bool,
@@ -402,6 +550,7 @@ def _collect_one(
             with get_db().get_session() as session:
                 _persist_indicator(
                     session,
+                    spec,
                     fetched,
                     outcome,
                     domain=_domain_for(discovered, indicator_id),
@@ -437,14 +586,22 @@ def run_cli(
     indicators: Iterable[str] | None = None,
     dry_run: bool = False,
     log_level: str | None = None,
+    connector: SeriesConnector | None = None,
+    spec: SourceSpec = WORLD_BANK_SPEC,
 ) -> int:
     """
-    CLI entry point used by ``python -m src.connectors.world_bank``.
+    CLI entry point shared by the source-specific ``main()`` functions.
+
+    With no ``connector`` this runs the World Bank pipeline exactly as before,
+    preserving ``python -m src.etl.pipeline``. A source that passes its own
+    connector + :class:`SourceSpec` owns that connector's lifecycle here.
 
     Args:
-        indicators: Indicator codes to collect; defaults to the full registry
+        indicators: Indicator codes to collect; defaults to the source registry
         dry_run: Fetch and report without writing to the database
         log_level: Override the configured log level
+        connector: Pre-built connector; omit to run World Bank from configuration
+        spec: Source description driving the run when ``connector`` is given
 
     Returns:
         Process exit code: 0 when every indicator succeeded, 1 otherwise
@@ -460,17 +617,24 @@ def run_cli(
 
     selected = tuple(indicators) if indicators else None
     try:
-        summary = run_world_bank_pipeline(indicators=selected, dry_run=dry_run)
+        if connector is None:
+            summary = run_world_bank_pipeline(indicators=selected, dry_run=dry_run)
+        else:
+            summary = run_pipeline(connector, spec, indicators=selected, dry_run=dry_run)
     except (PlatformConnectionError, DataRetrievalError) as exc:
         log_with_context(
             logger,
             "ERROR",
-            "world bank pipeline aborted",
+            "pipeline aborted",
+            source=spec.source_name,
             error=str(exc),
             error_type=type(exc).__name__,
         )
         print(f"pipeline aborted: {type(exc).__name__}: {exc}")  # - CLI output
         return EXIT_FAILED
+    finally:
+        if connector is not None:
+            connector.disconnect()
 
     print(summary.report())  # - CLI output
     return summary.exit_code

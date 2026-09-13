@@ -426,3 +426,241 @@ docker compose exec postgres psql -U iran_macro -d iran_macro_db_test -c "
   GROUP BY 1 ORDER BY 1;
 "
 ```
+
+---
+
+# IMF Indicators (Phase 4)
+
+**Status:** ✅ OBSERVED — recorded from a real end-to-end run on September 12,
+2026.
+
+Every number below was read out of the database after
+`poetry run python -m src.connectors.imf` completed. The IMF DataMapper returns
+one vintage of the World Economic Outlook; the **April 2026** vintage was
+fetched, so each series contains one estimate year and five projection years.
+
+## Provenance
+
+| Field | Value |
+|-------|-------|
+| Source | IMF DataMapper API v1 (World Economic Outlook) |
+| Endpoint | `https://www.imf.org/external/datamapper/api/v1/<INDICATOR>` |
+| Country | `IRN`, selected client-side (the API ignores the country path) |
+| Frequency | `annual` for all 6 indicators |
+| Vintage | **April 2026** — `metadata ->> 'vintage'` = `2026` on Bronze |
+| Collected | 2026-09-12 |
+| Rows fetched | 52 per indicator (1980–2031); 42 for `LUR` (1990–2031); 302 total |
+| Rows in Silver | 302 (no null observations for Iran in this vintage) |
+| Rows in Gold | 404 (302 levels + 102 derived growth rates) |
+
+## Indicators
+
+Coverage is the **observed** span of observations for Iran in
+`silver.silver_cleaned`; because forecasts are stored, it extends past today.
+
+| Indicator ID | Name | Unit | Domain | Coverage | Silver | Levels | YoY |
+|--------------|------|------|--------|----------|-------:|-------:|----:|
+| `NGDP_RPCH` | Real GDP growth | Annual percent change | `gdp` | 1980–2031 | 52 | 52 | — |
+| `PCPIPCH` | Inflation, average consumer prices | Annual percent change | `inflation` | 1980–2031 | 52 | 52 | — |
+| `NGDPD` | GDP, current prices | Billions of U.S. dollars | `gdp` | 1980–2031 | 52 | 52 | 51 |
+| `NGDPDPC` | GDP per capita, current prices | U.S. dollars per capita | `gdp` | 1980–2031 | 52 | 52 | 51 |
+| `LUR` | Unemployment rate | Percent | `welfare` | 1990–2031 | 42 | 42 | — |
+| `BCA_NGDPD` | Current account balance, % of GDP | Percent of GDP | `trade` | 1980–2031 | 52 | 52 | — |
+
+Units and labels come from the `/indicators` metadata endpoint and are written
+by `discover()`; the analytical domain is the committed registry (the API does
+not publish one). Rate indicators (`NGDP_RPCH`, `PCPIPCH`, `LUR`, `BCA_NGDPD`)
+deliberately get **no** derived series — a percent change of a percent is not a
+meaningful metric. Only the level series (`NGDPD`, `NGDPDPC`) get `.YOY`.
+
+## Forecast convention (project-defined, not IMF-provided)
+
+The API does not label which years are projections. This project derives the
+label by parsing the WEO vintage year from the indicator's `source` string and
+comparing it to each period year:
+
+| Period year | `observation_type` | Observed count (52-row series) |
+|-------------|--------------------|-------------------------------:|
+| before the vintage | `actual` | 46 |
+| the vintage year | `estimate` | 1 |
+| after the vintage | `forecast` | 5 |
+
+For `LUR` (42 rows) the split is 36 / 1 / 5. The label is stored in
+`silver.silver_cleaned.metadata ->> 'observation_type'` and in the Silver
+transformation counters (`forecast_records`). Forecast rows are future-dated by
+design and are **retained**, not dropped: the pipeline marks the source
+`supports_forecasts=True`, which flips Silver's future-period check from reject
+to count.
+
+**This is an explicit project convention.** It is not an IMF semantic, and it
+should be revisited if the DataMapper ever exposes a projection flag.
+
+## Bronze: the `{rows, meta, raw_response}` convention
+
+The connector stores one envelope per indicator:
+
+```json
+{
+  "rows": [{"period": "2031", "value": 123.4, "observation_type": "forecast"}, "..."],
+  "meta": {"indicator_id": "NGDPD", "country": "IRN", "vintage": 2026,
+           "source": "World Economic Outlook (April 2026)",
+           "unit": "Billions of U.S. dollars", "rows_returned": 52,
+           "forecast_through": 2031},
+  "raw_response": {"values": {"NGDPD": {"IRN": {"1980": 1.2, "...": "..."}}}, "api": {}}
+}
+```
+
+`raw_response` is the untouched multi-country payload (the API has no
+server-side filtering), so `rows` is the IRN slice while the full response stays
+auditable. `metadata ->> 'rows_usable'` equals the number of parsed
+observations; `metadata ->> 'envelope_convention'` records the shape.
+
+### API quirks absorbed
+
+| Quirk | Behaviour |
+|-------|-----------|
+| Country path ignored | `/NGDPD/IRN` returns the same 229-country payload; Iran is selected client-side |
+| `periods` parameter ignored | The full series is always returned |
+| Invalid code | HTTP **200** with only an `api` key — a missing `values[code]` is treated as a retrieval error, not an empty series |
+| Empty-string values key | `values[""] = null`; skipped by the parser |
+| Values are numbers | Keyed by four-digit **string** years |
+
+## Silver and Gold
+
+- **Timestamps** are annual period-end (`YYYY-12-31 00:00:00+00`).
+- **Forecasts are retained** and tagged (see above); no null observations were
+  skipped in this vintage.
+- **Derived ids are namespaced** `IMF.<indicator_id>.YOY` (e.g.
+  `IMF.NGDPD.YOY`). The derived unit is always `annual %`.
+- **YoY is prior-year aligned**, so 51 rates are published for a 52-year series
+  (1980 has no prior year to compare against).
+- **No chain-linking**: `is_chain_linked` is `false` on all 404 Gold rows and
+  `metadata.chain_linking_log` is empty — WEO series carry a single vintage and
+  no rebasing.
+
+## Known limitations
+
+1. **One vintage, five-year horizon.** The stored series is April 2026 WEO; a
+   later vintage restates history and extends the horizon, and a re-run will
+   upsert Silver on `(indicator_id, timestamp)`.
+2. **No projection flag from the source.** The actual/estimate/forecast label is
+   the project convention above.
+3. **`discover()` cannot report coverage.** `availability_start` /
+   `availability_end` are filled by the pipeline from what it stored.
+4. **Catalog label whitespace.** The API returns `"GDP per capita, current
+   prices\n"` for `NGDPDPC`, so the catalog name carries a trailing newline
+   (cosmetic; see Phase 4 technical debt).
+
+## Reproducing these numbers
+
+```bash
+poetry run python -m src.connectors.imf            # full run
+poetry run python -m src.connectors.imf --dry-run  # fetch + report, no writes
+```
+
+```sql
+SELECT indicator_id, count(*), min(timestamp)::date, max(timestamp)::date
+FROM silver.silver_cleaned WHERE source_name = 'imf' GROUP BY 1 ORDER BY 1;
+
+SELECT metadata ->> 'observation_type' AS kind, count(*)
+FROM silver.silver_cleaned WHERE source_name = 'imf' GROUP BY 1 ORDER BY 1;
+
+SELECT indicator_id, count(*) FROM gold.gold_analytical
+WHERE indicator_id IN (SELECT indicator_id FROM metadata.indicator_catalog
+                       WHERE source_name = 'imf') OR indicator_id LIKE 'IMF.%.YOY'
+GROUP BY 1 ORDER BY 1;
+```
+
+---
+
+# EIA Indicators (Phase 4)
+
+**Status:** ⚠️ PARTIAL — fixture-verified end to end; **no live run yet** because
+no real `EIA_API_KEY` is configured in this environment. The payload schema,
+auth contract, facets, paging, sorting, and date bounds were verified live on
+September 12, 2026 (see `docs/phase-4/VALIDATION.md`).
+
+## Provenance
+
+| Field | Value |
+|-------|-------|
+| Source | EIA Open Data API v2, international dataset |
+| Endpoint | `https://api.eia.gov/v2/international/data/` |
+| Auth | `api_key` required; missing → HTTP 403 `API_KEY_MISSING`, invalid → 403 `API_KEY_INVALID` |
+| Country facet | `facets[countryRegionId][]=IRN` |
+| Frequency | `monthly` for both indicators |
+| Default window | `start=2024-01`, no `end` (unbounded fetches reach back to 1993) |
+| Fixture window | 2024-01 … 2026-05 (29 months) |
+
+## Indicators
+
+| Indicator ID | Name | Facets | Unit | Domain |
+|--------------|------|--------|------|--------|
+| `EIA.IRN.CRUDE_PRODUCTION` | Crude oil, NGPL, and other liquids production | `productId=55`, `activityId=1` | thousand barrels per day | `energy` |
+| `EIA.IRN.TOTAL_LIQUIDS` | Total petroleum and other liquids production | `productId=53`, `activityId=1` | thousand barrels per day | `energy` |
+
+Coverage from the captured fixtures is **2024-01 … 2026-05 (29 months)** per
+indicator; each yields 29 Gold levels and, because YoY is prior-year aligned,
+**17** derived `.YOY` rows (2025-01 … 2026-05). Live coverage for Iran is
+expected to track the same window and is unverified until a key is supplied.
+
+## Bronze: the `{rows, meta, raw_response}` convention
+
+Paged responses are stored losslessly: `rows` is the concatenation of every
+`response.data` page, `raw_response` is the **list** of raw page payloads (one
+entry per request), and `meta` records `pages_fetched`, `total_reported`,
+`product_id`, `activity_id`, `start`, `end`, and `country`. The API key is
+**never** stored: `request_url` is rebuilt without it, and the connector scrubs
+it from retry/error text.
+
+## Silver and Gold
+
+- **Timestamps** are month-end (`YYYY-MM-<last day> 00:00:00+00`).
+- **`value` and `response.total` are strings**; blank/null values become null
+  observations (skipped and counted), non-numeric strings raise `ParsingError`.
+- **`dataFlagDescription`** (falling back to `dataFlagId`) is stored as
+  `metadata ->> 'obs_status'`.
+- **Derived ids are namespaced** `EIA.<indicator_id>.YOY`, unit `annual %`, and
+  a genuine **prior-year month** comparison (e.g. 2025-05 vs 2024-05), not a
+  lag-1 month difference.
+- **No chain-linking**: production is a level series with no base year.
+
+## Known limitations
+
+1. **Live ingestion unverified.** A real `EIA_API_KEY` is required; the public
+   `DEMO_KEY` is rate-limited (HTTP 429). All coverage above is fixture-based.
+2. **Unknown facets are empty, not errors.** The API answers HTTP 200 with
+   `total: "0"`; the connector treats that as an empty series.
+3. **Credentials are mandatory.** An unconfigured key aborts the run once,
+   before any layer is written, with an actionable `PlatformConnectionError`.
+
+## Reproducing these numbers
+
+```bash
+# Requires a real key in EIA_API_KEY
+poetry run python -m src.connectors.eia --dry-run
+poetry run python -m src.connectors.eia
+```
+
+```sql
+SELECT indicator_id, count(*), min(timestamp)::date, max(timestamp)::date
+FROM silver.silver_cleaned WHERE source_name = 'eia' GROUP BY 1 ORDER BY 1;
+```
+
+---
+
+# OPEC Basket (Phase 4 — DEFERRED)
+
+**Status:** ❌ NOT INGESTED — the source blocks programmatic access.
+
+The OPEC Reference Basket was evaluated and the decision gate **failed**:
+`.xlsx`/`.csv` downloads return a Cloudflare challenge page (HTML, not a
+workbook), direct JSON endpoints return **HTTP 403**, and even
+`https://www.opec.org/robots.txt` is blocked. A browser session can reach
+`/basket/basketDay.json` (daily values since 2003), but only by bypassing the
+403 bot block, which this project will not do.
+
+Consequently there is **no OPEC connector, parser, fixture, DAG, or
+configuration**, and no OPEC indicator appears in the catalog. Full evidence
+and the decision record are in
+[docs/phase-4/VALIDATION.md](../phase-4/VALIDATION.md).

@@ -74,6 +74,36 @@ def test_validate_date_range_missing_column(sample_timeseries: pd.DataFrame) -> 
     assert "not found" in errors[0]
 
 
+def test_validate_date_range_allows_future_dates_when_requested() -> None:
+    """IMF WEO forecasts are future-dated by design, so opt-in must not error."""
+    frame = pd.DataFrame(
+        {"timestamp": [datetime(2050, 1, 1, tzinfo=UTC), datetime(2051, 1, 1, tzinfo=UTC)]}
+    )
+
+    is_valid, errors = validate_date_range(frame, "timestamp", allow_future=True)
+
+    assert is_valid is True
+    assert errors == []
+
+
+def test_validate_date_range_still_rejects_future_dates_by_default() -> None:
+    """The opt-in must not weaken the default guard against clock bugs."""
+    frame = pd.DataFrame({"timestamp": [datetime(2050, 1, 1, tzinfo=UTC)]})
+
+    is_valid, errors = validate_date_range(frame, "timestamp")
+
+    assert is_valid is False
+    assert any("future" in error.lower() for error in errors)
+
+
+def test_validate_data_quality_forecast_opt_in() -> None:
+    """``validate_data_quality`` threads the forecast flag to date validation."""
+    frame = pd.DataFrame({"timestamp": [datetime(2050, 1, 1, tzinfo=UTC)], "value": [1.0]})
+
+    assert validate_data_quality(frame, allow_future=True).is_valid is True
+    assert validate_data_quality(frame).is_valid is False
+
+
 def test_calculate_null_percentage_no_nulls(
     sample_timeseries: pd.DataFrame,
 ) -> None:
