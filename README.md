@@ -193,17 +193,23 @@ iran-macro-platform/
 ├── src/
 │   ├── connectors/          # Data source connectors (APIs + scrapers)
 │   │   ├── base.py          # Abstract DataConnector base class
-│   │   └── world_bank.py    # World Bank API connector + pipeline entry point
+│   │   ├── world_bank.py    # World Bank API connector (reference implementation)
+│   │   ├── imf.py           # IMF DataMapper connector (annual WEO + forecasts)
+│   │   ├── imf_parser.py    # IMF payload → Silver-frame parser
+│   │   ├── eia.py           # EIA Open Data v2 connector (monthly energy)
+│   │   ├── eia_parser.py    # EIA payload → Silver-frame parser
+│   │   └── tgju_scraper.py  # TGJU Playwright scraper (+ tgju_parser.py)
 │   ├── etl/                 # Bronze/Silver/Gold transformations
 │   │   ├── bronze.py        # Raw envelope persistence + collection log
 │   │   ├── silver.py        # Cleaning, validation, idempotent upsert
 │   │   ├── gold.py          # Chain-linked publication + derived growth
+│   │   ├── frequency.py     # Daily → month-end aggregation
 │   │   ├── lineage.py       # TransformationLog audit trail
-│   │   └── pipeline.py      # Bronze → Silver → Gold runner
+│   │   └── pipeline.py      # Generic Bronze → Silver → Gold runner (SourceSpec)
 │   ├── chain_linking/       # Base year adjustment algorithms
 │   │   └── splice.py        # Break detection, splice, confidence scoring
 │   ├── database/            # Schema and connection management
-│   └── utils/               # Config, logging, validation, retry/backoff
+│   └── utils/               # Config, logging, validation, retry, period helpers
 ├── alembic/                 # Migration environment and versions
 ├── dashboard/               # Streamlit multi-page dashboard
 ├── airflow/                 # DAG definitions (Phase 3 — not built yet)
@@ -215,7 +221,9 @@ iran-macro-platform/
 │   ├── research/            # Research documents
 │   ├── plans/               # Phase implementation plans
 │   ├── phase-1/             # Phase 1 validation + implementation report
-│   ├── phase-2/             # Phase 2 Indicator catalog (observed coverage)
+│   ├── phase-2/             # Indicator catalog (observed coverage)
+│   ├── phase-3/             # TGJU scraper reports
+│   ├── phase-4/             # IMF/EIA reports + OPEC gate record
 │   └── phase-7/             # Dashboard runbook
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
@@ -272,18 +280,19 @@ for the detailed conventions.
 | Source | Type | Indicators | Frequency | Status |
 |--------|------|------------|-----------|--------|
 | **World Bank** | API | GDP, inflation, trade, population, energy (12 indicators) | Annual | ✅ Implemented (Phase 2) |
-| **IMF DataMapper** | API | Fiscal, External | Quarterly | Planned (Phase 4) |
-| **CBI TSD** | Scraper | Monetary, Banking | Monthly | Planned (Phase 5) |
+| **IMF DataMapper** | API | GDP, inflation, unemployment, current account (6 indicators, incl. WEO forecasts) | Annual | ✅ Implemented (Phase 4) |
+| **EIA** | API | Crude & total liquids production (2 indicators) | Monthly | ✅ Implemented (Phase 4) |
+| **OPEC** | Scraper | OPEC Reference Basket | Daily | ⛔ Deferred (Phase 4) — source blocks programmatic access |
 | **TGJU** | Scraper | FX, Gold (3 indicators) | Daily | ✅ Implemented (Phase 3) |
+| **CBI TSD** | Scraper | Monetary, Banking | Monthly | Planned (Phase 5) |
 | **SCI** | Scraper | CPI, Labor | Quarterly | Planned (Phase 5) |
 | **TSETMC** | Package | Stock indices | Daily | Planned (Phase 6) |
-| **EIA** | API | Oil prices | Daily | Planned (Phase 4) |
-| **OPEC** | Scraper | Oil production | Monthly | Planned (Phase 4) |
 | **HBSIR** | Package | Household surveys | Annual | Planned (Phase 6) |
 
-Phase numbers follow `PRD.md` §7. Every World Bank indicator, its unit, and its
-**observed** coverage for Iran are documented in
-[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md).
+Phase numbers follow `PRD.md` §7. Every World Bank, IMF, and EIA indicator, its
+unit, and its **observed** coverage for Iran are documented in
+[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md). OPEC is not
+ingested — see [docs/phase-4/VALIDATION.md](docs/phase-4/VALIDATION.md).
 
 ---
 
@@ -301,11 +310,11 @@ make test-integration
 # Everything
 make test-all
 
-# Live API tests (manual only — hits the real World Bank API)
+# Live API tests (manual only — hits the real World Bank / IMF / TGJU / EIA APIs)
 RUN_LIVE_API_TESTS=1 poetry run pytest -m live
 ```
 
-Current status: **377 tests** — 309 pass (unit tests at 83.06% coverage), 44 integration tests (15 TGJU + 28 World Bank + 1 live test skipped by default), 23 failing (13 Airflow DAG tests + 10 gold daily-metrics tests pending implementation).
+Current status: **572 tests** — 496 unit tests at **87.5% coverage** and 76 integration tests (73 pass; 3 live tests skipped by default). No known failing tests; `mypy src/` and `ruff` are clean.
 
 ### Coverage Requirements
 
@@ -332,7 +341,9 @@ it.
 - **[AGENTS.md](AGENTS.md)** — Project conventions and AI agent guidance
 - **[PRD.md](PRD.md)** — Product requirements and implementation plan
 - **[docs/research/init-research.md](docs/research/init-research.md)** — Data source analysis
-- **[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md)** — Indicator catalog with observed coverage
+- **[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md)** — Indicator catalog with observed coverage (World Bank, IMF, EIA)
+- **[docs/phase-3/README.md](docs/phase-3/README.md)** — TGJU scraper implementation and validation
+- **[docs/phase-4/README.md](docs/phase-4/README.md)** — IMF/EIA implementation, validation, and the OPEC gate record
 - **[docs/phase-1/VALIDATION.md](docs/phase-1/VALIDATION.md)** — Phase 1 validation checklist
 - **[docs/plans/](docs/plans/)** — Per-phase implementation plans
 
@@ -416,9 +427,13 @@ poetry cache clear . --all
 - [x] End-to-end validation against live PostgreSQL/TimescaleDB
 - [x] Airflow DAGs implemented (local deployment ready)
 
-### Phase 4: Additional APIs (Week 4-5)
-- [ ] IMF DataMapper connector with forecasts
-- [ ] EIA and OPEC energy connectors
+### Phase 4: Additional APIs ✅ COMPLETE
+- [x] Generic pipeline runner (`SourceSpec` + `run_pipeline`); World Bank unchanged
+- [x] IMF DataMapper connector with WEO forecasts (6 indicators)
+- [x] EIA monthly energy connector (2 indicators, API-key auth)
+- [x] Frequency-aware YoY + shared period helpers
+- [x] Forecast-aware Silver (future-dated IMF periods retained and labelled)
+- [ ] OPEC basket connector — **deferred**: Cloudflare blocks programmatic access
 
 ### Phase 5: Complex Domestic Scrapers (Week 5-6)
 - [ ] CBI TSD monetary scraper
@@ -473,4 +488,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** [Your Name]  
-**Project Status:** Phase 7 dashboard implemented and validated — Phase 4 (IMF/EIA/OPEC APIs) next
+**Project Status:** Phase 4 complete (IMF + EIA connectors; OPEC deferred) and the Phase 7 dashboard validated — Phase 5 (CBI/SCI domestic scrapers) next

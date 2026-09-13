@@ -33,16 +33,21 @@ from src.database.schema import (
 )
 from src.etl.gold import (
     DEFAULT_DOMAIN,
+    DERIVED_MA30_METHOD,
     DERIVED_METHOD,
+    DERIVED_RET1D_METHOD,
     DERIVED_YOY_UNIT,
     _resolve_domain,
     _write_chain_linking_log,
     derived_growth_indicator_id,
+    derived_ma30_indicator_id,
+    derived_ret1d_indicator_id,
     gold_indicator_ids,
     load_gold_series,
     silver_to_gold,
 )
 from src.etl.lineage import LAYER_GOLD, LAYER_SILVER, STATUS_SUCCESS
+from src.utils.periods import month_period_end
 from tests.conftest import FakeSession, compiled_sql
 
 GDP = "NY.GDP.MKTP.CD"
@@ -111,6 +116,15 @@ def published(session: FakeSession, indicator_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def derived_daily(session: FakeSession, suffix: str) -> list[dict[str, Any]]:
+    """Gold rows submitted for one daily derived series, in insertion order."""
+    return [
+        record
+        for record in session.inserted(GoldAnalytical)
+        if record["indicator_id"].endswith(f".{suffix}")
+    ]
+
+
 def catalog_entry(domain: str, base_years: list[int] | None = None) -> IndicatorCatalog:
     """A seeded catalog row for the indicator under test."""
     return IndicatorCatalog(
@@ -129,6 +143,18 @@ def catalog_entry(domain: str, base_years: list[int] | None = None) -> Indicator
 def test_derived_growth_indicator_id_is_namespaced() -> None:
     """``WB.`` prefixing means a derived series can never collide with a source code."""
     assert derived_growth_indicator_id(GDP) == GDP_YOY
+
+
+def test_daily_derived_ids_do_not_double_prefix_a_namespaced_source() -> None:
+    """A ``TGJU.`` source id already carries its namespace; do not add it twice."""
+    assert derived_ret1d_indicator_id("TGJU.USD.FREE", "TGJU") == "TGJU.USD.FREE.RET1D"
+    assert derived_ma30_indicator_id("TGJU.USD.FREE", "TGJU") == "TGJU.USD.FREE.MA30"
+
+
+def test_growth_derived_id_is_idempotent_about_its_namespace() -> None:
+    """A pre-namespaced source id is not prefixed a second time."""
+    assert derived_growth_indicator_id("IMF.NGDPD", "IMF") == "IMF.NGDPD.YOY"
+    assert derived_growth_indicator_id("NGDPD", "IMF") == "IMF.NGDPD.YOY"
 
 
 def test_gold_indicator_ids_covers_both_published_series() -> None:
@@ -399,6 +425,108 @@ def test_silver_to_gold_can_publish_levels_only(fake_session: FakeSession) -> No
     assert result.details["growth_rows"] == 0
 
 
+# ------------------------------------------------------------- periodic growth
+
+
+def seed_periodic_silver(
+    session: FakeSession,
+    indicator_id: str,
+    timestamps: list[datetime],
+    values: list[float],
+    frequency: str,
+) -> None:
+    """Seed a non-annual series whose timestamps are already period ends."""
+    rows: list[SilverCleaned] = []
+    for timestamp, value in zip(timestamps, values, strict=True):
+        row = SilverCleaned(
+            indicator_id=indicator_id,
+            timestamp=timestamp,
+            value=value,
+            unit="index",
+            frequency=frequency,
+            source_name="test",
+            bronze_id=BRONZE_ID,
+        )
+        row.id = uuid4()
+        rows.append(row)
+    session.seed(SilverCleaned, rows)
+
+
+def test_monthly_yoy_compares_the_same_month_one_year_earlier(
+    fake_session: FakeSession,
+) -> None:
+    """A positional lag would publish MoM as YoY on monthly series."""
+    indicator_id = "TEST.MONTHLY"
+    months = [(2024, month) for month in range(1, 13)] + [(2025, month) for month in range(1, 7)]
+    timestamps = [month_period_end(year, month) for year, month in months]
+    values = [100.0 + 10 * offset for offset in range(len(months))]
+    seed_periodic_silver(fake_session, indicator_id, timestamps, values, "monthly")
+
+    silver_to_gold(fake_session, indicator_id, domain="test", derived_prefix="TEST")
+
+    growth = published(fake_session, f"{indicator_id}.YOY")
+    assert len(growth) == 6  # only the 2025 months have a prior-year period
+    assert [record["timestamp"] for record in growth] == timestamps[12:]
+    first = growth[0]
+    assert first["timestamp"] == datetime(2025, 1, 31, tzinfo=UTC)
+    assert first["value"] == pytest.approx((220.0 / 100.0 - 1) * 100)
+    assert first["frequency"] == "monthly"
+
+
+def test_monthly_yoy_withholds_a_rate_when_the_prior_year_is_missing(
+    fake_session: FakeSession,
+) -> None:
+    """No prior-year period means no rate -- and the next month still aligns."""
+    indicator_id = "TEST.GAPPY"
+    full_months = [(2024, month) for month in range(1, 13)] + [
+        (2025, month) for month in range(1, 8)
+    ]
+    values_by_month = {
+        year_month: 100.0 + 10 * offset for offset, year_month in enumerate(full_months)
+    }
+    months = [year_month for year_month in full_months if year_month != (2024, 6)]
+    timestamps = [month_period_end(year, month) for year, month in months]
+    values = [values_by_month[year_month] for year_month in months]
+    seed_periodic_silver(fake_session, indicator_id, timestamps, values, "monthly")
+
+    silver_to_gold(fake_session, indicator_id, domain="test", derived_prefix="TEST")
+
+    growth = {
+        record["timestamp"]: record for record in published(fake_session, f"{indicator_id}.YOY")
+    }
+    assert datetime(2025, 6, 30, tzinfo=UTC) not in growth
+    july = growth[datetime(2025, 7, 31, tzinfo=UTC)]
+    assert july["record_metadata"]["from_period"] == "2024-07-31"
+
+
+def test_quarterly_yoy_compares_the_same_quarter_one_year_earlier(
+    fake_session: FakeSession,
+) -> None:
+    """Quarterly period ends are month ends; the same alignment applies."""
+    indicator_id = "TEST.QUARTERLY"
+    quarters = [
+        (2023, 3),
+        (2023, 6),
+        (2023, 9),
+        (2023, 12),
+        (2024, 3),
+        (2024, 6),
+        (2024, 9),
+        (2024, 12),
+    ]
+    timestamps = [month_period_end(year, month) for year, month in quarters]
+    values = [100.0 + 10 * offset for offset in range(len(quarters))]
+    seed_periodic_silver(fake_session, indicator_id, timestamps, values, "quarterly")
+
+    silver_to_gold(fake_session, indicator_id, domain="test", derived_prefix="TEST")
+
+    growth = published(fake_session, f"{indicator_id}.YOY")
+    assert len(growth) == 4
+    assert growth[0]["timestamp"] == datetime(2024, 3, 31, tzinfo=UTC)
+    assert growth[0]["value"] == pytest.approx((140.0 / 100.0 - 1) * 100)
+    assert growth[0]["frequency"] == "quarterly"
+
+
 # ------------------------------------------------------- refresh & audit rows
 
 
@@ -572,7 +700,7 @@ def catalog_entry_daily(
         source_name="tgju",
         base_years=None,
     )
-    session.add(catalog)
+    session.seed(IndicatorCatalog, [catalog], primary_key="indicator_id")
     return catalog
 
 
@@ -599,8 +727,8 @@ def seed_daily_silver(
         )
         row.id = uuid4()
         rows.append(row)
-        session.add(row)
 
+    session.seed(SilverCleaned, rows)
     return rows
 
 
@@ -618,24 +746,22 @@ def test_silver_to_gold_daily_strategy_derives_ret1d() -> None:
     )
 
     # Find RET1D rows
-    ret1d_rows = [
-        r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
-    ]
+    ret1d_rows = derived_daily(session, "RET1D")
 
     # Should have 9 RET1D rows (first day has no prior value)
     assert len(ret1d_rows) == 9
 
-    # All RET1D rows should have derivation_method = "ret1d"
-    assert all(r.derivation_method == "ret1d" for r in ret1d_rows)
+    # All RET1D rows should have method = "daily_return"
+    assert all(r["record_metadata"]["method"] == DERIVED_RET1D_METHOD for r in ret1d_rows)
 
     # Unit should be "%" for returns
-    assert all(r.unit == "%" for r in ret1d_rows)
+    assert all(r["unit"] == "%" for r in ret1d_rows)
 
     # is_chain_linked should be False (passthrough)
-    assert all(r.is_chain_linked is False for r in ret1d_rows)
+    assert all(r["is_chain_linked"] is False for r in ret1d_rows)
 
     # confidence should be None (not chain-linked)
-    assert all(r.confidence is None for r in ret1d_rows)
+    assert all(r["chain_linking_confidence"] is None for r in ret1d_rows)
 
 
 def test_silver_to_gold_daily_strategy_derives_ma30() -> None:
@@ -652,18 +778,16 @@ def test_silver_to_gold_daily_strategy_derives_ma30() -> None:
     )
 
     # Find MA30 rows
-    ma30_rows = [
-        r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
-    ]
+    ma30_rows = derived_daily(session, "MA30")
 
     # Should have 11 MA30 rows (first 29 days have insufficient data)
     assert len(ma30_rows) == 11
 
-    # All MA30 rows should have derivation_method = "ma30"
-    assert all(r.derivation_method == "ma30" for r in ma30_rows)
+    # All MA30 rows should have method = "30day_moving_average"
+    assert all(r["record_metadata"]["method"] == DERIVED_MA30_METHOD for r in ma30_rows)
 
     # is_chain_linked should be False (passthrough)
-    assert all(r.is_chain_linked is False for r in ma30_rows)
+    assert all(r["is_chain_linked"] is False for r in ma30_rows)
 
 
 def test_daily_ret1d_values_are_correct() -> None:
@@ -684,24 +808,21 @@ def test_daily_ret1d_values_are_correct() -> None:
         )
         row.id = uuid4()
         simple_rows.append(row)
-        session.add(row)
 
+    session.seed(SilverCleaned, simple_rows)
     catalog_entry_daily(session, "TEST.PRICE", domain="test", frequency="daily")
 
     silver_to_gold(session, "TEST.PRICE", derivation_strategy="daily", derived_prefix="TEST")
 
-    ret1d_rows = sorted(
-        [r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id],
-        key=lambda r: r.timestamp,
-    )
+    ret1d_rows = sorted(derived_daily(session, "RET1D"), key=lambda r: r["timestamp"])
 
     # Should have 3 returns (skip first day)
     assert len(ret1d_rows) == 3
 
     # Verify values: (105-100)/100*100 = 5.0%, (110-105)/105*100 = 4.76%, (104.5-110)/110*100 = -5.0%
-    assert abs(ret1d_rows[0].value - 5.0) < 0.01
-    assert abs(ret1d_rows[1].value - 4.76) < 0.01
-    assert abs(ret1d_rows[2].value - (-5.0)) < 0.01
+    assert abs(ret1d_rows[0]["value"] - 5.0) < 0.01
+    assert abs(ret1d_rows[1]["value"] - 4.76) < 0.01
+    assert abs(ret1d_rows[2]["value"] - (-5.0)) < 0.01
 
 
 def test_daily_ma30_values_are_correct() -> None:
@@ -721,21 +842,19 @@ def test_daily_ma30_values_are_correct() -> None:
         )
         row.id = uuid4()
         constant_rows.append(row)
-        session.add(row)
 
+    session.seed(SilverCleaned, constant_rows)
     catalog_entry_daily(session, "TEST.CONSTANT", domain="test", frequency="daily")
 
     silver_to_gold(session, "TEST.CONSTANT", derivation_strategy="daily", derived_prefix="TEST")
 
-    ma30_rows = [
-        r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
-    ]
+    ma30_rows = derived_daily(session, "MA30")
 
     # Should have 6 MA rows (days 30-35)
     assert len(ma30_rows) == 6
 
     # All should be exactly 100.0
-    assert all(abs(r.value - 100.0) < 0.01 for r in ma30_rows)
+    assert all(abs(r["value"] - 100.0) < 0.01 for r in ma30_rows)
 
 
 def test_daily_strategy_skips_first_return() -> None:
@@ -748,13 +867,10 @@ def test_daily_strategy_skips_first_return() -> None:
         session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
     )
 
-    ret1d_rows = sorted(
-        [r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id],
-        key=lambda r: r.timestamp,
-    )
+    ret1d_rows = sorted(derived_daily(session, "RET1D"), key=lambda r: r["timestamp"])
 
     # First timestamp should be day 2 (skip day 1)
-    assert ret1d_rows[0].timestamp == datetime(2026, 9, 2, tzinfo=UTC)
+    assert ret1d_rows[0]["timestamp"] == datetime(2026, 9, 2, tzinfo=UTC)
     assert len(ret1d_rows) == 4  # 5 days - 1 skipped
 
 
@@ -768,13 +884,10 @@ def test_daily_strategy_skips_first_29_ma() -> None:
         session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
     )
 
-    ma30_rows = sorted(
-        [r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id],
-        key=lambda r: r.timestamp,
-    )
+    ma30_rows = sorted(derived_daily(session, "MA30"), key=lambda r: r["timestamp"])
 
     # First timestamp should be day 30
-    assert ma30_rows[0].timestamp == datetime(2026, 9, 30, tzinfo=UTC)
+    assert ma30_rows[0]["timestamp"] == datetime(2026, 9, 30, tzinfo=UTC)
     assert len(ma30_rows) == 3  # Days 30, 31, 32
 
 
@@ -786,7 +899,7 @@ def test_daily_derived_series_have_correct_indicator_ids() -> None:
 
     silver_to_gold(session, "TGJU.USD.FREE", derivation_strategy="daily", derived_prefix="TGJU")
 
-    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    added_indicators = {r["indicator_id"] for r in session.inserted(GoldAnalytical)}
 
     # Should have base, RET1D, and MA30
     assert "TGJU.USD.FREE" in added_indicators
@@ -804,21 +917,17 @@ def test_daily_strategy_preserves_silver_id_lineage() -> None:
         session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
     )
 
-    ret1d_rows = [
-        r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
-    ]
-    ma30_rows = [
-        r for r in session.added if isinstance(r, GoldAnalytical) and "MA30" in r.indicator_id
-    ]
+    ret1d_rows = derived_daily(session, "RET1D")
+    ma30_rows = derived_daily(session, "MA30")
 
     # All derived rows should have a non-null silver_id
-    assert all(r.silver_id is not None for r in ret1d_rows)
-    assert all(r.silver_id is not None for r in ma30_rows)
+    assert all(r["silver_id"] is not None for r in ret1d_rows)
+    assert all(r["silver_id"] is not None for r in ma30_rows)
 
     # silver_id should point to actual Silver rows
     silver_ids = {r.id for r in rows}
-    assert all(r.silver_id in silver_ids for r in ret1d_rows)
-    assert all(r.silver_id in silver_ids for r in ma30_rows)
+    assert all(r["silver_id"] in silver_ids for r in ret1d_rows)
+    assert all(r["silver_id"] in silver_ids for r in ma30_rows)
 
 
 def test_daily_strategy_does_not_publish_yoy() -> None:
@@ -831,7 +940,7 @@ def test_daily_strategy_does_not_publish_yoy() -> None:
         session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
     )
 
-    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    added_indicators = {r["indicator_id"] for r in session.inserted(GoldAnalytical)}
 
     # Should NOT have YOY
     assert not any("YOY" in ind for ind in added_indicators)
@@ -845,7 +954,7 @@ def test_yoy_strategy_does_not_publish_daily_metrics() -> None:
 
     silver_to_gold(session, GDP, derivation_strategy="yoy", derived_prefix="WB")
 
-    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    added_indicators = {r["indicator_id"] for r in session.inserted(GoldAnalytical)}
 
     # Should have YOY but not RET1D or MA30
     assert any("YOY" in ind for ind in added_indicators)
@@ -863,7 +972,7 @@ def test_daily_strategy_with_custom_prefix() -> None:
         session, "CUSTOM.INDICATOR", derivation_strategy="daily", derived_prefix="CUSTOM"
     )
 
-    added_indicators = {r.indicator_id for r in session.added if isinstance(r, GoldAnalytical)}
+    added_indicators = {r["indicator_id"] for r in session.inserted(GoldAnalytical)}
 
     # IDs should start with CUSTOM prefix
     assert "CUSTOM.INDICATOR" in added_indicators
@@ -881,17 +990,15 @@ def test_daily_metrics_metadata_in_gold() -> None:
         session, rows[0].indicator_id, derivation_strategy="daily", derived_prefix="TGJU"
     )
 
-    ret1d_rows = [
-        r for r in session.added if isinstance(r, GoldAnalytical) and "RET1D" in r.indicator_id
-    ]
+    ret1d_rows = derived_daily(session, "RET1D")
 
     # Check one RET1D row in detail
     sample = ret1d_rows[0]
-    assert sample.unit == "%"
-    assert sample.frequency == "daily"
-    assert sample.domain == "fx"
-    assert sample.derivation_method == "ret1d"
-    assert sample.is_chain_linked is False
-    assert sample.confidence is None
-    assert sample.original_value is not None  # The actual return value
-    assert sample.silver_id is not None
+    assert sample["unit"] == "%"
+    assert sample["frequency"] == "daily"
+    assert sample["domain"] == "fx"
+    assert sample["record_metadata"]["method"] == DERIVED_RET1D_METHOD
+    assert sample["is_chain_linked"] is False
+    assert sample["chain_linking_confidence"] is None
+    assert sample["original_value"] is not None  # The actual return value
+    assert sample["silver_id"] is not None

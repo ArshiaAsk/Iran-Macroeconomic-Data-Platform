@@ -1,0 +1,17 @@
+{
+  "countries": {
+    "IRN": {
+      "label": "Iran"
+    },
+    "USA": {
+      "label": "United States"
+    },
+    "DEU": {
+      "label": "Germany"
+    }
+  },
+  "api": {
+    "version": "1",
+    "output-method": "json"
+  }
+}

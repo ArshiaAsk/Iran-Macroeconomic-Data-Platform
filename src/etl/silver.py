@@ -64,6 +64,7 @@ class SilverPreparation:
     null_records: int = 0
     duplicate_records: int = 0
     future_records: int = 0
+    forecast_records: int = 0
     outlier_count: int = 0
     validation: ValidationResult | None = None
 
@@ -85,6 +86,7 @@ class SilverPreparation:
             "nulls_skipped": self.null_records,
             "duplicates_rejected": self.duplicate_records,
             "future_periods_skipped": self.future_records,
+            "forecast_records": self.forecast_records,
             "outliers_flagged": self.outlier_count,
             "null_percentage": (
                 round(self.validation.null_percentage, 4) if self.validation else None
@@ -124,6 +126,7 @@ def prepare_silver_frame(
     unit: str | None = None,
     now: datetime | None = None,
     parser: Any = None,
+    allow_future: bool = False,
 ) -> SilverPreparation:
     """
     Clean raw Bronze observation rows into Silver-ready records.
@@ -136,6 +139,7 @@ def prepare_silver_frame(
         unit: Resolved unit to stamp on each observation
         now: Clock override for the future-period cutoff
         parser: Callable that parses rows into a DataFrame; defaults to World Bank behavior
+        allow_future: Keep future-dated periods (IMF forecasts) and count them
 
     Returns:
         The cleaned frame plus null, duplicate, and outlier counts
@@ -153,11 +157,11 @@ def prepare_silver_frame(
             frame=parsed,
             records_processed=processed,
             future_records=future_records,
-            validation=validate_data_quality(parsed),
+            validation=validate_data_quality(parsed, allow_future=allow_future, now=now),
         )
 
     # Validate before dropping nulls so null_percentage describes the source.
-    validation = validate_data_quality(parsed)
+    validation = validate_data_quality(parsed, allow_future=allow_future, now=now)
 
     non_null = parsed.dropna(subset=["value"])
     null_records = int(len(parsed) - len(non_null))
@@ -173,12 +177,21 @@ def prepare_silver_frame(
     )
     cleaned["validation_notes"] = cleaned["is_outlier"].map({True: OUTLIER_NOTE, False: None})
 
+    # Future periods are forecasts, not corrupt rows. Count them so the horizon
+    # is visible in the transformation log and they are never treated as failed.
+    forecast_records = 0
+    if allow_future:
+        cutoff = now or utc_now()
+        in_future = pd.to_datetime(cleaned["timestamp"], utc=True) > cutoff
+        forecast_records = int(in_future.sum())
+
     return SilverPreparation(
         frame=cleaned,
         records_processed=processed,
         null_records=null_records,
         duplicate_records=duplicate_records,
         future_records=future_records,
+        forecast_records=forecast_records,
         outlier_count=int(outliers.sum()),
         validation=validation,
     )
@@ -209,6 +222,12 @@ def _silver_records(
     # loose enough to coerce explicitly, which is what the columns require.
     for row in preparation.frame.to_dict("records"):
         obs_status = row.get("obs_status") or None
+        observation_type = row.get("observation_type") or None
+        metadata: dict[str, Any] = {}
+        if obs_status:
+            metadata["obs_status"] = obs_status
+        if observation_type:
+            metadata["observation_type"] = observation_type
         records.append(
             {
                 "id": uuid4(),
@@ -222,7 +241,7 @@ def _silver_records(
                 "validation_status": row["validation_status"],
                 "validation_notes": row["validation_notes"],
                 "is_outlier": bool(row["is_outlier"]),
-                "record_metadata": {"obs_status": obs_status} if obs_status else None,
+                "record_metadata": metadata or None,
                 "created_at": stamped,
                 "updated_at": stamped,
             }
@@ -276,6 +295,7 @@ def bronze_to_silver(
     unit: str | None = None,
     now: datetime | None = None,
     parser: Any = None,
+    allow_future: bool = False,
 ) -> TransformResult:
     """
     Transform one Bronze payload into cleaned Silver observations.
@@ -289,6 +309,7 @@ def bronze_to_silver(
         unit: Resolved unit; falls back to the value parsed from the payload
         now: Clock override for the future-period cutoff
         parser: Callable that parses rows into a DataFrame; defaults to World Bank behavior
+        allow_future: Keep future-dated periods (IMF forecasts) and count them
 
     Returns:
         Counts and status for the transformation
@@ -308,7 +329,9 @@ def bronze_to_silver(
             raise DataRetrievalError(msg)
 
         rows = extract_rows(bronze_row.raw_data)
-        preparation = prepare_silver_frame(rows, indicator_id, unit, now=now, parser=parser)
+        preparation = prepare_silver_frame(
+            rows, indicator_id, unit, now=now, parser=parser, allow_future=allow_future
+        )
 
         records = _silver_records(
             preparation,

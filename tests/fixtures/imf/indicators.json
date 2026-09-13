@@ -1,0 +1,56 @@
+{
+  "indicators": {
+    "NGDP_RPCH": {
+      "label": "Real GDP growth",
+      "description": "Gross domestic product is the most commonly used single measure of a country's overall economic activity. It represents the total value at constant prices of final goods and services produced within a country during a specified time period, such as one year.",
+      "source": "World Economic Outlook (April 2026)",
+      "unit": "Annual percent change",
+      "dataset": "WEO",
+      "last-modified": "2026-04-08 16:07:34"
+    },
+    "PCPIPCH": {
+      "label": "Inflation rate, average consumer prices",
+      "description": "The average consumer price index (CPI) is a measure of a country's average level of prices based on the cost of a typical basket of consumer goods and services in a given period. The rate of inflation is the percent change in the average CPI.\n \n",
+      "source": "World Economic Outlook (April 2026)",
+      "unit": "Annual percent change",
+      "dataset": "WEO",
+      "last-modified": "2026-04-08 16:07:39"
+    },
+    "NGDPD": {
+      "label": "GDP, current prices",
+      "description": "Gross domestic product is the most commonly used single measure of a country's overall economic activity. It represents the total value at current prices of final goods and services produced within a country during a specified time period, such as one year.",
+      "source": "World Economic Outlook (April 2026)",
+      "unit": "Billions of U.S. dollars",
+      "dataset": "WEO",
+      "last-modified": "2026-04-08 16:07:35"
+    },
+    "NGDPDPC": {
+      "label": "GDP per capita, current prices\n",
+      "description": "Gross domestic product is the most commonly used single measure of a country's overall economic activity. It represents the total value at current prices of final goods and services produced within a country during a specified time period divided by the average population for the same one year.",
+      "source": "World Economic Outlook (April 2026)",
+      "unit": "U.S. dollars per capita",
+      "dataset": "WEO",
+      "last-modified": "2026-04-08 16:07:36"
+    },
+    "LUR": {
+      "label": "Unemployment rate",
+      "description": "The number of unemployed persons as a percentage of the total labor force.",
+      "source": "World Economic Outlook (April 2026)",
+      "unit": "Percent",
+      "dataset": "WEO",
+      "last-modified": "2026-04-08 16:07:42"
+    },
+    "BCA_NGDPD": {
+      "label": "Current account balance, percent of GDP",
+      "description": "The current account is the record of all transactions in the balance of payments covering the exports and imports of goods and services, payments of income, and current transfers between residents of a country and nonresidents.",
+      "source": "World Economic Outlook (April 2026)",
+      "unit": "Percent of GDP",
+      "dataset": "WEO",
+      "last-modified": "2026-04-08 16:07:41"
+    }
+  },
+  "api": {
+    "version": "1",
+    "output-method": "json"
+  }
+}

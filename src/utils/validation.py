@@ -49,6 +49,8 @@ def validate_date_range(
     date_column: str,
     min_date: datetime | None = None,
     max_date: datetime | None = None,
+    allow_future: bool = False,
+    now: datetime | None = None,
 ) -> tuple[bool, list[str]]:
     """
     Validate dates are within acceptable range.
@@ -58,6 +60,8 @@ def validate_date_range(
         date_column: Name of date column
         min_date: Minimum acceptable date (optional)
         max_date: Maximum acceptable date (optional)
+        allow_future: Permit period-end timestamps after ``now`` (IMF forecasts)
+        now: Clock override for the future-date cutoff
 
     Returns:
         Tuple of (is_valid, error_messages)
@@ -76,11 +80,13 @@ def validate_date_range(
 
     # Check for future dates. Match the tz-awareness of the parsed dates so the
     # comparison does not raise on naive/aware mismatch.
-    now = datetime.now(UTC)
+    cutoff = now or datetime.now(UTC)
     if getattr(dates.dtype, "tz", None) is None:
-        now = now.replace(tzinfo=None)
+        cutoff = cutoff.replace(tzinfo=None)
 
-    if (dates > now).any():
+    # Forecast sources (IMF WEO) deliberately date periods in the future; the
+    # Silver transformer counts those rows instead of rejecting them.
+    if not allow_future and (dates > cutoff).any():
         errors.append("Found dates in the future")
 
     # Check min date
@@ -149,6 +155,8 @@ def validate_data_quality(
     value_column: str = "value",
     date_column: str = "timestamp",
     null_threshold: float = 5.0,
+    allow_future: bool = False,
+    now: datetime | None = None,
 ) -> ValidationResult:
     """
     Comprehensive data quality validation.
@@ -158,6 +166,8 @@ def validate_data_quality(
         value_column: Name of value column
         date_column: Name of date column
         null_threshold: Maximum acceptable null percentage (default 5%)
+        allow_future: Permit future-dated periods instead of erroring
+        now: Clock override for the future-date cutoff
 
     Returns:
         ValidationResult with validation details
@@ -198,7 +208,9 @@ def validate_data_quality(
         warnings.append(f"High null percentage: {null_pct:.2f}% (threshold: {null_threshold}%)")
 
     # Validate date range
-    date_valid, date_errors = validate_date_range(df, date_column)
+    _date_valid, date_errors = validate_date_range(
+        df, date_column, allow_future=allow_future, now=now
+    )
     errors.extend(date_errors)
 
     # Detect outliers

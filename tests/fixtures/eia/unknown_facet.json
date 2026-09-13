@@ -1,0 +1,21 @@
+{
+  "warnings": [],
+  "response": {
+    "total": "0",
+    "dateFormat": "YYYY-MM",
+    "frequency": "monthly",
+    "description": "",
+    "data": []
+  },
+  "request": {
+    "command": "/v2/international/data/",
+    "params": {
+      "facets": {
+        "productId": [
+          "99999"
+        ]
+      }
+    }
+  },
+  "apiVersion": "2.1.13"
+}

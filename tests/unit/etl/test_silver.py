@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+import pandas as pd
 import pytest
 
 from src.database.schema import BronzeRaw, SilverCleaned, TransformationLog
@@ -26,6 +27,7 @@ from src.etl.silver import (
     write_silver,
 )
 from src.utils.exceptions import DataRetrievalError
+from src.utils.periods import annual_period_end
 from tests.conftest import FakeSession, compiled_sql, load_world_bank_fixture
 
 GDP = "NY.GDP.MKTP.CD"
@@ -35,6 +37,7 @@ ENERGY = "EG.USE.PCAP.KG.OE"
 EXPECTED_ANNUAL_ROWS = 66
 ENERGY_NULLS = 32
 BRONZE_ID = UUID("11111111-1111-1111-1111-111111111111")
+FORECAST_INDICATOR = "IMF.NGDPD"
 
 
 def observation(year: str, value: float | None, indicator_id: str = GDP) -> dict[str, Any]:
@@ -54,6 +57,36 @@ def observation(year: str, value: float | None, indicator_id: str = GDP) -> dict
 def fixture_rows(indicator_id: str) -> list[dict[str, Any]]:
     """The observation rows of a captured fixture."""
     return load_world_bank_fixture(f"{indicator_id}_normal")[1]
+
+
+def forecast_parser(
+    rows: list[dict[str, Any]],
+    indicator_id: str,
+    unit: str | None = None,
+    now: datetime | None = None,
+) -> pd.DataFrame:
+    """A parser that keeps future periods, matching the IMF forecast contract."""
+    return pd.DataFrame(
+        [
+            {
+                "timestamp": annual_period_end(row["period"]),
+                "value": row["value"],
+                "indicator_id": indicator_id,
+                "unit": unit,
+                "obs_status": None,
+                "observation_type": row["observation_type"],
+            }
+            for row in rows
+        ]
+    )
+
+
+def forecast_rows() -> list[dict[str, Any]]:
+    """One historical observation and one future WEO projection."""
+    return [
+        {"period": "2024", "value": 1.0, "observation_type": "actual"},
+        {"period": "2027", "value": 2.0, "observation_type": "forecast"},
+    ]
 
 
 def seeded_bronze(session: FakeSession, indicator_id: str) -> None:
@@ -145,6 +178,46 @@ def test_prepare_counts_future_periods_as_failures() -> None:
     assert preparation.future_records == 1
     assert preparation.records_written == 1
     assert preparation.counters()["future_periods_skipped"] == 1
+
+
+def test_prepare_keeps_forecast_periods_when_allowed() -> None:
+    """IMF projections are future-dated by design, not corrupt observations."""
+    preparation = prepare_silver_frame(
+        forecast_rows(),
+        FORECAST_INDICATOR,
+        parser=forecast_parser,
+        allow_future=True,
+        now=datetime(2026, 6, 30, tzinfo=UTC),
+    )
+
+    assert preparation.records_written == 2
+    assert preparation.forecast_records == 1
+    assert preparation.future_records == 0
+    assert preparation.records_failed == 0
+    assert preparation.validation is not None
+    assert preparation.validation.is_valid is True
+
+
+def test_prepare_reports_forecast_counts_in_the_log() -> None:
+    """The forecast horizon has to be visible in the transformation log."""
+    preparation = prepare_silver_frame(
+        forecast_rows(),
+        FORECAST_INDICATOR,
+        parser=forecast_parser,
+        allow_future=True,
+    )
+
+    assert preparation.counters()["forecast_records"] == 1
+
+
+def test_prepare_flags_future_periods_when_forecasts_are_not_expected() -> None:
+    """Without the opt-in, a future period is still a validation failure."""
+    preparation = prepare_silver_frame(forecast_rows(), FORECAST_INDICATOR, parser=forecast_parser)
+
+    assert preparation.forecast_records == 0
+    assert preparation.validation is not None
+    assert preparation.validation.is_valid is False
+    assert any("future" in error.lower() for error in preparation.validation.errors)
 
 
 def test_prepare_ignores_rows_for_other_indicators() -> None:
@@ -249,6 +322,27 @@ def test_silver_records_keep_obs_status_as_provenance() -> None:
 
     assert records[0]["record_metadata"] == {"obs_status": "P"}
     assert records[1]["record_metadata"] is None
+
+
+def test_silver_records_label_forecast_observations() -> None:
+    """Consumers must be able to separate history from projections."""
+    preparation = prepare_silver_frame(
+        forecast_rows(), FORECAST_INDICATOR, parser=forecast_parser, allow_future=True
+    )
+
+    records = _silver_records(
+        preparation,
+        indicator_id=FORECAST_INDICATOR,
+        source_name="imf",
+        bronze_id=BRONZE_ID,
+        frequency="annual",
+        unit=None,
+    )
+
+    assert [record["record_metadata"]["observation_type"] for record in records] == [
+        "actual",
+        "forecast",
+    ]
 
 
 def test_silver_records_fall_back_to_the_parsed_unit() -> None:
