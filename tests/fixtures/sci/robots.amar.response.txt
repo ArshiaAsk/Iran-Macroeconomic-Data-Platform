@@ -1,0 +1,15 @@
+HTTP/1.1 200 OK
+Cache-Control: public,max-age=31536000,no-cache
+Content-Type: text/plain
+Last-Modified: Tue, 18 Oct 2016 05:23:56 GMT
+Accept-Ranges: bytes
+ETag: "deb89bd2ff28d21:0"
+Server: Microsoft-IIS/10.0
+X-XSS-Protection: 1; mode=block
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Content-Security-Policy: default-src 'self' wss://support.sci.org.ir wss://api.raychat.io https://*.raychat.io https://support.sci.org.ir/ https://*.googleapis.com https://www.google-analytics.com/; frame-src 'self' https://rpt.sci.org.ir:4040 https://www.aparat.com https://www.google.com https://amar.org.ir https://www.amar.org.ir http://amar.org.ir http://www.amar.org.ir https://*.googleapis.com https://*.raychat.io https://support.sci.org.ir/; font-src 'self' https://fonts.gstatic.com https://cdn.fontcdn.ir https://fdn.fontcdn.ir https://support.sci.org.ir/ https://*.raychat.io https://support.sci.org.ir/ data:; img-src * data:; media-src 'self' https://static.raychat.com/ https://support.sci.org.ir/ wss://api.raychat.io https://*.raychat.io; object-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.getclicky.com/ https://www.amar.org.ir https://amar.org.ir http://amar.org.ir http://www.amar.org.ir  https://*.raychat.io https://support.sci.org.ir/ https://www.google-analytics.com https://www.googletagmanager.com  https://*.googleapis.com https://apis.google.com/js/plusone.js https://code.highcharts.com/;  style-src 'self' 'unsafe-inline' blob: http://fonts.googleapis.com https://maxcdn.bootstrapcdn.com https://cdn.fontcdn.ir https://*.raychat.io https://support.sci.org.ir/ http://fonts.googleapis.com https://cdn.jsdelivr.net; upgrade-insecure-requests
+Date: Sun, 13 Sep 2026 06:43:05 GMT
+Content-Length: 4291
+Set-Cookie: cookiesession1=678B28A12EA57C1268074AE11905DC24;Expires=Mon, 13 Sep 2027 06:43:05 GMT;Path=/;HttpOnly
+

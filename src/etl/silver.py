@@ -224,6 +224,12 @@ def _silver_records(
         obs_status = row.get("obs_status") or None
         observation_type = row.get("observation_type") or None
         metadata: dict[str, Any] = {}
+        # Parsers may attach per-row provenance (e.g. SCI's ``base_year`` and
+        # ``period_label``). Preserving it here keeps base-year segments
+        # identifiable in Silver, which Gold needs to order them oldest-first.
+        extra_metadata = row.get("record_metadata")
+        if isinstance(extra_metadata, Mapping):
+            metadata.update({str(key): value for key, value in extra_metadata.items()})
         if obs_status:
             metadata["obs_status"] = obs_status
         if observation_type:
@@ -296,13 +302,14 @@ def bronze_to_silver(
     now: datetime | None = None,
     parser: Any = None,
     allow_future: bool = False,
+    rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> TransformResult:
     """
     Transform one Bronze payload into cleaned Silver observations.
 
     Args:
         session: Active session; the caller owns the transaction
-        bronze_id: Bronze row to read
+        bronze_id: Bronze row to read (and the row each Silver record cites)
         indicator_id: Indicator to extract from the payload
         source_name: Connector identity recorded on each Silver row
         frequency: Observation frequency
@@ -310,6 +317,10 @@ def bronze_to_silver(
         now: Clock override for the future-period cutoff
         parser: Callable that parses rows into a DataFrame; defaults to World Bank behavior
         allow_future: Keep future-dated periods (IMF forecasts) and count them
+        rows: Observation rows to parse. Defaults to the Bronze row's stored
+            ``rows``; pass a subset to scope a **multi-series** envelope to one
+            series (SCI), so rows belonging to sibling series are not counted
+            as future/skipped for this series.
 
     Returns:
         Counts and status for the transformation
@@ -328,9 +339,9 @@ def bronze_to_silver(
             msg = f"bronze row {bronze_id} not found"
             raise DataRetrievalError(msg)
 
-        rows = extract_rows(bronze_row.raw_data)
+        envelope_rows = extract_rows(bronze_row.raw_data) if rows is None else list(rows)
         preparation = prepare_silver_frame(
-            rows, indicator_id, unit, now=now, parser=parser, allow_future=allow_future
+            envelope_rows, indicator_id, unit, now=now, parser=parser, allow_future=allow_future
         )
 
         records = _silver_records(

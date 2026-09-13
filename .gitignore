@@ -110,6 +110,11 @@ data/bronze/
 *.csv
 *.parquet
 
+# Exception: captured source fixtures are part of the test contract (Phase 5)
+# and must be committed so parsers can be regression-tested offline.
+!tests/fixtures/**/*.xlsx
+!tests/fixtures/**/*.xls
+
 # Backup files
 *.bak
 *.backup

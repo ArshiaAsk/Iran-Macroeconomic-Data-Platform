@@ -1,0 +1,23 @@
+{
+ "rechecked": "2026-09-13",
+ "gate": "CLOSED",
+ "task": "Task 7 - CBI scraper",
+ "note": "Task 7 targets config.cbi_tsd_url (tsd.cbi.ir). Re-probed before implementing; the TSD host does not answer on either scheme. The www.cbi.ir F5 challenge from the Task 6 re-check still applies.",
+ "probes": [
+  {
+   "url": "https://tsd.cbi.ir/",
+   "method": "curl-direct",
+   "exit_code": 28,
+   "http_status": "000",
+   "error": "Connection timed out after 20000 ms"
+  },
+  {
+   "url": "http://tsd.cbi.ir/",
+   "method": "curl-direct",
+   "exit_code": 28,
+   "http_status": "000",
+   "error": "Connection timed out after 20002 ms"
+  }
+ ],
+ "decision": "No CbiConfig/CBI_INDICATOR_REGISTRY/CbiScraper created; run documented as gated."
+}

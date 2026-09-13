@@ -1,0 +1,15 @@
+# SCI (amar.org.ir) TLS certificate — captured 2026-09-13T06:52:44Z
+## openssl s_client (no -CAfile; default trust store)
+subject=CN = amar.org.ir
+issuer=C = PL, O = Asseco Data Systems S.A., CN = Certum DV TLS G2 R39 CA
+Verification error: unable to verify the first certificate
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
+Verify return code: 21 (unable to verify the first certificate)
+
+## full chain advertised
+ 0 s:CN = amar.org.ir
+   i:C = PL, O = Asseco Data Systems S.A., CN = Certum DV TLS G2 R39 CA
+ 1 s:C = PL, O = Unizeto Technologies S.A., OU = Certum Certification Authority, CN = Certum Trusted Network CA
+   i:C = PL, O = Unizeto Technologies S.A., OU = Certum Certification Authority, CN = Certum Trusted Network CA
+ 2 s:C = PL, O = Unizeto Technologies S.A., OU = Certum Certification Authority, CN = Certum Domain Validation CA SHA2
+   i:C = PL, O = Unizeto Technologies S.A., OU = Certum Certification Authority, CN = Certum Trusted Network CA

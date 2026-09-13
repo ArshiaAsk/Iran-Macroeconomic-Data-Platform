@@ -324,6 +324,46 @@ def test_silver_records_keep_obs_status_as_provenance() -> None:
     assert records[1]["record_metadata"] is None
 
 
+def test_silver_records_preserve_parser_metadata() -> None:
+    """Per-row provenance (e.g. SCI ``base_year``) must survive into Silver."""
+
+    def metadata_parser(
+        rows: list[dict[str, Any]],
+        indicator_id: str,
+        unit: str | None = None,
+        now: datetime | None = None,
+    ) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "timestamp": pd.to_datetime(["2021-03-31"], utc=True),
+                "value": [10.0],
+                "indicator_id": [indicator_id],
+                "unit": [unit or "index"],
+                "obs_status": ["A"],
+                "record_metadata": [{"base_year": 1400, "period_label": "1400/01"}],
+            }
+        )
+
+    preparation = prepare_silver_frame(
+        [{"raw": True}], "SCI.CPI.URBAN.B2021", parser=metadata_parser
+    )
+
+    records = _silver_records(
+        preparation,
+        indicator_id="SCI.CPI.URBAN.B2021",
+        source_name="sci",
+        bronze_id=BRONZE_ID,
+        frequency="monthly",
+        unit="index",
+    )
+
+    assert records[0]["record_metadata"] == {
+        "base_year": 1400,
+        "period_label": "1400/01",
+        "obs_status": "A",
+    }
+
+
 def test_silver_records_label_forecast_observations() -> None:
     """Consumers must be able to separate history from projections."""
     preparation = prepare_silver_frame(
@@ -414,6 +454,34 @@ def test_bronze_to_silver_transforms_a_stored_payload(fake_session: FakeSession)
     assert result.status == STATUS_SUCCESS
     assert len(fake_session.inserted(SilverCleaned)) == 0  # values(), not executemany
     assert fake_session.executed
+
+
+def test_bronze_to_silver_scopes_rows_to_one_series(fake_session: FakeSession) -> None:
+    """A multi-series envelope can be parsed one series at a time (SCI files).
+
+    Without the ``rows`` scope the sibling series would be counted as
+    future/skipped rows for this indicator, inflating ``records_failed``.
+    """
+    envelope = wrap_envelope(fixture_rows(GDP) + fixture_rows(CPI))
+    row = BronzeRaw(source_name="world_bank", source_type="api", raw_data=envelope)
+    row.id = BRONZE_ID
+    fake_session.seed(BronzeRaw, [row])
+
+    result = bronze_to_silver(
+        fake_session,  # type: ignore[arg-type]
+        bronze_id=BRONZE_ID,
+        indicator_id=GDP,
+        rows=fixture_rows(GDP),
+    )
+
+    assert result.records_processed == EXPECTED_ANNUAL_ROWS
+    assert result.records_written == EXPECTED_ANNUAL_ROWS
+    assert result.records_failed == 0
+    assert result.details["future_periods_skipped"] == 0
+    # Lineage still cites the single Bronze file row the series came from.
+    logs = fake_session.added_of(TransformationLog)
+    assert logs[-1].record_metadata["records_written"] == EXPECTED_ANNUAL_ROWS
+    assert logs[-1].record_metadata["bronze_id"] == str(BRONZE_ID)
 
 
 def test_bronze_to_silver_writes_a_transformation_log(fake_session: FakeSession) -> None:

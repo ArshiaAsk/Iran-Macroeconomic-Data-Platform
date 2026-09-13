@@ -37,16 +37,22 @@ from src.etl.gold import (
     DERIVED_METHOD,
     DERIVED_RET1D_METHOD,
     DERIVED_YOY_UNIT,
+    BaseYearSegment,
     _resolve_domain,
     _write_chain_linking_log,
+    base_year_from_indicator_id,
     derived_growth_indicator_id,
     derived_ma30_indicator_id,
     derived_ret1d_indicator_id,
     gold_indicator_ids,
+    load_base_year_segments,
     load_gold_series,
+    order_base_year_segments,
     silver_to_gold,
 )
 from src.etl.lineage import LAYER_GOLD, LAYER_SILVER, STATUS_SUCCESS
+from src.etl.silver import SilverSeries
+from src.utils.exceptions import ChainLinkingError
 from src.utils.periods import month_period_end
 from tests.conftest import FakeSession, compiled_sql
 
@@ -1002,3 +1008,204 @@ def test_daily_metrics_metadata_in_gold() -> None:
     assert sample["chain_linking_confidence"] is None
     assert sample["original_value"] is not None  # The actual return value
     assert sample["silver_id"] is not None
+
+
+# ------------------------------------------------- multi-segment base-year links
+
+CANONICAL = "SCI.CPI.URBAN"
+SEG_OLD = "SCI.CPI.URBAN.B2000"
+SEG_NEW = "SCI.CPI.URBAN.B2005"
+ANNUAL_YEARS = 12
+SEGMENT_REBASE = 2.0
+
+
+def _segment(frame_years: list[int], values: list[float]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(
+                [datetime(year, 12, 31, tzinfo=UTC) for year in frame_years]
+            ),
+            "value": values,
+        }
+    )
+
+
+def _base_year_segment(indicator_id: str, frame: pd.DataFrame, base_year: int) -> BaseYearSegment:
+    silver_ids = {ts.to_pydatetime(): uuid4() for ts in frame["timestamp"]}
+    series = SilverSeries(
+        indicator_id=indicator_id,
+        frame=frame,
+        unit=UNIT,
+        frequency=FREQUENCY,
+        silver_ids=silver_ids,
+    )
+    return BaseYearSegment(indicator_id=indicator_id, series=series, base_year=base_year)
+
+
+def synthetic_segments() -> tuple[BaseYearSegment, BaseYearSegment]:
+    """Two annual segments rebased by exactly 2.0, overlapping 2005-2007."""
+    levels = {year: 100.0 * GROWTH_RATE ** (year - FIRST_YEAR) for year in range(2000, 2005)}
+    levels.update({year: 100.0 * GROWTH_RATE ** (year - FIRST_YEAR) for year in range(2005, 2011)})
+    old_years = list(range(2000, 2008))
+    new_years = list(range(2005, 2011))
+    old_frame = _segment(old_years, [levels[year] for year in old_years])
+    new_frame = _segment(new_years, [levels[year] * SEGMENT_REBASE for year in new_years])
+    return (
+        _base_year_segment(SEG_OLD, old_frame, 2000),
+        _base_year_segment(SEG_NEW, new_frame, 2005),
+    )
+
+
+def seed_canonical_catalog(session: FakeSession) -> None:
+    session.seed(
+        IndicatorCatalog,
+        [
+            IndicatorCatalog(
+                indicator_id=CANONICAL,
+                name="CPI - urban",
+                frequency=FREQUENCY,
+                domain="inflation",
+                source_name="sci",
+                has_base_year_changes=True,
+                base_years=[2000, 2005],
+            )
+        ],
+        primary_key="indicator_id",
+    )
+
+
+def test_base_year_from_indicator_id_reads_the_suffix() -> None:
+    assert base_year_from_indicator_id("SCI.CPI.URBAN.B2016") == 2016
+    assert base_year_from_indicator_id("SCI.CPI.URBAN") is None
+    assert base_year_from_indicator_id("SCI.CPI.URBAN.YOY") is None
+
+
+def test_order_base_year_segments_oldest_first() -> None:
+    old, new = synthetic_segments()
+
+    ordered = order_base_year_segments([new, old])
+
+    assert [segment.indicator_id for segment in ordered] == [SEG_OLD, SEG_NEW]
+
+
+def test_order_base_year_segments_falls_back_when_base_year_unknown() -> None:
+    old, new = synthetic_segments()
+    unknown = BaseYearSegment(indicator_id="X.UNKNOWN", series=old.series, base_year=None)
+
+    ordered = order_base_year_segments([new, unknown])
+
+    assert [segment.indicator_id for segment in ordered] == [SEG_NEW, "X.UNKNOWN"]
+
+
+def test_silver_to_gold_links_segments_under_the_canonical_id(
+    fake_session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Published segments roll up into one canonical, chain-linked series."""
+    old, new = synthetic_segments()
+    seed_canonical_catalog(fake_session)
+    monkeypatch.setattr("src.etl.gold.load_base_year_segments", lambda session, ids: [old, new])
+
+    result = silver_to_gold(  # type: ignore[arg-type]
+        fake_session,
+        CANONICAL,
+        derived_prefix="SCI",
+        derivation_strategy="yoy",
+        segment_indicator_ids=[SEG_OLD, SEG_NEW],
+    )
+
+    levels = published(fake_session, CANONICAL)
+    assert len(levels) == 11  # 2000-2004 rescaled + 2005-2010 on the new base
+    linked_years = {row["timestamp"].year for row in levels if row["is_chain_linked"]}
+    assert linked_years == {2000, 2001, 2002, 2003, 2004}
+    # Segments themselves are never published to Gold.
+    assert published(fake_session, SEG_OLD) == []
+    assert published(fake_session, SEG_NEW) == []
+
+    assert result.details["is_chain_linked"] is True
+    assert result.details["segments"] == [SEG_OLD, SEG_NEW]
+    assert published(fake_session, "SCI.CPI.URBAN.YOY")
+
+
+def test_silver_to_gold_writes_a_chain_linking_log_for_segments(
+    fake_session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, new = synthetic_segments()
+    seed_canonical_catalog(fake_session)
+    monkeypatch.setattr("src.etl.gold.load_base_year_segments", lambda session, ids: [old, new])
+
+    silver_to_gold(  # type: ignore[arg-type]
+        fake_session, CANONICAL, segment_indicator_ids=[SEG_OLD, SEG_NEW]
+    )
+
+    logs = fake_session.added_of(ChainLinkingLog)
+    assert len(logs) == 1
+    assert logs[0].indicator_id == CANONICAL
+    assert logs[0].linking_method == "overlap"
+
+
+def test_silver_to_gold_keeps_segment_lineage(
+    fake_session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every canonical row points back at the Silver row it came from."""
+    old, new = synthetic_segments()
+    seed_canonical_catalog(fake_session)
+    monkeypatch.setattr("src.etl.gold.load_base_year_segments", lambda session, ids: [old, new])
+    all_silver_ids = set(old.series.silver_ids.values()) | set(new.series.silver_ids.values())
+
+    silver_to_gold(  # type: ignore[arg-type]
+        fake_session, CANONICAL, segment_indicator_ids=[SEG_OLD, SEG_NEW]
+    )
+
+    for row in published(fake_session, CANONICAL):
+        assert row["silver_id"] in all_silver_ids
+
+
+def test_silver_to_gold_raises_on_empty_segment(
+    fake_session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, _ = synthetic_segments()
+    empty = BaseYearSegment(
+        indicator_id=SEG_NEW,
+        series=SilverSeries(indicator_id=SEG_NEW, frame=old.series.frame.iloc[0:0]),
+        base_year=2005,
+    )
+    seed_canonical_catalog(fake_session)
+    monkeypatch.setattr("src.etl.gold.load_base_year_segments", lambda session, ids: [old, empty])
+
+    with pytest.raises(ChainLinkingError, match="no Silver observations"):
+        silver_to_gold(  # type: ignore[arg-type]
+            fake_session, CANONICAL, segment_indicator_ids=[SEG_OLD, SEG_NEW]
+        )
+
+
+def test_silver_to_gold_raises_when_no_segments_loaded(
+    fake_session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_canonical_catalog(fake_session)
+    monkeypatch.setattr("src.etl.gold.load_base_year_segments", lambda session, ids: [])
+
+    with pytest.raises(ChainLinkingError, match="no base-year segments"):
+        silver_to_gold(  # type: ignore[arg-type]
+            fake_session, CANONICAL, segment_indicator_ids=[SEG_OLD]
+        )
+
+
+def test_load_base_year_segments_orders_and_reads_ids(
+    fake_session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The loader composes ordering with Silver loading (filters are DB-tested)."""
+    old, new = synthetic_segments()
+    frames = {SEG_OLD: old.series, SEG_NEW: new.series}
+
+    def fake_load(session: FakeSession, indicator_id: str) -> SilverSeries:
+        return frames[indicator_id]
+
+    def fake_base_year(session: FakeSession, indicator_id: str) -> int:
+        return {SEG_OLD: 2000, SEG_NEW: 2005}[indicator_id]
+
+    monkeypatch.setattr("src.etl.gold.load_silver_series", fake_load)
+    monkeypatch.setattr("src.etl.gold._segment_base_year", fake_base_year)
+
+    loaded = load_base_year_segments(fake_session, [SEG_NEW, SEG_OLD])  # type: ignore[arg-type]
+
+    assert [segment.indicator_id for segment in loaded] == [SEG_OLD, SEG_NEW]

@@ -1,0 +1,71 @@
+{
+ "rechecked": "2026-09-13",
+ "gate": "CLOSED",
+ "probes": [
+  {
+   "name": "task6_cbi_home_browser",
+   "url": "https://www.cbi.ir/",
+   "method": "playwright-chromium-direct",
+   "status": 200,
+   "file": "task6_cbi_home_browser.html",
+   "markers": [
+    "TSPD_101",
+    "bobcmn",
+    "support ID"
+   ],
+   "byte_length": 43882,
+   "sha256": "564cf9cc7bad1290bced879c7b094e224bbc02214e547b78506ab75c4f9d0fa1",
+   "title": null
+  },
+  {
+   "name": "task6_cbi_robots_browser",
+   "url": "https://www.cbi.ir/robots.txt",
+   "method": "playwright-chromium-direct",
+   "status": 200,
+   "file": "task6_cbi_robots_browser.html",
+   "markers": [
+    "TSPD_101",
+    "bobcmn",
+    "support ID"
+   ],
+   "byte_length": 40106,
+   "sha256": "2a833fd94ba3cc63ca1492763a07e420022e2a418b8b31e4075439351b6da684",
+   "title": null
+  },
+  {
+   "name": "task6_cbi_home_curl",
+   "url": "https://www.cbi.ir/",
+   "method": "curl-direct",
+   "status": 200,
+   "file": "task6_cbi_home_curl.html",
+   "markers": [
+    "TSPD_101",
+    "bobcmn",
+    "support ID"
+   ],
+   "byte_length": 48138,
+   "sha256": "96877dcf0015d794a1b06ae3a4323d5416b4e5b4758fb470757fa31cead33471",
+   "title": null
+  },
+  {
+   "name": "task6_cbi_robots_curl",
+   "url": "https://www.cbi.ir/robots.txt",
+   "method": "curl-direct",
+   "status": 200,
+   "file": "task6_cbi_robots_curl.txt",
+   "markers": [
+    "TSPD_101",
+    "bobcmn",
+    "support ID"
+   ],
+   "byte_length": 41210,
+   "sha256": "7ce74a7e7cd9b7afab5f0f2020b0b84d6cddf7a095636cd51ee8e03f5f518238",
+   "title": null
+  }
+ ],
+ "tsd": {
+  "url": "https://tsd.cbi.ir/",
+  "method": "curl-direct + playwright-chromium-direct",
+  "error": "DNS/connection failure: curl exit 6 'Could not resolve host'; browser net::ERR_NAME_NOT_RESOLVED; HTTP 000"
+ }
+}

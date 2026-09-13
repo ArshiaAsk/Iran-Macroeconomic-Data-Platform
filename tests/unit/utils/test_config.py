@@ -67,3 +67,48 @@ def test_api_config_defaults() -> None:
         assert "worldbank.org" in config.world_bank_url
         assert "imf.org" in config.imf_url
         assert config.eia_api_key is None
+
+
+def test_api_config_sci_and_cbi_urls() -> None:
+    """SCI is configured; CBI's URL exists even though the source is gated."""
+    with patch.dict(os.environ, {}, clear=True):
+        config = APIConfig(_env_file=None)
+        assert "amar.org.ir" in config.sci_base_url
+        assert "tsd.cbi.ir" in config.cbi_tsd_url
+
+
+def test_api_config_reads_aliases() -> None:
+    """New URLs are overridable via their environment aliases."""
+    with patch.dict(
+        os.environ,
+        {
+            "SCI_BASE_URL": "https://sci.test",
+            "CBI_TSD_URL": "https://cbi.test",
+            "SCI_CA_BUNDLE": "/tmp/sci-ca.pem",
+        },
+        clear=True,
+    ):
+        config = APIConfig(_env_file=None)
+        assert config.sci_base_url == "https://sci.test"
+        assert config.cbi_tsd_url == "https://cbi.test"
+        assert config.sci_ca_bundle == "/tmp/sci-ca.pem"
+
+
+def test_collection_config_scraper_download_defaults() -> None:
+    """Download timeout and size cap have sensible defaults."""
+    with patch.dict(os.environ, {}, clear=True):
+        config = CollectionConfig(_env_file=None)
+        assert config.scraper_download_timeout == 60
+        assert config.scraper_max_download_bytes == 10_000_000
+
+
+def test_collection_config_validation_download_timeout() -> None:
+    """A non-positive download timeout is rejected."""
+    with pytest.raises(ValueError, match="scraper_download_timeout must be positive"):
+        CollectionConfig(scraper_download_timeout=0)
+
+
+def test_collection_config_validation_max_download_bytes() -> None:
+    """A non-positive size cap is rejected."""
+    with pytest.raises(ValueError, match="scraper_max_download_bytes must be positive"):
+        CollectionConfig(scraper_max_download_bytes=0)

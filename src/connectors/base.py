@@ -29,6 +29,9 @@ class IndicatorMetadata:
     availability_end: datetime | None
     has_base_year_changes: bool
     base_years: list[int] | None
+    # Catalog flag: base-year segment series are seeded inactive so the
+    # dashboard shows the canonical (linked) series instead of raw segments.
+    is_active: bool = True
 
 
 class DataConnector(ABC):

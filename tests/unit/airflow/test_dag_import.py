@@ -145,3 +145,90 @@ def test_tgju_daily_task_has_failure_callback(ensure_airflow_in_path):
 
     task = tgju_daily.dag.tasks[0]
     assert task.on_failure_callback is not None, "Task should have on_failure_callback configured"
+
+
+# --------------------------------------------------------------------- SCI
+
+
+def test_sci_weekly_dag_imports_without_error(ensure_airflow_in_path):
+    """Test that the sci_weekly DAG can be imported."""
+    try:
+        import sci_weekly  # noqa: F401
+    except ImportError as exc:
+        pytest.fail(f"Failed to import sci_weekly DAG: {exc}")
+
+
+def test_sci_weekly_dag_has_correct_id(ensure_airflow_in_path):
+    """Test that sci_weekly DAG has the expected dag_id."""
+    import sci_weekly
+
+    assert hasattr(sci_weekly, "dag"), "DAG object not found in sci_weekly module"
+    assert sci_weekly.dag.dag_id == "sci_weekly"
+
+
+def test_sci_weekly_dag_has_valid_weekly_schedule(ensure_airflow_in_path):
+    """Test that sci_weekly DAG runs weekly at 03:00 (low-traffic Tehran time)."""
+    import sci_weekly
+
+    assert sci_weekly.dag.schedule == "0 3 * * 5", "Schedule should be 0 3 * * 5 (weekly)"
+
+
+def test_sci_weekly_dag_has_catchup_disabled(ensure_airflow_in_path):
+    """Test that sci_weekly DAG has catchup=False."""
+    import sci_weekly
+
+    assert sci_weekly.dag.catchup is False, "catchup should be disabled for weekly DAG"
+
+
+def test_sci_weekly_dag_has_expected_tags(ensure_airflow_in_path):
+    """Test that sci_weekly DAG has the expected tags."""
+    import sci_weekly
+
+    expected_tags = {"sci", "scraper", "weekly", "cpi", "unemployment"}
+    actual_tags = set(sci_weekly.dag.tags or [])
+    assert expected_tags.issubset(actual_tags), f"Expected tags {expected_tags}, got {actual_tags}"
+
+
+def test_sci_weekly_dag_has_one_task(ensure_airflow_in_path):
+    """Test that sci_weekly DAG has exactly one task."""
+    import sci_weekly
+
+    tasks = sci_weekly.dag.tasks
+    assert len(tasks) == 1, f"Expected 1 task, found {len(tasks)}"
+    assert tasks[0].task_id == "scrape_sci_publications"
+
+
+def test_sci_weekly_dag_max_active_runs_is_one(ensure_airflow_in_path):
+    """Test that sci_weekly DAG prevents concurrent runs."""
+    import sci_weekly
+
+    assert (
+        sci_weekly.dag.max_active_runs == 1
+    ), "max_active_runs should be 1 to prevent concurrent scraping"
+
+
+def test_sci_weekly_dag_has_retries_configured(ensure_airflow_in_path):
+    """Test that sci_weekly DAG has retry policy configured."""
+    import sci_weekly
+
+    default_args = sci_weekly.dag.default_args
+    assert "retries" in default_args, "retries should be configured in default_args"
+    assert default_args["retries"] == 3, "Expected 3 retries"
+    assert "retry_delay" in default_args, "retry_delay should be configured"
+
+
+def test_sci_weekly_task_has_failure_callback(ensure_airflow_in_path):
+    """Test that the sci_weekly task has an on_failure_callback."""
+    import sci_weekly
+
+    task = sci_weekly.dag.tasks[0]
+    assert task.on_failure_callback is not None, "Task should have on_failure_callback configured"
+
+
+def test_sci_weekly_imports_the_pipeline_lazily(ensure_airflow_in_path):
+    """DAG parse must not import the connector (and thus risk a DB connection)."""
+    import sci_weekly
+
+    assert "run_sci_pipeline" not in vars(sci_weekly), (
+        "run_sci_pipeline must be imported inside the task callable, " "not at DAG parse time"
+    )

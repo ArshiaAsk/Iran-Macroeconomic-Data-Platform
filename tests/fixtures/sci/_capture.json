@@ -1,0 +1,103 @@
+[
+ {
+  "fixture": "cpi_national_timeseries.xlsx",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ts_national_140505-14050618165053.xlsx",
+  "description": "National (all-household) consumer price index monthly time series, monthly/point-to-point/annual inflation",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "byte_length": 907112,
+  "sha256": "155d22eb5958c736bad3ba395dd84e8c06e421b7bbed66a431bdd4c8a77457e1"
+ },
+ {
+  "fixture": "cpi_urban_timeseries.xlsx",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ts_urban_140505-14050618165804.xlsx",
+  "description": "Urban household consumer price index monthly time series",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "byte_length": 1248356,
+  "sha256": "b28e3375b772f37ef5e440ca6ba3378b33173226b0388507953f0c102d259114"
+ },
+ {
+  "fixture": "cpi_decile_timeseries.xlsx",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ts_decile_140505-14050618164745.xlsx",
+  "description": "Consumer price index by household expenditure decile monthly time series",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "byte_length": 306450,
+  "sha256": "f49d90a04504e343c1846065fa134cb9bbe72e2f62cf57ab4057016f319fe6f0"
+ },
+ {
+  "fixture": "cpi_base1395_timeseries.xlsx",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ts_cpi_1395=100-14040208113537.xlsx",
+  "description": "Consumer price index series on base year 1395=2016 (explicit base-1395 publication)",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "byte_length": 617573,
+  "sha256": "a417ae40286d982431102af3c02d3d20af064772598e5b8023d2ea2388d74891"
+ },
+ {
+  "fixture": "cpi_report_1405-05_base1400.pdf",
+  "url": "https://amar.org.ir/Portals/0/Articles/gp_tavarom_1405-05.pdf",
+  "description": "Monthly CPI report Mordad 1405 (base year 1400=2021)",
+  "status": 200,
+  "content_type": "application/pdf",
+  "byte_length": 554705,
+  "sha256": "570360f8121f43d832bd0cc8fe91866252be357e681d7c8df725121e2e0ad39d"
+ },
+ {
+  "fixture": "unemployment_annual_1404.xlsx",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ne_niruye_kar_sal1404-14050615130653.xlsx",
+  "description": "Labour force survey results, annual 1404 (unemployment rate)",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "byte_length": 1429041,
+  "sha256": "49a3e7990954c146f5b47e1b0feec253a5532fcdcefa8da3f102299c16ce5d6c"
+ },
+ {
+  "fixture": "unemployment_spring_1405.xls",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ne_niruye_kar_1405-01-14050525163749.xls",
+  "description": "Labour force survey results, spring 1405 (legacy .xls)",
+  "status": 200,
+  "content_type": "application/vnd.ms-excel",
+  "byte_length": 370688,
+  "sha256": "add2970ec19b336bd4e5504e5532fab6f35815dbe03eb7d720defb30059521cf"
+ },
+ {
+  "fixture": "unemployment_report_1404.pdf",
+  "url": "https://amar.org.ir/Portals/0/Articles/nirroyekar1404.pdf",
+  "description": "Labour force survey report annual 1404 (PDF)",
+  "status": 200,
+  "content_type": "application/pdf",
+  "byte_length": 1023044,
+  "sha256": "02a4fae909e1b55ab1514405ef3de73d70be5d3a4dca6318b01eab4c4af92fac"
+ },
+ {
+  "fixture": "prices_page.html",
+  "url": "https://amar.org.ir/prices",
+  "description": "Price indices index page (CPI section)",
+  "status": 200,
+  "content_type": "text/html",
+  "byte_length": 648927,
+  "sha256": "4739f6d7f99389ca1fbbe891c91446303c37ac9986f4656ad20ca70814d32c8e",
+  "final_url": "https://amar.org.ir/prices"
+ },
+ {
+  "fixture": "work_page.html",
+  "url": "https://amar.org.ir/work",
+  "description": "Labour force / unemployment index page",
+  "status": 200,
+  "content_type": "text/html",
+  "byte_length": 400467,
+  "sha256": "c58ffa086f008e76bd3544628ca4453cb01b70ef5cdf12441595f45e58b557ce",
+  "final_url": "https://amar.org.ir/work"
+ },
+ {
+  "fixture": "cpi_rural_timeseries.xlsx",
+  "url": "https://amar.org.ir/Portals/0/Statistics/ts_rural-140505-14050618165248.xlsx",
+  "description": "Rural household consumer price index monthly time series",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "byte_length": 1394864,
+  "sha256": "d445503b87042c014a721da052bf61047b7873cb99a0fc97225bb6f77ec09691"
+ }
+]

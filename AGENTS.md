@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phases 1–4 and 7 complete. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors; the OPEC basket is **deferred** (Cloudflare blocks programmatic access — see `docs/phase-4/VALIDATION.md`). Phase 5 (CBI/SCI domestic scrapers) is next
+* **Lifecycle Stage:** Active implementation — Phases 1–5 and 7 complete. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. The OPEC basket and the **CBI TSD** scraper are **deferred** — both sources block programmatic access (see `docs/phase-4/VALIDATION.md` and `docs/phase-5/VALIDATION.md`). Phase 6 (TSETMC/HBSIR) is next
 
 ## Tech Stack
 
@@ -85,7 +85,10 @@ iran-macro-platform/
 │   │   ├── imf.py           # IMF DataMapper connector (annual WEO + forecasts) ✓
 │   │   ├── eia.py           # EIA Open Data v2 connector (monthly energy) ✓
 │   │   ├── tgju_scraper.py  # TGJU Playwright scraper ✓
-│   │   └── ...              # cbi_scraper.py, sci_scraper.py — later phases
+│   │   ├── tgju_parser.py   # TGJU HTML parser ✓
+│   │   ├── sci_scraper.py   # SCI file scraper (Excel/PDF, Persian/Jalali) ✓
+│   │   ├── sci_parser.py    # SCI workbook → Silver frame parser ✓
+│   │   └── ...              # cbi_*.py — deferred (Phase 5 bot-defense gate closed)
 │   ├── etl/                 # Bronze/Silver/Gold transformations ✓ IMPLEMENTED
 │   ├── chain_linking/       # Base year adjustment algorithms ✓ IMPLEMENTED
 │   ├── database/            # Schema, connection, hypertable setup
@@ -103,7 +106,8 @@ iran-macro-platform/
 │   ├── phase-1/             # Phase 1 validation + implementation report
 │   ├── phase-2/             # Indicator catalog (observed coverage)
 │   ├── phase-3/             # TGJU scraper reports
-│   └── phase-4/             # IMF/EIA reports + OPEC gate record ✓
+│   ├── phase-4/             # IMF/EIA reports + OPEC gate record ✓
+│   └── phase-5/             # SCI reports + CBI gate record ✓
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
@@ -530,6 +534,9 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | `src/connectors/eia_parser.py` | EIA payload → Silver frame parser (string values, month-end) |
 | `src/connectors/tgju_scraper.py` | TGJU scraper (Playwright + Persian handling) |
 | `src/connectors/tgju_parser.py` | TGJU HTML parser (Persian digits, date conversion) |
+| `src/connectors/sci_scraper.py` | SCI file scraper (Excel downloads, TLS pinning, `--dry-run` CLI) |
+| `src/connectors/sci_parser.py` | SCI workbook → Silver frame parser (Jalali month-end) |
+| `src/utils/persian.py` | Shared Persian digits / prices / Jalali→Gregorian helpers |
 | `src/etl/bronze.py` | Raw envelope persistence + `DataCollectionLog` |
 | `src/etl/silver.py` | Cleaning, outlier flagging, idempotent upsert |
 | `src/etl/gold.py` | Chain-linked publication + derived growth series |
@@ -539,6 +546,7 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | `src/utils/periods.py` | Annual/monthly period-end + exact prior-year alignment |
 | `src/utils/retry.py` | Retry/backoff policy and rate limiter |
 | `docs/phase-4/VALIDATION.md` | Phase 4 validation results + OPEC gate record |
+| `docs/phase-5/VALIDATION.md` | Phase 5 SCI validation results + CBI gate record |
 | `src/database/schema.py` | SQLAlchemy models for all layers |
 | `src/database/connection.py` | Engine, session management, hypertable setup |
 | `alembic/versions/20260817_1456_initial_schema.py` | Initial migration (all 4 schemas + hypertable) |
@@ -585,6 +593,7 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | Product Requirements | `PRD.md` |
 | Loaded indicators, units, observed coverage | `docs/phase-2/data_dictionary.md` |
 | Phase 4 validation + OPEC gate decision | `docs/phase-4/VALIDATION.md` |
+| Phase 5 SCI validation + CBI gate decision | `docs/phase-5/VALIDATION.md` |
 | Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents
