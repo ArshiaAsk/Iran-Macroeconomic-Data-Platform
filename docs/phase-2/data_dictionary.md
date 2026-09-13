@@ -664,3 +664,180 @@ Consequently there is **no OPEC connector, parser, fixture, DAG, or
 configuration**, and no OPEC indicator appears in the catalog. Full evidence
 and the decision record are in
 [docs/phase-4/VALIDATION.md](../phase-4/VALIDATION.md).
+
+---
+
+# SCI Indicators (Phase 5)
+
+**Status:** ✅ OBSERVED — recorded from a live run on September 13, 2026.
+
+Every number below was read out of the database after
+`poetry run python -m src.connectors.sci_scraper` completed (6/6 publications),
+not copied from an SCI catalogue. Where SCI advertises a series the connector
+does not register, this document says so.
+
+## Provenance
+
+| Field | Value |
+|-------|-------|
+| Source | Statistical Center of Iran (SCI), `https://www.amar.org.ir` |
+| Type | File scraper (Excel `.xlsx` + legacy `.xls`; PDF/HTML inspected, not registered) |
+| Index page | `https://www.amar.org.ir/prices` |
+| Collected | 2026-09-13 |
+| Bronze rows | 6 (one per downloaded file) |
+| Rows in Silver | 2,649 |
+| Rows in Gold | 4,639 (2,398 levels + 2,241 derived YoY) |
+| TLS note | `www.amar.org.ir` serves an incomplete chain; the missing `Certum DV TLS G2 R39 CA` intermediate is pinned in `src/connectors/certs/` — verification is never disabled |
+
+## Indicators
+
+Canonical (linked) series are **active** in the catalog; the `B<year>`
+base-year segments live in Silver and are seeded **inactive**. Coverage is the
+**observed** span of Gold level rows; "Silver" counts `silver.silver_cleaned`,
+"Levels"/"YoY" count `gold.gold_analytical` level and `.YOY` rows.
+
+| Indicator ID | Name | Unit | Domain | Frequency | Coverage (Gold) | Silver | Levels | YoY |
+|--------------|------|------|--------|-----------|-----------------|-------:|-------:|----:|
+| `SCI.CPI.URBAN` | CPI, urban households (chain-linked) | index | `inflation` | monthly | 1982-03-31 … 2026-07-31 | 784 (2 segments) | 533 | 521 |
+| `SCI.CPI.NATIONAL` | CPI, national (all households) | index | `inflation` | monthly | 2011-03-31 … 2026-07-31 | 185 | 185 | 173 |
+| `SCI.CPI.RURAL` | CPI, rural households | index | `inflation` | monthly | 1982-05-31 … 2026-07-31 | 429 | 429 | 417 |
+| `SCI.CPI.DECILE.B2021.D1…D10` | CPI by household expenditure decile (10 series) | index | `inflation` | monthly | 2016-03-31 … 2026-07-31 | 125 each | 125 each | 113 each |
+| `SCI.UNEMPLOYMENT.QUARTERLY` | Unemployment rate (labour-force survey) | percent | `labor` | quarterly | 2026-05-31 (spring 1405) | 1 | 1 | 0 |
+
+The canonical urban series has no Silver rows of its own: its 784 Silver
+observations are the two published base-year segments below, which overlap by
+251 months.
+
+### Published base-year segments (inactive)
+
+| Segment ID | Base (Jalali = Gregorian) | Silver | Coverage |
+|------------|---------------------------|-------:|----------|
+| `SCI.CPI.URBAN.B2016` | 1395 = 2016 | 491 | 1982-03-31 … 2023-01-31 |
+| `SCI.CPI.URBAN.B2021` | 1400 = 2021 | 293 | 2002-03-31 … 2026-07-31 |
+| `SCI.CPI.NATIONAL.B2021` | 1400 = 2021 | 185 | 2011-03-31 … 2026-07-31 |
+| `SCI.CPI.RURAL.B2021` | 1400 = 2021 | 429 | 1982-05-31 … 2026-07-31 |
+
+## Chain-linking and base years
+
+SCI publishes only **two** CPI bases (1395 = 2016 and 1400 = 2021); no 1390
+publication exists. The 1395 urban workbook's tidy `جدول 3` sheet reaches back to
+**1361-01 (1982-03-31)** — earlier than the wide `جدول 1` sheet (which starts at
+1381) — so the 1395→1400 splice rescales real history rather than nothing.
+
+Catalog `base_years` for the canonicals: `SCI.CPI.URBAN` = `[2016, 2021]`,
+`SCI.CPI.NATIONAL` = `[2021]`, `SCI.CPI.RURAL` = `[2021]`; `has_base_year_changes`
+is true only for the urban series, which is the only one with two segments.
+
+Observed `metadata.chain_linking_log` row:
+
+| indicator_id | method | records_linked | overlap_months | avg_confidence | status |
+|--------------|--------|---------------:|---------------:|---------------:|--------|
+| `SCI.CPI.URBAN` | `overlap` | 240 | 251 | 0.9985 | `success` |
+
+The 240 rescaled rows are the observations **before** the 1400 base begins
+(`is_chain_linked = true` in Gold); everything from the 1400 base onward keeps
+its original value (`is_chain_linked = false`). National and rural publish a
+single base and are passthroughs — no chain-linking row is written for them.
+
+## Bronze: the `{rows, meta}` file convention
+
+The **file** is the unit of Bronze: six downloads produce six rows, each with no
+more than the raw workbook. `rows` holds the parsed observations (JSON-safe) and
+`meta` carries the provenance plus the raw bytes:
+
+```json
+{
+  "rows": [ {"timestamp": "2026-07-31T00:00:00+00:00", "value": 1234.5,
+             "indicator_id": "SCI.CPI.URBAN.B2021", "unit": "index",
+             "record_metadata": {"base_year": 1400, "period_label": "1405/05"}} ],
+  "meta": {"filename": "ts_urban….xlsx", "content_type": "…sheet",
+           "byte_length": 1248356, "sha256": "b28e3375…", "url": "https://…",
+           "downloaded_at": "…", "indicator_id": "SCI.CPI.URBAN.B2021",
+           "base_year": 1400, "base_year_gregorian": 2021,
+           "parser": "cpi_excel", "raw_file_base64": "<base64>"}
+}
+```
+
+`meta.raw_file_base64` is the raw workbook, kept under the configured size guard
+(`scraper_max_download_bytes`) so a re-parse never needs a re-scrape. The decile
+publication is one Bronze row carrying ten series; the runner scopes Silver's
+per-series parse to that series' rows so the sibling series are not logged as
+skipped.
+
+## Silver and Gold
+
+- **Timestamps** are month-end (monthly) or quarter-end (quarterly), stored UTC.
+  SCI's Jalali `YYYY/MM` labels are converted to Gregorian; the original period
+  label and base year are kept in `record_metadata`.
+- **Persian digits** are normalised before parsing; thousands separators are
+  stripped (`src/utils/persian.py`).
+- **Units** are `index` for every CPI series and `percent` for unemployment.
+- **Derived ids** are namespaced `SCI.<indicator_id>.YOY` with unit `annual %`.
+- **Idempotent re-runs:** Silver upserts on `(indicator_id, timestamp)`; Gold
+  deletes and reinserts per indicator. A second run leaves Silver ids unchanged
+  and refreshes Gold ids.
+
+## Known limitations and findings
+
+1. **Base-year discontinuity is handled for the urban series only.** National and
+   rural publish just the 1400 base, so their canonical series is a passthrough
+   (single base, no splice).
+2. **`ChainLinkingLog.base_year_from`/`base_year_to` are not the nominal bases.**
+   The observed row stores `2023` and `2002` — the last year of the older
+   segment and the first year of the newer one, i.e. the splice's overlap
+   boundary — rather than the 2016→2021 bases. The catalog's `base_years` and the
+   segment ids (`B2016`/`B2021`) carry the nominal bases correctly. **Flagged as
+   a pre-existing chain-linking defect** (`src/chain_linking/splice.py`), not
+   fixed in Phase 5's documentation task.
+3. **Inactive segment metadata is over-broad.** `SCI.CPI.NATIONAL.B2021` and
+   `SCI.CPI.RURAL.B2021` carry `base_years = [2016, 2021]` copied from the
+   publication registry even though only 1400 = 2021 is published for them. The
+   canonical rows are correct.
+4. **Unemployment is a single observation.** SCI publishes the spring 1405 rate
+   (9.1%) only; there is no history in the registered publication, so the Gold
+   series is one point and derives no YoY. A time series accumulates from
+   periodic runs.
+5. **PDF and cross-tab publications are not registered.** The monthly CPI report
+   PDF and the labour-force PDF expose no extractable tables, and the annual
+   unemployment cross-tab has no clean rate row, so they contribute no
+   indicators.
+6. **CBI is gated.** No CBI indicator exists in the catalog (see below).
+
+## Reproducing these numbers
+
+```bash
+poetry run python -m src.connectors.sci_scraper --dry-run   # fetch + report, no writes
+poetry run python -m src.connectors.sci_scraper             # full Bronze → Silver → Gold
+```
+
+```sql
+SELECT indicator_id, count(*), min(timestamp)::date, max(timestamp)::date
+FROM silver.silver_cleaned WHERE source_name = 'sci' GROUP BY 1 ORDER BY 1;
+
+SELECT indicator_id, count(*) AS levels,
+       sum(CASE WHEN is_chain_linked THEN 1 ELSE 0 END) AS linked
+FROM gold.gold_analytical
+WHERE indicator_id LIKE 'SCI.%' AND indicator_id NOT LIKE '%.YOY'
+GROUP BY 1 ORDER BY 1;
+
+SELECT * FROM metadata.chain_linking_log WHERE indicator_id LIKE 'SCI.%';
+```
+
+---
+
+# CBI Indicators (Phase 5 — GATED)
+
+**Status:** ❌ NOT INGESTED — the Central Bank of Iran blocks programmatic access.
+
+The CBI decision gate was evaluated in Task 1 and re-probed in Tasks 6–7.
+`https://www.cbi.ir/` answers every request with an F5 TSPD JavaScript challenge
+rather than content (with both `curl` and a normal headless Chromium), and
+`https://tsd.cbi.ir/` does not resolve/answer at all. Per the project's rule
+(AGENTS.md, and the OPEC precedent) the block is **not worked around**.
+
+Consequently there is **no `cbi_parser.py`, `cbi_scraper.py`, CBI DAG, fixture
+with data, or CBI indicator in the catalog**. The `CBI.M0`, `CBI.M2`,
+`CBI.MONEY.MULTIPLIER`, and `CBI.HOUSING.TEHRAN` ids from the plan remain
+unimplemented. Evidence: `tests/fixtures/cbi/_gate_task6.json`,
+`tests/fixtures/cbi/_gate_task7.json`, and
+[docs/phase-5/VALIDATION.md](../phase-5/VALIDATION.md).

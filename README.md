@@ -212,7 +212,7 @@ iran-macro-platform/
 │   └── utils/               # Config, logging, validation, retry, period helpers
 ├── alembic/                 # Migration environment and versions
 ├── dashboard/               # Streamlit multi-page dashboard
-├── airflow/                 # DAG definitions (Phase 3 — not built yet)
+├── airflow/                 # DAG definitions (TGJU daily + SCI weekly)
 ├── tests/
 │   ├── unit/                # Unit tests (no network, no database)
 │   ├── integration/         # Integration tests (PostgreSQL + TimescaleDB)
@@ -224,6 +224,7 @@ iran-macro-platform/
 │   ├── phase-2/             # Indicator catalog (observed coverage)
 │   ├── phase-3/             # TGJU scraper reports
 │   ├── phase-4/             # IMF/EIA reports + OPEC gate record
+│   ├── phase-5/             # SCI reports + CBI gate record
 │   └── phase-7/             # Dashboard runbook
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
@@ -284,15 +285,17 @@ for the detailed conventions.
 | **EIA** | API | Crude & total liquids production (2 indicators) | Monthly | ✅ Implemented (Phase 4) |
 | **OPEC** | Scraper | OPEC Reference Basket | Daily | ⛔ Deferred (Phase 4) — source blocks programmatic access |
 | **TGJU** | Scraper | FX, Gold (3 indicators) | Daily | ✅ Implemented (Phase 3) |
-| **CBI TSD** | Scraper | Monetary, Banking | Monthly | Planned (Phase 5) |
-| **SCI** | Scraper | CPI, Labor | Quarterly | Planned (Phase 5) |
+| **SCI** | Scraper | CPI (national/urban/rural + 10 deciles), unemployment | Monthly / Quarterly | ✅ Implemented (Phase 5) |
+| **CBI TSD** | Scraper | Monetary, Banking | Monthly | ⛔ Deferred (Phase 5) — bot defense blocks programmatic access |
 | **TSETMC** | Package | Stock indices | Daily | Planned (Phase 6) |
 | **HBSIR** | Package | Household surveys | Annual | Planned (Phase 6) |
 
-Phase numbers follow `PRD.md` §7. Every World Bank, IMF, and EIA indicator, its
-unit, and its **observed** coverage for Iran are documented in
-[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md). OPEC is not
-ingested — see [docs/phase-4/VALIDATION.md](docs/phase-4/VALIDATION.md).
+Phase numbers follow `PRD.md` §7. Every World Bank, IMF, EIA, and SCI
+indicator, its unit, and its **observed** coverage for Iran are documented in
+[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md). OPEC
+(Phase 4) and CBI (Phase 5) are not ingested — see
+[docs/phase-4/VALIDATION.md](docs/phase-4/VALIDATION.md) and
+[docs/phase-5/VALIDATION.md](docs/phase-5/VALIDATION.md).
 
 ---
 
@@ -314,7 +317,7 @@ make test-all
 RUN_LIVE_API_TESTS=1 poetry run pytest -m live
 ```
 
-Current status: **572 tests** — 496 unit tests at **87.5% coverage** and 76 integration tests (73 pass; 3 live tests skipped by default). No known failing tests; `mypy src/` and `ruff` are clean.
+Current status: **739 tests** — 648 unit tests at **86.8% coverage** (plus 1 gated live test skipped by default) and 90 integration tests (86 pass; 4 live tests skipped by default). No known failing tests; `mypy src/` and `ruff` are clean.
 
 ### Coverage Requirements
 
@@ -435,9 +438,13 @@ poetry cache clear . --all
 - [x] Forecast-aware Silver (future-dated IMF periods retained and labelled)
 - [ ] OPEC basket connector — **deferred**: Cloudflare blocks programmatic access
 
-### Phase 5: Complex Domestic Scrapers (Week 5-6)
-- [ ] CBI TSD monetary scraper
-- [ ] SCI CPI/labour scraper with real multi-base-year chain-linking
+### Phase 5: Complex Domestic Scrapers (Week 5-6) ✅ COMPLETE
+- [x] SCI CPI (national/urban/rural + 10 deciles) and labour connector
+- [x] Persian/Jalali helpers + Excel (`.xlsx`/`.xls`) parsers
+- [x] Real 1395→1400 multi-base-year chain-linking (urban CPI)
+- [x] Runner/catalog wiring (canonicals active, base-year segments inactive)
+- [x] Weekly Airflow DAG (`sci_weekly`)
+- [ ] CBI TSD monetary scraper — **deferred**: bot defense blocks programmatic access
 
 ### Phase 6: Market & Survey Data (Week 6-7)
 - [ ] TSETMC stock market connector
@@ -488,4 +495,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** [Your Name]  
-**Project Status:** Phase 4 complete (IMF + EIA connectors; OPEC deferred) and the Phase 7 dashboard validated — Phase 5 (CBI/SCI domestic scrapers) next
+**Project Status:** Phases 1–5 and 7 complete — SCI domestic CPI/labour pipeline implemented (CBI and OPEC deferred: sources block programmatic access); Phase 6 (TSETMC/HBSIR) next

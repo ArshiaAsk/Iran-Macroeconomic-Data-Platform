@@ -26,10 +26,12 @@ and its derived rows, then re-inserts. Note for operations: once the
 requires a TimescaleDB version that permits DML on compressed chunks (2.11+).
 """
 
+import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import numpy as np
 import pandas as pd
@@ -46,7 +48,13 @@ from src.chain_linking.splice import (
     ChainLinkResult,
     chain_link,
 )
-from src.database.schema import ChainLinkingLog, GoldAnalytical, IndicatorCatalog, utc_now
+from src.database.schema import (
+    ChainLinkingLog,
+    GoldAnalytical,
+    IndicatorCatalog,
+    SilverCleaned,
+    utc_now,
+)
 from src.etl.lineage import (
     LAYER_GOLD,
     LAYER_SILVER,
@@ -56,6 +64,7 @@ from src.etl.lineage import (
     transformation,
 )
 from src.etl.silver import SilverSeries, load_silver_series
+from src.utils.exceptions import ChainLinkingError
 from src.utils.logging import get_logger, log_with_context
 from src.utils.periods import year_earlier
 
@@ -79,6 +88,10 @@ MA30_WINDOW = 30
 
 DEFAULT_DOMAIN = "unclassified"
 PERCENT = 100.0
+
+# Base-year segments carry their base year in the indicator id (e.g. ``…B2016``)
+# when the Silver row metadata does not. The suffix is Gregorian.
+_BASE_YEAR_ID_PATTERN = re.compile(r"\.B(\d{4})$")
 
 
 def _namespaced(indicator_id: str, prefix: str, suffix: str) -> str:
@@ -551,6 +564,113 @@ def _replace_gold_rows(
     return len(records)
 
 
+@dataclass
+class BaseYearSegment:
+    """One published base-year series loaded for multi-segment linking."""
+
+    indicator_id: str
+    series: SilverSeries
+    base_year: int | None = None
+
+
+def base_year_from_indicator_id(indicator_id: str) -> int | None:
+    """
+    Gregorian base year encoded in a segment indicator id, if present.
+
+    Segment ids follow ``<canonical>.B<year>`` (e.g. ``SCI.CPI.URBAN.B2016``).
+
+    Args:
+        indicator_id: Segment indicator id
+
+    Returns:
+        The base year, or ``None`` when the id does not carry one
+    """
+    match = _BASE_YEAR_ID_PATTERN.search(indicator_id)
+    return int(match.group(1)) if match else None
+
+
+def _segment_base_year(session: Session, indicator_id: str) -> int | None:
+    """Base year recorded on a segment's Silver rows, falling back to its id."""
+    rows = session.query(SilverCleaned).filter(SilverCleaned.indicator_id == indicator_id).all()
+    years: set[int] = set()
+    for row in rows:
+        metadata = row.record_metadata
+        if isinstance(metadata, Mapping) and metadata.get("base_year") is not None:
+            years.add(int(metadata["base_year"]))
+    if len(years) == 1:
+        return years.pop()
+    return base_year_from_indicator_id(indicator_id)
+
+
+def order_base_year_segments(segments: Sequence[BaseYearSegment]) -> list[BaseYearSegment]:
+    """
+    Order segments oldest base first (the order ``chain_link`` expects).
+
+    Falls back to the supplied order -- and warns -- when any segment's base
+    year is unknown, because guessing would splice the wrong direction.
+
+    Args:
+        segments: Loaded base-year segments
+
+    Returns:
+        Segments sorted ascending by base year, or the input order when unknown
+    """
+    if not segments:
+        return []
+    if any(segment.base_year is None for segment in segments):
+        log_with_context(
+            logger,
+            "WARNING",
+            "segment base year(s) unknown; keeping supplied segment order",
+            segments=[segment.indicator_id for segment in segments],
+        )
+        return list(segments)
+    return sorted(segments, key=lambda segment: int(segment.base_year or 0))
+
+
+def load_base_year_segments(
+    session: Session,
+    segment_indicator_ids: Sequence[str],
+) -> list[BaseYearSegment]:
+    """
+    Load each published base-year segment from Silver, oldest base first.
+
+    Args:
+        session: Active session; the caller owns the transaction
+        segment_indicator_ids: Segment ids (e.g. ``SCI.CPI.URBAN.B2016``)
+
+    Returns:
+        Segments ordered oldest base first
+    """
+    segments = [
+        BaseYearSegment(
+            indicator_id=segment_id,
+            series=load_silver_series(session, segment_id),
+            base_year=_segment_base_year(session, segment_id),
+        )
+        for segment_id in segment_indicator_ids
+    ]
+    return order_base_year_segments(segments)
+
+
+def _merge_segment_series(
+    indicator_id: str,
+    segments: Sequence[BaseYearSegment],
+) -> SilverSeries:
+    """Present the linked segments as one series under the canonical id."""
+    newest = segments[-1].series
+    silver_ids: dict[datetime, UUID] = {}
+    for segment in segments:
+        silver_ids.update(segment.series.silver_ids)
+    return SilverSeries(
+        indicator_id=indicator_id,
+        frame=newest.frame,
+        unit=newest.unit,
+        frequency=newest.frequency,
+        silver_ids=silver_ids,
+    )
+
+
 def silver_to_gold(
     session: Session,
     indicator_id: str,
@@ -560,6 +680,7 @@ def silver_to_gold(
     statistical_fallback: bool = False,
     derived_prefix: str = DERIVED_PREFIX,
     derivation_strategy: str = "yoy",
+    segment_indicator_ids: Sequence[str] | None = None,
 ) -> TransformResult:
     """
     Chain-link one indicator's Silver history into Gold and derive growth rates.
@@ -573,6 +694,10 @@ def silver_to_gold(
         statistical_fallback: Permit level-shift break detection without metadata
         derived_prefix: Namespace prefix for derived indicators (default: WB)
         derivation_strategy: Strategy for derived metrics - "yoy" or "daily"
+        segment_indicator_ids: Published base-year segments to link into
+            ``indicator_id`` (oldest base first is derived, not assumed). When
+            supplied, ``indicator_id`` names the canonical series and its own
+            Silver rows are not read.
 
     Returns:
         Counts and status for the transformation
@@ -586,17 +711,45 @@ def silver_to_gold(
         target_layer=LAYER_GOLD,
         transformation_type=TRANSFORMATION_TYPE,
     ) as context:
-        series = load_silver_series(session, indicator_id)
+        segment_ids = list(segment_indicator_ids or [])
         catalog = _resolve_catalog_entry(session, indicator_id)
         resolved_domain = _resolve_domain(catalog, indicator_id, domain)
         resolved_base_years = base_years or (catalog.base_years if catalog else None)
 
-        result = chain_link(
-            series.frame,
-            metadata={"base_years": resolved_base_years},
-            frequency=series.frequency,
-            statistical_fallback=statistical_fallback,
-        )
+        if segment_ids:
+            segments = load_base_year_segments(session, segment_ids)
+            empty = [segment.indicator_id for segment in segments if segment.series.frame.empty]
+            if not segments:
+                msg = f"no base-year segments loaded for {indicator_id}"
+                raise ChainLinkingError(msg)
+            if empty:
+                msg = (
+                    f"cannot chain-link {indicator_id}: no Silver observations for "
+                    f"{', '.join(empty)}"
+                )
+                raise ChainLinkingError(msg)
+            series = _merge_segment_series(indicator_id, segments)
+            newest = segments[-1]
+            result = chain_link(
+                newest.series.frame,
+                metadata={
+                    "segments": [segment.series.frame for segment in segments],
+                    "base_years": resolved_base_years,
+                },
+                frequency=newest.series.frequency,
+                statistical_fallback=statistical_fallback,
+            )
+            processed = sum(len(segment.series.frame) for segment in segments)
+        else:
+            series = load_silver_series(session, indicator_id)
+            result = chain_link(
+                series.frame,
+                metadata={"base_years": resolved_base_years},
+                frequency=series.frequency,
+                statistical_fallback=statistical_fallback,
+            )
+            processed = int(len(series.frame))
+
         linked = result.frame
         stamped = utc_now()
 
@@ -638,7 +791,6 @@ def silver_to_gold(
         written = _replace_gold_rows(session, targets, [*records, *derived_records])
         _write_chain_linking_log(session, indicator_id, result)
 
-        processed = int(len(series.frame))
         # Observations that reached Gold as levels; a missing Silver id is the
         # only way a row can be dropped here.
         failed = max(processed - len(records), 0)
@@ -654,6 +806,7 @@ def silver_to_gold(
             "derived_rows": len(derived_records),
             "derivation_strategy": derivation_strategy if include_growth else None,
             "is_chain_linked": result.is_chain_linked,
+            "segments": segment_ids,
             "linking_method": result.linking_method,
             "records_linked": result.records_linked,
             "avg_confidence_score": result.avg_confidence_score,

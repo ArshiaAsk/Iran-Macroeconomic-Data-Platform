@@ -27,6 +27,8 @@ plotly = "^6.1.1"
 apache-airflow = {version = "^3.3.0", optional = true}  # Airflow 3.x: requires SQLAlchemy >= 2.0.50
 asyncpg = "^0.31.0"
 openpyxl = "^3.1.0"
+xlrd = "^2.0"  # legacy .xls workbooks (xlrd>=2 reads .xls only; openpyxl handles .xlsx)
+pdfplumber = "^0.11"  # Persian RTL PDF tables (SCI/CBI publications)
 kaleido = "^1.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -85,9 +87,14 @@ ignore = [
 "__init__.py" = ["F401"]  # Unused imports in __init__.py
 "tests/**/*.py" = ["ARG", "PLR2004", "PT011", "B017", "PT018", "PT004"]  # Allow unused args, magic values, broad exceptions, and fixture naming in tests
 "src/connectors/tgju_parser.py" = ["RUF002", "RUF003", "PLR0912"]  # Allow Persian chars in docs, complex branches
+"src/utils/persian.py" = ["RUF002", "RUF003"]  # Allow Persian text/digits in docs and comments
+"src/connectors/sci_parser.py" = ["RUF001", "RUF002", "RUF003"]  # Allow Persian text and missing-value dashes
 "src/connectors/tgju_scraper.py" = ["RUF002", "ARG002", "PLR0912", "N806", "ARG001"]  # Allow Persian chars, unused protocol args, complex branches
+"src/connectors/sci_scraper.py" = ["RUF001", "RUF002", "ARG002"]  # Allow Persian text and unused protocol args
 "src/etl/gold.py" = ["RUF002"]  # Allow special chars in docstrings
 "tests/unit/connectors/test_tgju_parser.py" = ["RUF001", "RUF002", "RUF003"]  # Allow Persian test data
+"tests/unit/connectors/test_sci_parser.py" = ["RUF001", "RUF002", "RUF003"]  # Allow Persian test data
+"tests/unit/utils/test_persian.py" = ["RUF001", "RUF002", "RUF003"]  # Allow Persian test data
 "tests/unit/etl/test_gold.py" = ["F841"]  # Allow unused vars in tests
 "airflow/dags/*.py" = ["EM101", "EM102"]  # Allow exception messages in DAGs
 
@@ -116,6 +123,8 @@ module = [
     "fake_useragent.*",
     "jdatetime.*",
     "bs4.*",
+    "openpyxl.*",
+    "xlrd.*",
     "streamlit.*",
     "plotly.*",
     "kaleido.*",

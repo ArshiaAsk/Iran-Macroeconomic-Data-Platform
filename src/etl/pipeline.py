@@ -175,6 +175,9 @@ class IndicatorOutcome:
     records_failed: int = 0
     is_chain_linked: bool = False
     bronze_id: UUID | None = None
+    # Series actually persisted to Silver for this outcome (SCI uses this to
+    # decide which canonical indicators can be chain-linked).
+    series_ids: list[str] = field(default_factory=list)
     error: str | None = None
 
     def summary(self) -> dict[str, Any]:
@@ -266,7 +269,7 @@ def _catalog_values(item: IndicatorMetadata) -> dict[str, Any]:
         "availability_end": item.availability_end,
         "has_base_year_changes": item.has_base_year_changes,
         "base_years": item.base_years,
-        "is_active": True,
+        "is_active": item.is_active,
         "created_at": stamped,
         "updated_at": stamped,
     }

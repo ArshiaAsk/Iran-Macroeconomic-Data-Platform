@@ -1,0 +1,44 @@
+[
+ {
+  "name": "cbi_home",
+  "url": "https://www.cbi.ir/",
+  "status": 200,
+  "final_url": "https://www.cbi.ir/",
+  "title": "Request Rejected",
+  "content_len": 254,
+  "markers": {
+   "TSPD": false,
+   "bobcmn": false,
+   "TSPD_101": false,
+   "captcha": false,
+   "challenge": false
+  },
+  "sha256": "ebb65f7f7222f483d1503af8c31214bc9fc66bf63cf4f586165799eec5ae3f59"
+ },
+ {
+  "name": "cbi_robots",
+  "url": "https://www.cbi.ir/robots.txt",
+  "status": 200,
+  "final_url": "https://www.cbi.ir/robots.txt",
+  "title": "Request Rejected",
+  "content_len": 254,
+  "markers": {
+   "TSPD": false,
+   "bobcmn": false,
+   "TSPD_101": false,
+   "captcha": false,
+   "challenge": false
+  },
+  "sha256": "7ac2bae6e7ae03710833f1f593db70ff307b59bac5bc7da645a0fe2c6d6b6149"
+ },
+ {
+  "name": "cbi_tsd",
+  "url": "https://tsd.cbi.ir/",
+  "error": "TimeoutError('Page.goto: Timeout 40000ms exceeded.\\nCall log:\\n  - navigating to \"https://tsd.cbi.ir/\", waiting until \"domcontentloaded\"\\n')"
+ },
+ {
+  "name": "cbi_tsd_http",
+  "url": "http://tsd.cbi.ir/",
+  "error": "TimeoutError('Page.goto: Timeout 40000ms exceeded.\\nCall log:\\n  - navigating to \"http://tsd.cbi.ir/\", waiting until \"domcontentloaded\"\\n')"
+ }
+]

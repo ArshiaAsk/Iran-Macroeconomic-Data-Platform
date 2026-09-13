@@ -63,6 +63,8 @@ class CollectionConfig(BaseSettings):
     # Scraper-specific settings
     scraper_min_request_interval: float = Field(default=1.0, alias="SCRAPER_MIN_REQUEST_INTERVAL")
     scraper_page_timeout: int = Field(default=30, alias="SCRAPER_PAGE_TIMEOUT")
+    scraper_download_timeout: int = Field(default=60, alias="SCRAPER_DOWNLOAD_TIMEOUT")
+    scraper_max_download_bytes: int = Field(default=10_000_000, alias="SCRAPER_MAX_DOWNLOAD_BYTES")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -109,6 +111,24 @@ class CollectionConfig(BaseSettings):
             raise ValueError(msg)
         return v
 
+    @field_validator("scraper_download_timeout")
+    @classmethod
+    def validate_scraper_download_timeout(cls, v: int) -> int:
+        """Validate scraper_download_timeout is positive."""
+        if v <= 0:
+            msg = "scraper_download_timeout must be positive"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("scraper_max_download_bytes")
+    @classmethod
+    def validate_scraper_max_download_bytes(cls, v: int) -> int:
+        """Validate scraper_max_download_bytes is positive."""
+        if v <= 0:
+            msg = "scraper_max_download_bytes must be positive"
+            raise ValueError(msg)
+        return v
+
 
 class APIConfig(BaseSettings):
     """API configuration for external data sources."""
@@ -121,6 +141,14 @@ class APIConfig(BaseSettings):
     eia_api_key: str | None = Field(default=None, alias="EIA_API_KEY")
     eia_url: str = Field(default="https://api.eia.gov/v2", alias="EIA_API_URL")
     tgju_base_url: str = Field(default="https://www.tgju.org", alias="TGJU_BASE_URL")
+    sci_base_url: str = Field(default="https://www.amar.org.ir", alias="SCI_BASE_URL")
+    # Optional CA bundle for SCI. The site serves an incomplete TLS chain, so a
+    # pinned intermediate is shipped under src/connectors/certs/ and used unless
+    # this override points elsewhere.
+    sci_ca_bundle: str | None = Field(default=None, alias="SCI_CA_BUNDLE")
+    # CBI TSD is gated (see docs/phase-5/VALIDATION.md); the URL exists so a
+    # future connector reads it from config rather than hardcoding it.
+    cbi_tsd_url: str = Field(default="https://tsd.cbi.ir", alias="CBI_TSD_URL")
 
     model_config = SettingsConfigDict(
         env_file=".env",
