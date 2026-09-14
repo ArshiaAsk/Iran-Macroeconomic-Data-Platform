@@ -1,0 +1,158 @@
+[
+  {
+    "year": 1390,
+    "gini": 0.3494,
+    "poverty_rate_pct": 15.85,
+    "poverty_line_rial": 49470000,
+    "poverty_line_rule": "50% of weighted median household income",
+    "n_households": 38512,
+    "weighted_households": 21158812,
+    "decile_shares_pct": {
+      "1": 2.149,
+      "2": 4.112,
+      "3": 5.459,
+      "4": 6.653,
+      "5": 7.865,
+      "6": 9.128,
+      "7": 10.594,
+      "8": 12.57,
+      "9": 15.756,
+      "10": 25.715
+    },
+    "columns": {
+      "Total_Income": [
+        "Year",
+        "ID",
+        "Income"
+      ],
+      "Weight": [
+        "Year",
+        "ID",
+        "Weight"
+      ],
+      "Total_Expenditure": [
+        "Year",
+        "ID",
+        "Gross_Expenditure",
+        "Net_Expenditure"
+      ]
+    }
+  },
+  {
+    "year": 1395,
+    "gini": 0.3767,
+    "poverty_rate_pct": 16.26,
+    "poverty_line_rial": 114100000,
+    "poverty_line_rule": "50% of weighted median household income",
+    "n_households": 38146,
+    "weighted_households": 24854004,
+    "decile_shares_pct": {
+      "1": 1.876,
+      "2": 3.85,
+      "3": 5.173,
+      "4": 6.355,
+      "5": 7.507,
+      "6": 8.793,
+      "7": 10.316,
+      "8": 12.34,
+      "9": 15.592,
+      "10": 28.197
+    },
+    "columns": {
+      "Total_Income": [
+        "Year",
+        "ID",
+        "Income"
+      ],
+      "Weight": [
+        "Year",
+        "ID",
+        "Weight"
+      ],
+      "Total_Expenditure": [
+        "Year",
+        "ID",
+        "Gross_Expenditure",
+        "Net_Expenditure"
+      ]
+    }
+  },
+  {
+    "year": 1400,
+    "gini": 0.3704,
+    "poverty_rate_pct": 16.42,
+    "poverty_line_rial": 416190000,
+    "poverty_line_rule": "50% of weighted median household income",
+    "n_households": 37988,
+    "weighted_households": 26693614,
+    "decile_shares_pct": {
+      "1": 1.875,
+      "2": 3.858,
+      "3": 5.213,
+      "4": 6.376,
+      "5": 7.584,
+      "6": 8.923,
+      "7": 10.54,
+      "8": 12.601,
+      "9": 15.814,
+      "10": 27.216
+    },
+    "columns": {
+      "Total_Income": [
+        "Year",
+        "ID",
+        "Income"
+      ],
+      "Weight": [
+        "Year",
+        "ID",
+        "Weight"
+      ],
+      "Total_Expenditure": [
+        "Year",
+        "ID",
+        "Gross_Expenditure",
+        "Net_Expenditure"
+      ]
+    }
+  },
+  {
+    "year": 1403,
+    "gini": 0.3451,
+    "poverty_rate_pct": 14.58,
+    "poverty_line_rial": 1319500000,
+    "poverty_line_rule": "50% of weighted median household income",
+    "n_households": 37504,
+    "weighted_households": 28199495,
+    "decile_shares_pct": {
+      "1": 2.141,
+      "2": 4.272,
+      "3": 5.633,
+      "4": 6.707,
+      "5": 7.843,
+      "6": 9.106,
+      "7": 10.57,
+      "8": 12.582,
+      "9": 15.554,
+      "10": 25.592
+    },
+    "columns": {
+      "Total_Income": [
+        "Year",
+        "ID",
+        "Income"
+      ],
+      "Weight": [
+        "Year",
+        "ID",
+        "Weight"
+      ],
+      "Total_Expenditure": [
+        "Year",
+        "ID",
+        "Gross_Expenditure",
+        "Net_Expenditure"
+      ]
+    }
+  }
+]

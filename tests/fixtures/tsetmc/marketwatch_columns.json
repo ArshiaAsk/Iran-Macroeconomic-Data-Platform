@@ -1,0 +1,153 @@
+{
+  "columns": [
+    "Trade Type",
+    "Time",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Final",
+    "Close(%)",
+    "Final(%)",
+    "Day_UL",
+    "Day_LL",
+    "Value",
+    "BQ-Value",
+    "SQ-Value",
+    "BQPC",
+    "SQPC",
+    "Volume",
+    "Vol_Buy_R",
+    "Vol_Buy_I",
+    "Vol_Sell_R",
+    "Vol_Sell_I",
+    "No",
+    "No_Buy_R",
+    "No_Buy_I",
+    "No_Sell_R",
+    "No_Sell_I",
+    "Name",
+    "Market",
+    "Sector",
+    "Share-No",
+    "Base-Vol",
+    "Market Cap",
+    "EPS",
+    "Download"
+  ],
+  "n_symbols": 1544,
+  "sample_columns": [
+    "Ticker",
+    "Close",
+    "Value",
+    "Market Cap",
+    "EPS"
+  ],
+  "sample": [
+    {
+      "Ticker": "خوساز",
+      "Close": 19940.0,
+      "Value": 116022121320.0,
+      "Market Cap": 22330331866680.0,
+      "EPS": -286.0
+    },
+    {
+      "Ticker": "وگردش",
+      "Close": 1765.0,
+      "Value": 1015799018796.0,
+      "Market Cap": 282545400000000.0,
+      "EPS": 1032.0
+    },
+    {
+      "Ticker": "بورس3",
+      "Close": 5330.0,
+      "Value": 5330000.0,
+      "Market Cap": 170560000000000.0,
+      "EPS": 280.0
+    },
+    {
+      "Ticker": "چفیبر3",
+      "Close": 7900.0,
+      "Value": 0.0,
+      "Market Cap": 14148000000000.0,
+      "EPS": 224.0
+    },
+    {
+      "Ticker": "سنیر3",
+      "Close": 7350.0,
+      "Value": 7350000.0,
+      "Market Cap": 24953250000000.0,
+      "EPS": 963.0
+    },
+    {
+      "Ticker": "کاریس",
+      "Close": 84402.0,
+      "Value": 307311556923.0,
+      "Market Cap": 271212800000000.0,
+      "EPS": null
+    },
+    {
+      "Ticker": "خکاوه",
+      "Close": 917.0,
+      "Value": 584215962271.0,
+      "Market Cap": 51882741794212.0,
+      "EPS": 53.0
+    },
+    {
+      "Ticker": "آسان",
+      "Close": 13696.0,
+      "Value": 111074984727.0,
+      "Market Cap": 102712500000000.0,
+      "EPS": null
+    },
+    {
+      "Ticker": "غدام",
+      "Close": 63200.0,
+      "Value": 54090882670.0,
+      "Market Cap": 10086400000000.0,
+      "EPS": 545.0
+    },
+    {
+      "Ticker": "سپینود",
+      "Close": 28720.0,
+      "Value": 49829200.0,
+      "Market Cap": 2872000000000.0,
+      "EPS": null
+    },
+    {
+      "Ticker": "کهمدا3",
+      "Close": 6320.0,
+      "Value": 6952000.0,
+      "Market Cap": 104280000000000.0,
+      "EPS": 981.0
+    },
+    {
+      "Ticker": "وساپا3",
+      "Close": 9410.0,
+      "Value": 819611000.0,
+      "Market Cap": 244660000000000.0,
+      "EPS": 2887.0
+    },
+    {
+      "Ticker": "پولاد",
+      "Close": 29399.0,
+      "Value": 100000638238.0,
+      "Market Cap": 5879400000000.0,
+      "EPS": null
+    },
+    {
+      "Ticker": "داترا3",
+      "Close": 6710.0,
+      "Value": 13420000.0,
+      "Market Cap": 38548950000000.0,
+      "EPS": 777.0
+    },
+    {
+      "Ticker": "سهرمز3",
+      "Close": 21410.0,
+      "Value": 786003920.0,
+      "Market Cap": 156207360000000.0,
+      "EPS": 1143.0
+    }
+  ]
+}

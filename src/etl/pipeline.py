@@ -131,6 +131,9 @@ class IndicatorDerivation:
 
     derivation_strategy: str | None = None
     include_growth: bool = True
+    # Opt-in month-end downsample of a (daily) linked series -> ``.ME`` rows.
+    # Defaults to False so existing sources keep their current behavior.
+    include_monthly: bool = False
 
 
 @dataclass(frozen=True)
@@ -423,6 +426,7 @@ def _persist_indicator(
         include_growth=derivation.include_growth,
         derived_prefix=spec.derived_prefix,
         derivation_strategy=strategy or "yoy",
+        include_monthly=derivation.include_monthly,
     )
     outcome.rows_written_gold = gold.records_written
     outcome.is_chain_linked = bool(gold.details.get("is_chain_linked"))

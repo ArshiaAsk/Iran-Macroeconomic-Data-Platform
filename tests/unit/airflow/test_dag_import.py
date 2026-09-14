@@ -232,3 +232,164 @@ def test_sci_weekly_imports_the_pipeline_lazily(ensure_airflow_in_path):
     assert "run_sci_pipeline" not in vars(sci_weekly), (
         "run_sci_pipeline must be imported inside the task callable, " "not at DAG parse time"
     )
+
+
+# ------------------------------------------------------------------ TSETMC
+
+
+def test_tsetmc_daily_dag_imports_without_error(ensure_airflow_in_path):
+    """Test that the tsetmc_daily DAG can be imported."""
+    try:
+        import tsetmc_daily  # noqa: F401
+    except ImportError as exc:
+        pytest.fail(f"Failed to import tsetmc_daily DAG: {exc}")
+
+
+def test_tsetmc_daily_dag_has_correct_id(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG has the expected dag_id."""
+    import tsetmc_daily
+
+    assert hasattr(tsetmc_daily, "dag"), "DAG object not found in tsetmc_daily module"
+    assert tsetmc_daily.dag.dag_id == "tsetmc_daily"
+
+
+def test_tsetmc_daily_dag_has_valid_schedule(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG runs daily at 23:00 Tehran time."""
+    import tsetmc_daily
+
+    assert tsetmc_daily.dag.schedule == "0 23 * * *", "Schedule should be 0 23 * * * (23:00 daily)"
+
+
+def test_tsetmc_daily_dag_schedule_is_anchored_to_tehran_time(ensure_airflow_in_path):
+    """The 23:00 run must be interpreted in the Tehran timezone, not UTC."""
+    import tsetmc_daily
+
+    tz = tsetmc_daily.dag.timezone
+    assert tz.name == "Asia/Tehran", f"Expected Asia/Tehran timezone, got {tz}"
+
+
+def test_tsetmc_daily_dag_has_catchup_disabled(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG has catchup=False."""
+    import tsetmc_daily
+
+    assert tsetmc_daily.dag.catchup is False, "catchup should be disabled for daily DAG"
+
+
+def test_tsetmc_daily_dag_has_expected_tags(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG has the expected tags."""
+    import tsetmc_daily
+
+    expected_tags = {"tsetmc", "package", "daily", "market", "tedpix"}
+    actual_tags = set(tsetmc_daily.dag.tags or [])
+    assert expected_tags.issubset(actual_tags), f"Expected tags {expected_tags}, got {actual_tags}"
+
+
+def test_tsetmc_daily_dag_has_one_task(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG has exactly one collection task."""
+    import tsetmc_daily
+
+    tasks = tsetmc_daily.dag.tasks
+    assert len(tasks) == 1, f"Expected 1 task, found {len(tasks)}"
+    assert tasks[0].task_id == "collect_tsetmc_index"
+
+
+def test_tsetmc_daily_dag_max_active_runs_is_one(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG prevents concurrent runs."""
+    import tsetmc_daily
+
+    assert (
+        tsetmc_daily.dag.max_active_runs == 1
+    ), "max_active_runs should be 1 to prevent concurrent collection"
+
+
+def test_tsetmc_daily_dag_has_retries_with_exponential_backoff(ensure_airflow_in_path):
+    """Test that tsetmc_daily DAG follows the shared retry/backoff convention."""
+    import tsetmc_daily
+
+    default_args = tsetmc_daily.dag.default_args
+    assert default_args["retries"] == 3, "Expected 3 retries"
+    assert default_args["retry_delay"].total_seconds() == 300, "Expected a 5-minute retry delay"
+    assert default_args["retry_exponential_backoff"] is True
+    assert default_args["max_retry_delay"].total_seconds() == 1800, "Expected a 30-minute cap"
+
+
+def test_tsetmc_daily_task_has_failure_callback(ensure_airflow_in_path):
+    """Test that the tsetmc_daily task has an on_failure_callback."""
+    import tsetmc_daily
+
+    task = tsetmc_daily.dag.tasks[0]
+    assert task.on_failure_callback is not None, "Task should have on_failure_callback configured"
+
+
+def test_tsetmc_daily_task_is_wired_to_the_collection_callable(ensure_airflow_in_path):
+    """The scheduled task must call the connector-backed callable."""
+    import tsetmc_daily
+
+    task = tsetmc_daily.dag.tasks[0]
+    assert task.python_callable is tsetmc_daily._run_tsetmc_collection
+
+
+def test_tsetmc_daily_imports_the_pipeline_lazily(ensure_airflow_in_path):
+    """DAG parse must not import the connector or the optional finpy-tse extra."""
+    import tsetmc_daily
+
+    assert "run_tsetmc_pipeline" not in vars(tsetmc_daily), (
+        "run_tsetmc_pipeline must be imported inside the task callable, " "not at DAG parse time"
+    )
+    assert "finpy_tse" not in vars(
+        tsetmc_daily
+    ), "finpy_tse must never be imported at DAG parse time"
+
+
+def test_tsetmc_daily_task_runs_the_pipeline_with_dry_run_false(
+    ensure_airflow_in_path, monkeypatch
+):
+    """The task callable delegates to run_tsetmc_pipeline(dry_run=False)."""
+    import tsetmc_daily
+
+    from src.connectors import tsetmc as tsetmc_module
+
+    captured: dict[str, object] = {}
+
+    class FakeSummary:
+        def __init__(self) -> None:
+            self.outcomes = [object()]
+            self.succeeded = [object()]
+            self.failed: list[object] = []
+            self.rows_written_silver = 4
+            self.rows_written_gold = 8
+
+    def fake_run_tsetmc_pipeline(**kwargs):
+        captured.update(kwargs)
+        return FakeSummary()
+
+    monkeypatch.setattr(tsetmc_module, "run_tsetmc_pipeline", fake_run_tsetmc_pipeline)
+
+    tsetmc_daily._run_tsetmc_collection()
+
+    assert captured["dry_run"] is False
+
+
+def test_tsetmc_daily_task_raises_on_failed_indicator(ensure_airflow_in_path, monkeypatch):
+    """A failed indicator must raise so Airflow retries and fires callbacks."""
+    import tsetmc_daily
+
+    from airflow.exceptions import AirflowException
+    from src.connectors import tsetmc as tsetmc_module
+
+    class FailingOutcome:
+        def __init__(self) -> None:
+            self.indicator_id = "TSETMC.TEDPIX"
+
+    class FakeSummary:
+        def __init__(self) -> None:
+            self.outcomes = [FailingOutcome()]
+            self.succeeded: list[object] = []
+            self.failed = [FailingOutcome()]
+            self.rows_written_silver = 0
+            self.rows_written_gold = 0
+
+    monkeypatch.setattr(tsetmc_module, "run_tsetmc_pipeline", lambda **kwargs: FakeSummary())
+
+    with pytest.raises(AirflowException, match="TSETMC.TEDPIX"):
+        tsetmc_daily._run_tsetmc_collection()

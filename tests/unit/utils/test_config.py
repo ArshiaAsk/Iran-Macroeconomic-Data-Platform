@@ -77,6 +77,43 @@ def test_api_config_sci_and_cbi_urls() -> None:
         assert "tsd.cbi.ir" in config.cbi_tsd_url
 
 
+def test_api_config_phase6_defaults() -> None:
+    """Phase 6 sources have sensible defaults and are optional."""
+    with patch.dict(os.environ, {}, clear=True):
+        config = APIConfig(_env_file=None)
+        assert config.tsetmc_base_url == "http://cdn.tsetmc.com/api"
+        assert config.tsetmc_timeout == 30
+        assert config.hbsir_data_dir == "Data"
+        assert config.hbsir_download_timeout == 60
+
+
+def test_api_config_phase6_reads_aliases() -> None:
+    """Phase 6 settings are overridable via their environment aliases."""
+    with patch.dict(
+        os.environ,
+        {
+            "TSETMC_BASE_URL": "http://tsetmc.test/api",
+            "TSETMC_TIMEOUT": "45",
+            "HBSIR_DATA_DIR": "/data/hbsir",
+            "HBSIR_DOWNLOAD_TIMEOUT": "120",
+        },
+        clear=True,
+    ):
+        config = APIConfig(_env_file=None)
+        assert config.tsetmc_base_url == "http://tsetmc.test/api"
+        assert config.tsetmc_timeout == 45
+        assert config.hbsir_data_dir == "/data/hbsir"
+        assert config.hbsir_download_timeout == 120
+
+
+def test_api_config_phase6_timeout_validation() -> None:
+    """Non-positive Phase 6 timeouts are rejected."""
+    with pytest.raises(ValueError, match="tsetmc_timeout must be positive"):
+        APIConfig(tsetmc_timeout=0)
+    with pytest.raises(ValueError, match="hbsir_download_timeout must be positive"):
+        APIConfig(hbsir_download_timeout=-1)
+
+
 def test_api_config_reads_aliases() -> None:
     """New URLs are overridable via their environment aliases."""
     with patch.dict(
