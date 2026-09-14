@@ -1,0 +1,500 @@
+{
+  "package": "hbsir 0.6.6 (+bssir 0.6.8)",
+  "captured": "2026-09-13",
+  "data_dir": "/tmp/p6recon/Data/HBSIR/4_cleaned",
+  "mirror": "https://s3.ir-tbz-sh1.arvanstorage.ir/iran-open-data",
+  "survey_years_available": "1369-1403 (Total_Income)",
+  "loaded_files": [
+    {
+      "file": "1369_cloth.parquet",
+      "byte_length": 301259,
+      "sha256": "629ae33f7d2f27de30bb1c725c1b3cf0562cf35b4e5ec79d099e87537f4c0625"
+    },
+    {
+      "file": "1369_durable.parquet",
+      "byte_length": 503783,
+      "sha256": "cb6ec0ca3fb92f2fc84e131777eeb61b543f893545362a3458462e468421e205"
+    },
+    {
+      "file": "1369_employment_income.parquet",
+      "byte_length": 237849,
+      "sha256": "aec1ffae899ea9c1245ee51a8b9a2bd50cc18df860601c0053bd49920a445ed0"
+    },
+    {
+      "file": "1369_entertainment.parquet",
+      "byte_length": 131360,
+      "sha256": "6f659e7378d0c6a2d14cc45f7394ad9d204810f7f8e12d70eda1cc81e7853862"
+    },
+    {
+      "file": "1369_food.parquet",
+      "byte_length": 2192081,
+      "sha256": "3d90380c711f761fed50bfa5048e351ab8243544c4ef9d17fd49bd9c6c721bce"
+    },
+    {
+      "file": "1369_furniture.parquet",
+      "byte_length": 452336,
+      "sha256": "c72e0f1b3c315ab3aa391dff3fe38a69af7618f02065730f75e55add92c7fea6"
+    },
+    {
+      "file": "1369_home.parquet",
+      "byte_length": 371008,
+      "sha256": "3fa21fb1ebf538a3c575352d23f61415c50d233eb874685a3e95d7a61ae4101e"
+    },
+    {
+      "file": "1369_medical.parquet",
+      "byte_length": 227042,
+      "sha256": "af613916715bbb29d5927909e07da4a1c3d578803b729cff42bae3e2014d2997"
+    },
+    {
+      "file": "1369_miscellaneous.parquet",
+      "byte_length": 217452,
+      "sha256": "c4e53f460cf0d14060754d60645c5521f49b8c514b1b968f84a917118be9fbe7"
+    },
+    {
+      "file": "1369_other_income.parquet",
+      "byte_length": 43886,
+      "sha256": "7e6b34e5f620fe0094f73c28e1d7a500eaa76c9c0c41b2d24309faf2e2bdebc0"
+    },
+    {
+      "file": "1369_self_employed_income.parquet",
+      "byte_length": 404385,
+      "sha256": "19e81cee0f37736e5b24ac8c79e7614ac2240c8c8f37c512996ad7cd1e3d044a"
+    },
+    {
+      "file": "1369_transportation.parquet",
+      "byte_length": 227610,
+      "sha256": "a19862f19635128bc200876678f88995326f5129500e37637d1ed7b0c1b8d38e"
+    },
+    {
+      "file": "1385_cloth.parquet",
+      "byte_length": 483750,
+      "sha256": "277274f48d7b6373ba9e4b49959d260fc44de28173e5c8a274354200d259b5e1"
+    },
+    {
+      "file": "1385_communication.parquet",
+      "byte_length": 210665,
+      "sha256": "0fa1487b2cabcfe8701144c35c94a4cf47655561ecb26be74d6e024c70e1d685"
+    },
+    {
+      "file": "1385_durable.parquet",
+      "byte_length": 2011205,
+      "sha256": "d58664b4f319e59d4866be6296d42131aebb2500a1b9989b3cf7d57e092325c1"
+    },
+    {
+      "file": "1385_education.parquet",
+      "byte_length": 2850,
+      "sha256": "e80b16440afca59d623ad791679c1d6b80ef709f7fad9fc33397f6afc8035c90"
+    },
+    {
+      "file": "1385_employment_income.parquet",
+      "byte_length": 646007,
+      "sha256": "f40be5680242eb15492b085e2ce651fef486a262de22926889126364d3aed499"
+    },
+    {
+      "file": "1385_entertainment.parquet",
+      "byte_length": 291461,
+      "sha256": "fef891875f29b14782d52f4b66760d4cd9417125a267fe4671e5ff64fd38e785"
+    },
+    {
+      "file": "1385_food.parquet",
+      "byte_length": 6329933,
+      "sha256": "6ab11e58c4093cdbc206c8c16e4bf30c1e9ebca69d14e84e702dfe6d0d6a3cfa"
+    },
+    {
+      "file": "1385_furniture.parquet",
+      "byte_length": 904401,
+      "sha256": "911d992454dfe88fffe7744ded474fca69cef43f6913ec96986264dc03c542e0"
+    },
+    {
+      "file": "1385_home.parquet",
+      "byte_length": 609916,
+      "sha256": "1e260f2a6b54ce7d9a3cca7cabf27f81bfa0fed4720faebd2619a17e6f31fa42"
+    },
+    {
+      "file": "1385_hotel.parquet",
+      "byte_length": 217089,
+      "sha256": "17528d4544c1e66d998b1ee624b251a5b78b26fc34a9955d065761c8c938bc20"
+    },
+    {
+      "file": "1385_medical.parquet",
+      "byte_length": 351201,
+      "sha256": "ee5531aae089bb915eb69378c9c40e179fa187f9cc823925b559b6b19a0871fe"
+    },
+    {
+      "file": "1385_miscellaneous.parquet",
+      "byte_length": 660143,
+      "sha256": "6de607573c2a4077af695ae3bfdc0a4744421bf0a8a8c33f53e4aa6c217d67b1"
+    },
+    {
+      "file": "1385_other_income.parquet",
+      "byte_length": 170331,
+      "sha256": "c4ee471bd1d03c7362dd3bb94cdddf12210b076793c86469fe2c10d9f8558f4c"
+    },
+    {
+      "file": "1385_self_employed_income.parquet",
+      "byte_length": 564550,
+      "sha256": "32cf519d47adf70d75f20d9e7d9ba5997af26a4659dc4bcecfc37aa608abb007"
+    },
+    {
+      "file": "1385_tobacco.parquet",
+      "byte_length": 95001,
+      "sha256": "758e507db958b8a7e84d9718ce7741a93035d52aaaa2dfc51fa49f0210e7476c"
+    },
+    {
+      "file": "1385_transportation.parquet",
+      "byte_length": 456154,
+      "sha256": "c328e4c285924b6bb620b531531819ca472990af24b328a80b889644c709f945"
+    },
+    {
+      "file": "1390_cloth.parquet",
+      "byte_length": 422686,
+      "sha256": "9cf6fe40937e6bda537d9610283a85b7792f4be92d7391b09452c00378a25387"
+    },
+    {
+      "file": "1390_communication.parquet",
+      "byte_length": 351700,
+      "sha256": "a5e2b473a43cca7ff2bdac6aada3734352b47bdcad82da5d27030fdfb8537b3d"
+    },
+    {
+      "file": "1390_durable.parquet",
+      "byte_length": 2169114,
+      "sha256": "2f5f0f1ec7999851ab27dc66ba86a3558c6f3c686140565cb6e39f0d0c4c2760"
+    },
+    {
+      "file": "1390_education.parquet",
+      "byte_length": 2850,
+      "sha256": "e80b16440afca59d623ad791679c1d6b80ef709f7fad9fc33397f6afc8035c90"
+    },
+    {
+      "file": "1390_employment_income.parquet",
+      "byte_length": 635447,
+      "sha256": "810718c962d1de674d6f53d3bc1d80c25b9ce0efcbea2ac80ccb312a38b8dce9"
+    },
+    {
+      "file": "1390_entertainment.parquet",
+      "byte_length": 209470,
+      "sha256": "ea9071dcdae47cd1b11812678ec743b4dd78caee777c088f7c2c52b3861c8df0"
+    },
+    {
+      "file": "1390_food.parquet",
+      "byte_length": 7016453,
+      "sha256": "052eca1dd04b48b1ee98d4a0fd623939cdee6b5e0db26abe91feab1c609ec071"
+    },
+    {
+      "file": "1390_furniture.parquet",
+      "byte_length": 891402,
+      "sha256": "b6c5964c30cedae8dbf96ea2cb66f394cd840c76ff3e64972215e0f241fe9670"
+    },
+    {
+      "file": "1390_home.parquet",
+      "byte_length": 757429,
+      "sha256": "f00cf22e59ba3264b17c13b8c48296843f62cc092f7edb628e1fd1edd430c9ac"
+    },
+    {
+      "file": "1390_hotel.parquet",
+      "byte_length": 192871,
+      "sha256": "57d58060d32c1a8f7be256aa65b03000bcc769ab070d3b7b3255dd825d4fd058"
+    },
+    {
+      "file": "1390_medical.parquet",
+      "byte_length": 388899,
+      "sha256": "2cb1522b8b467f6c86ca540d863e3abfc5642abd40f89393f2b6b0f903d8c050"
+    },
+    {
+      "file": "1390_miscellaneous.parquet",
+      "byte_length": 708228,
+      "sha256": "14ff745fccd5bdd1f6f93bedd682c65ffaf1696a17a123ed514ff84c0a6ab84e"
+    },
+    {
+      "file": "1390_other_income.parquet",
+      "byte_length": 206450,
+      "sha256": "c9565966b3380947c46627a0b1e9557c304a2c6119a668938151e4291373596d"
+    },
+    {
+      "file": "1390_self_employed_income.parquet",
+      "byte_length": 470968,
+      "sha256": "a15f6b5a27f5f5a410750f5a69ecb20169c122fe90411a81e66560d1f691f82b"
+    },
+    {
+      "file": "1390_subsidy.parquet",
+      "byte_length": 353107,
+      "sha256": "676814b9a428df9cbed7618e2d1f09f90b9597b21bd2aa8babf8977a1aeb9827"
+    },
+    {
+      "file": "1390_tobacco.parquet",
+      "byte_length": 90774,
+      "sha256": "70faa968f414af396fada3054f0d85f6a98a41267568f09330c49cacefd3dcca"
+    },
+    {
+      "file": "1390_transportation.parquet",
+      "byte_length": 518943,
+      "sha256": "2b2d5e72ba4f0507ea11a6f3dca304dc7fe3324924102bd9acefa4ed172c49a3"
+    },
+    {
+      "file": "1395_cloth.parquet",
+      "byte_length": 339068,
+      "sha256": "c54fbcbb6e5ed118a61d37e76fe60ffc6816d9526845ee40b8c87ad47cf7eead"
+    },
+    {
+      "file": "1395_communication.parquet",
+      "byte_length": 379869,
+      "sha256": "a02ca6d1c332362cadacf61328359baba1c44715101cbd7fea60a85798cd107c"
+    },
+    {
+      "file": "1395_durable.parquet",
+      "byte_length": 2006763,
+      "sha256": "90a73f72cea68e993e1a22405867818f657ad7ae669c77c9de5dccca20d13b0f"
+    },
+    {
+      "file": "1395_education.parquet",
+      "byte_length": 2850,
+      "sha256": "e80b16440afca59d623ad791679c1d6b80ef709f7fad9fc33397f6afc8035c90"
+    },
+    {
+      "file": "1395_employment_income.parquet",
+      "byte_length": 578571,
+      "sha256": "b95fa5ff82a2e536972e6b65c742803ffc8a05b23ef6913dbdd06ce6ea525ae8"
+    },
+    {
+      "file": "1395_entertainment.parquet",
+      "byte_length": 177001,
+      "sha256": "8b5105346b0b8ba32ec6341203cbf0caea5c83a5882d0a3093a3f4a8665208b2"
+    },
+    {
+      "file": "1395_food.parquet",
+      "byte_length": 6570332,
+      "sha256": "60e60aac2e616cc2a870663a94b148e2bcba9ea47c8a5b7eb04d24bb8f64dd9a"
+    },
+    {
+      "file": "1395_furniture.parquet",
+      "byte_length": 849250,
+      "sha256": "17d1fec997c7f526dd49ffa069d40bfddb093d3c86a40db750a1a0e66aeb43b3"
+    },
+    {
+      "file": "1395_home.parquet",
+      "byte_length": 743735,
+      "sha256": "33825720219f63829e9386964d531b0dbee87575b5fed39633dbc61c67861c32"
+    },
+    {
+      "file": "1395_hotel.parquet",
+      "byte_length": 173296,
+      "sha256": "d4c81d88cde23f865405d05d8d137122ce4e2a8dd96e4a7714114cd708df950c"
+    },
+    {
+      "file": "1395_medical.parquet",
+      "byte_length": 351496,
+      "sha256": "48271e8a0d46ba1dcf1b39b46804b80f3aebba5f9254b10500c7a13d99a54c3e"
+    },
+    {
+      "file": "1395_miscellaneous.parquet",
+      "byte_length": 702923,
+      "sha256": "2e4a8dc5157c0582396837ca05d4d597a7303a570dd6c5b965588223db559845"
+    },
+    {
+      "file": "1395_other_income.parquet",
+      "byte_length": 218615,
+      "sha256": "25657f02250c95619ad7a20c366fb30c387c3baa3d7d303e72b1ff3e41a9b91c"
+    },
+    {
+      "file": "1395_self_employed_income.parquet",
+      "byte_length": 405707,
+      "sha256": "241c283f3b0baee31a0c9b51c4ee94eb8bd0adfcbd355f218a9a0d64ec0a7278"
+    },
+    {
+      "file": "1395_subsidy.parquet",
+      "byte_length": 299439,
+      "sha256": "c1af143acf4229561ad649d76da21ccd5b09918d6119184b307c8e992f4362c0"
+    },
+    {
+      "file": "1395_tobacco.parquet",
+      "byte_length": 78740,
+      "sha256": "add090ee0d693ea055b50a2a9bbaef357027d80330a93f5bc2fa55390742e341"
+    },
+    {
+      "file": "1395_transportation.parquet",
+      "byte_length": 488596,
+      "sha256": "d6827e8ce9cf0e408071c79e7e8decd6877f634330cadd0afabc29e463fb46c9"
+    },
+    {
+      "file": "1400_cloth.parquet",
+      "byte_length": 307743,
+      "sha256": "e458d9b0cac806346d947921b368cf552445cd570951bb554e39660ee792af83"
+    },
+    {
+      "file": "1400_communication.parquet",
+      "byte_length": 423286,
+      "sha256": "fe2d91a34841cd2f42626ca74f4f50ce21987446f4818b5feee8263bfa92118e"
+    },
+    {
+      "file": "1400_durable.parquet",
+      "byte_length": 1840214,
+      "sha256": "e44c2d05ccc478e4a6797257bf49bf117db8da370541bfe12ef855fb7682988c"
+    },
+    {
+      "file": "1400_education.parquet",
+      "byte_length": 2850,
+      "sha256": "e80b16440afca59d623ad791679c1d6b80ef709f7fad9fc33397f6afc8035c90"
+    },
+    {
+      "file": "1400_employment_income.parquet",
+      "byte_length": 549186,
+      "sha256": "7c27f3db1db9a1d377c7e01c27804220a6cb1c493fee2f74e6cc37f793979c3b"
+    },
+    {
+      "file": "1400_entertainment.parquet",
+      "byte_length": 113364,
+      "sha256": "c0696d1d728b81f024a50776f4c1b2625b25792ae3513a3c19889be828a11796"
+    },
+    {
+      "file": "1400_food.parquet",
+      "byte_length": 6148115,
+      "sha256": "22196518f904560a1f5763a4d23c6e729a6807b66c720459047bb43d84b6b7ad"
+    },
+    {
+      "file": "1400_furniture.parquet",
+      "byte_length": 792889,
+      "sha256": "cf0cf4e71f0d3ebd7c37f4c06bedcfd6451141f1f02525fe341b557928569e3c"
+    },
+    {
+      "file": "1400_home.parquet",
+      "byte_length": 739958,
+      "sha256": "cf69ea6d58535db150679d10095a22941455758cf5fedfe9aeddf1435cd76d8d"
+    },
+    {
+      "file": "1400_hotel.parquet",
+      "byte_length": 132410,
+      "sha256": "bfac901bb573ffe9e2d96fd6318adaeaf8f070be9bbedc78b1ff565839368805"
+    },
+    {
+      "file": "1400_household_information.parquet",
+      "byte_length": 293500,
+      "sha256": "5b1f898f90ee03970e92ff06200c834525f3315e43f9f9e4a90a34742504d05b"
+    },
+    {
+      "file": "1400_medical.parquet",
+      "byte_length": 374363,
+      "sha256": "f490b57a2dc8c7c44bb492770224b18468794972491ec97cd5c19f3fae823e70"
+    },
+    {
+      "file": "1400_miscellaneous.parquet",
+      "byte_length": 637927,
+      "sha256": "eb08c21e608a2ff95d6c94d302274bbe615be2df94b757f3e0afa5f8ec3fe406"
+    },
+    {
+      "file": "1400_other_income.parquet",
+      "byte_length": 457505,
+      "sha256": "35286fa064e4da850284a59cf57bfff1719f6aec149a5b18b38a97d8b4c70582"
+    },
+    {
+      "file": "1400_self_employed_income.parquet",
+      "byte_length": 359222,
+      "sha256": "ecb54c2a5d83c7b0da674dae777586be8d5d93e8da4edb42a7e08ac3f1c3a1b0"
+    },
+    {
+      "file": "1400_subsidy.parquet",
+      "byte_length": 364142,
+      "sha256": "e4e8f3ef60c785fcfa7e6abf0e5278289c0199c5feeb29d06ea801a96693367f"
+    },
+    {
+      "file": "1400_tobacco.parquet",
+      "byte_length": 71743,
+      "sha256": "57c463b253c15c83a76f0958e283c57358bb54e0f8a1f3f18271deba775a01d2"
+    },
+    {
+      "file": "1400_transportation.parquet",
+      "byte_length": 418107,
+      "sha256": "b2853fbfb7a9681230aec20f938330b2e45e0864adb560d75ac88fea70d8fe93"
+    },
+    {
+      "file": "1403_cloth.parquet",
+      "byte_length": 222495,
+      "sha256": "d0e225eb86faa0bc943420b7c710a8d5fcce8120d8fe1415855842061909d8c4"
+    },
+    {
+      "file": "1403_communication.parquet",
+      "byte_length": 445053,
+      "sha256": "a5308d3c5b60698f064985def98ca9df5ef143c9ff9394f21ee7c33cff72c00d"
+    },
+    {
+      "file": "1403_durable.parquet",
+      "byte_length": 2175152,
+      "sha256": "715e15d3fced9b78c9669937ac4ac39649dbde6f7ff127e648692e37e4000c68"
+    },
+    {
+      "file": "1403_education.parquet",
+      "byte_length": 2850,
+      "sha256": "e80b16440afca59d623ad791679c1d6b80ef709f7fad9fc33397f6afc8035c90"
+    },
+    {
+      "file": "1403_employment_income.parquet",
+      "byte_length": 514197,
+      "sha256": "2f31a8810ab2c2d4cbec4d7230de70959a921bf7fb76d85488b3f0c6ac0d2ede"
+    },
+    {
+      "file": "1403_entertainment.parquet",
+      "byte_length": 120253,
+      "sha256": "4fbdb32ba9b2dc318760c80d7ee60b5de33cc134886d1c9bf8a8e608d3682dff"
+    },
+    {
+      "file": "1403_food.parquet",
+      "byte_length": 7484880,
+      "sha256": "2b6b714f30db99ae53472f2322a6477aaaf67296c12d07a0a0420988efadcec4"
+    },
+    {
+      "file": "1403_furniture.parquet",
+      "byte_length": 800125,
+      "sha256": "66046a8d619bd3c9ec93d34d29269cddb18040d8f221e16b52bbd7f74e2035b6"
+    },
+    {
+      "file": "1403_home.parquet",
+      "byte_length": 785890,
+      "sha256": "ef3085bbfefe04938b13a3faca2ac39f97a0e93dfa3de6ed1c2775b9c047989e"
+    },
+    {
+      "file": "1403_hotel.parquet",
+      "byte_length": 164270,
+      "sha256": "c96c5a62323e5fff5fd29b29cf26e2429e660014905f58a6a2c58565a0ce0a3f"
+    },
+    {
+      "file": "1403_household_information.parquet",
+      "byte_length": 321644,
+      "sha256": "16a10ae31c919a08285ebfb954e5d8718b8e77da2ddcf59f7ee232ed1a2e0a91"
+    },
+    {
+      "file": "1403_medical.parquet",
+      "byte_length": 342629,
+      "sha256": "90e2f3718866661275743bf0b1dec3a36a6e20d263bd9cd8218c4acd223367fc"
+    },
+    {
+      "file": "1403_miscellaneous.parquet",
+      "byte_length": 654766,
+      "sha256": "577e883601c83082a901a42875cbf165ed2aeb75a9edaf29731b7a695f7e64a7"
+    },
+    {
+      "file": "1403_other_income.parquet",
+      "byte_length": 433860,
+      "sha256": "e63673e0f61639e7e50cb2e6ae6fb3824f799d36654988fc2df29028375ffe0d"
+    },
+    {
+      "file": "1403_self_employed_income.parquet",
+      "byte_length": 345567,
+      "sha256": "f85fb5e041b2fe710620184dd4b882f585a796b25611925d03c09c0d28dce377"
+    },
+    {
+      "file": "1403_subsidy.parquet",
+      "byte_length": 286902,
+      "sha256": "41a6e76284187ab16dae92539ced444ad55efcee41948ca43864d382058163e3"
+    },
+    {
+      "file": "1403_tobacco.parquet",
+      "byte_length": 68805,
+      "sha256": "961760c28cbe419447a5ce8ad24a7a569272df0c3f19337ea185e13e1ef063d5"
+    },
+    {
+      "file": "1403_transportation.parquet",
+      "byte_length": 434164,
+      "sha256": "f8b281b8d2440a3f89d140d1dbf3eeda700ff6760c172f8976895474d0dda30c"
+    }
+  ],
+  "note": "Fixtures are small real samples plus computed aggregates. Full microdata is NOT redistributed; see docstring/licence (MIT)."
+}

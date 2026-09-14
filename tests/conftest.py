@@ -23,6 +23,8 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures"
 WORLD_BANK_FIXTURES = FIXTURE_ROOT / "world_bank"
 IMF_FIXTURES = FIXTURE_ROOT / "imf"
 EIA_FIXTURES = FIXTURE_ROOT / "eia"
+TSETMC_FIXTURES = FIXTURE_ROOT / "tsetmc"
+HBSIR_FIXTURES = FIXTURE_ROOT / "hbsir"
 
 HTTP_OK = 200
 HTTP_NOT_FOUND = 404
@@ -72,6 +74,45 @@ def load_eia_fixture(name: str) -> Any:
         The parsed JSON payload, exactly as the API returned it
     """
     return json.loads((EIA_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_tsetmc_fixture(name: str) -> Any:
+    """
+    Load one captured TSETMC cdn response by fixture stem.
+
+    Args:
+        name: File stem under ``tests/fixtures/tsetmc`` (no ``.json``)
+
+    Returns:
+        The parsed JSON payload, exactly as the cdn returned it
+    """
+    return json.loads((TSETMC_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_hbsir_csv(name: str) -> pd.DataFrame:
+    """
+    Load one captured HBSIR CSV fixture by stem.
+
+    Args:
+        name: File stem under ``tests/fixtures/hbsir`` (no ``.csv``)
+
+    Returns:
+        The parsed CSV as a DataFrame
+    """
+    return pd.read_csv(HBSIR_FIXTURES / f"{name}.csv")
+
+
+def load_hbsir_json(name: str) -> Any:
+    """
+    Load one captured HBSIR JSON fixture by stem.
+
+    Args:
+        name: File stem under ``tests/fixtures/hbsir`` (no ``.json``)
+
+    Returns:
+        The parsed JSON payload
+    """
+    return json.loads((HBSIR_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -306,6 +347,83 @@ def eia_session_for(indicators: Sequence[str]) -> FakeHTTPSession:
         fixture = code.rsplit(".", 1)[-1]
         data[registry.product_id] = load_eia_fixture(f"{fixture}_normal")
     return make_eia_session(data=data)
+
+
+TSETMC_FIXTURE_VERSION = "1.2.10"
+TSETMC_FIXTURE_URL = "http://cdn.tsetmc.com/api/Index/GetIndexB2History/32097828799138957"
+
+
+@dataclass
+class FakeTsetmcClient:
+    """
+    Offline stand-in for the injectable TSETMC transport.
+
+    Mirrors :class:`src.connectors.tsetmc.TsetmcClient` without importing
+    ``finpy_tse``: it replays a captured ``indexB2`` payload (or raises a
+    configured exception) and records the ``ins_code`` values it was asked for.
+    """
+
+    payload: Any
+    package_version: str | None = TSETMC_FIXTURE_VERSION
+    available: bool = True
+    request_url: str = TSETMC_FIXTURE_URL
+    status_code: int | None = HTTP_OK
+    calls: list[str] = field(default_factory=list)
+    closed: bool = False
+
+    def is_available(self) -> bool:
+        """Whether the (fake) package is importable."""
+        return self.available
+
+    def fetch_index_history(self, ins_code: str) -> Any:
+        """Record the call and return the configured raw payload."""
+        from src.connectors.tsetmc import TsetmcIndexPayload
+
+        self.calls.append(ins_code)
+        if isinstance(self.payload, Exception):
+            raise self.payload
+        return TsetmcIndexPayload(
+            raw=self.payload,
+            request_url=self.request_url,
+            http_status_code=self.status_code,
+        )
+
+    def close(self) -> None:
+        """Mark the client closed so ``disconnect()`` can be asserted."""
+        self.closed = True
+
+
+HBSIR_FIXTURE_VERSION = "0.6.6"
+
+
+@dataclass
+class FakeHbsirLoader:
+    """
+    Offline stand-in for the injectable HBSIR loader.
+
+    Mirrors :class:`src.connectors.hbsir.HbsirLoader` without importing
+    ``hbsir``: it returns pre-seeded income/weight tables and records the
+    ``(table_name, years)`` it was asked for.
+    """
+
+    tables: dict[str, pd.DataFrame]
+    package_version: str | None = HBSIR_FIXTURE_VERSION
+    available: bool = True
+    calls: list[tuple[str, Any]] = field(default_factory=list)
+    closed: bool = False
+
+    def is_available(self) -> bool:
+        """Whether the (fake) package is importable."""
+        return self.available
+
+    def load_table(self, table_name: str, years: Any) -> pd.DataFrame:
+        """Record the call and return the seeded table."""
+        self.calls.append((table_name, years))
+        return self.tables[table_name]
+
+    def close(self) -> None:
+        """Mark the loader closed so ``disconnect()`` can be asserted."""
+        self.closed = True
 
 
 class FakeResult:

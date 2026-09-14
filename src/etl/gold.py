@@ -28,7 +28,7 @@ requires a TimescaleDB version that permits DML on compressed chunks (2.11+).
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -55,6 +55,7 @@ from src.database.schema import (
     SilverCleaned,
     utc_now,
 )
+from src.etl.frequency import to_month_end
 from src.etl.lineage import (
     LAYER_GOLD,
     LAYER_SILVER,
@@ -66,7 +67,7 @@ from src.etl.lineage import (
 from src.etl.silver import SilverSeries, load_silver_series
 from src.utils.exceptions import ChainLinkingError
 from src.utils.logging import get_logger, log_with_context
-from src.utils.periods import year_earlier
+from src.utils.periods import FREQUENCY_MONTHLY, year_earlier
 
 logger = get_logger(__name__)
 
@@ -85,6 +86,10 @@ DERIVED_RET1D_METHOD = "daily_return"
 DERIVED_MA30_SUFFIX = "MA30"
 DERIVED_MA30_METHOD = "30day_moving_average"
 MA30_WINDOW = 30
+
+# Month-end downsample of a daily series (opt-in via ``include_monthly``)
+DERIVED_MONTH_END_SUFFIX = "ME"
+DERIVED_MONTH_END_METHOD = "month_end_from_daily"
 
 DEFAULT_DOMAIN = "unclassified"
 PERCENT = 100.0
@@ -156,6 +161,20 @@ def derived_ma30_indicator_id(indicator_id: str, prefix: str) -> str:
         e.g. ``TGJU.USD.FREE.MA30``
     """
     return _namespaced(indicator_id, prefix, DERIVED_MA30_SUFFIX)
+
+
+def derived_month_end_indicator_id(indicator_id: str, prefix: str) -> str:
+    """
+    Namespaced id for a derived month-end downsample series.
+
+    Args:
+        indicator_id: Source indicator code
+        prefix: Source namespace (e.g., TSETMC)
+
+    Returns:
+        e.g. ``TSETMC.TEDPIX.ME``
+    """
+    return _namespaced(indicator_id, prefix, DERIVED_MONTH_END_SUFFIX)
 
 
 def _resolve_catalog_entry(session: Session, indicator_id: str) -> IndicatorCatalog | None:
@@ -505,6 +524,95 @@ def _moving_average_records(
     return records
 
 
+def _month_end_silver_ids(
+    linked: pd.DataFrame, series: SilverSeries
+) -> dict[tuple[int, int], UUID]:
+    """
+    Map ``(year, month)`` to the Silver id of that month's last observation.
+
+    :func:`to_month_end` returns only the retained value and the period-end
+    timestamp, so this recovers the Silver lineage link for the observation the
+    downsample actually selected.
+    """
+    selected: dict[tuple[int, int], tuple[datetime, UUID]] = {}
+    for row in linked.itertuples(index=False):
+        timestamp = pd.Timestamp(getattr(row, TIMESTAMP_COLUMN)).to_pydatetime()
+        silver_id = series.silver_ids.get(timestamp)
+        if silver_id is None:
+            continue
+        key = (timestamp.year, timestamp.month)
+        current = selected.get(key)
+        if current is None or timestamp > current[0]:
+            selected[key] = (timestamp, silver_id)
+    return {key: value[1] for key, value in selected.items()}
+
+
+def _month_end_records(
+    linked: pd.DataFrame,
+    series: SilverSeries,
+    domain: str,
+    stamped: datetime,
+    prefix: str,
+) -> list[dict[str, Any]]:
+    """
+    Build derived month-end (``.ME``) rows from the linked daily levels.
+
+    The **last observation of each calendar month** is republished at the
+    month-end timestamp via :func:`src.etl.frequency.to_month_end`. Months with
+    no observation yield no row and are never forward-filled. Each row keeps the
+    Silver lineage of the month's last observation.
+
+    Args:
+        linked: Chain-linked daily DataFrame
+        series: Silver series metadata
+        domain: Analytical domain
+        stamped: Creation timestamp
+        prefix: Namespace prefix for the derived indicator (e.g., TSETMC)
+
+    Returns:
+        List of Gold records for the derived month-end series
+    """
+    derived_id = derived_month_end_indicator_id(series.indicator_id, prefix=prefix)
+
+    monthly = to_month_end(linked.loc[:, [TIMESTAMP_COLUMN, VALUE_COLUMN]])
+    if monthly.empty:
+        return []
+
+    silver_by_month = _month_end_silver_ids(linked, series)
+
+    records: list[dict[str, Any]] = []
+    for row in monthly.itertuples(index=False):
+        timestamp = pd.Timestamp(getattr(row, TIMESTAMP_COLUMN)).to_pydatetime()
+        silver_id = silver_by_month.get((timestamp.year, timestamp.month))
+        if silver_id is None:
+            continue
+        value = float(getattr(row, VALUE_COLUMN))
+        records.append(
+            {
+                "id": uuid4(),
+                "indicator_id": derived_id,
+                "timestamp": timestamp,
+                "value": value,
+                "original_value": value,  # Republished aggregate; no new splice
+                "is_chain_linked": False,
+                "chain_linking_confidence": None,
+                "unit": series.unit,
+                "frequency": FREQUENCY_MONTHLY,
+                "domain": domain,
+                "silver_id": silver_id,
+                "record_metadata": {
+                    "derived_from": series.indicator_id,
+                    "method": DERIVED_MONTH_END_METHOD,
+                    "derivation": DERIVED_MONTH_END_METHOD,
+                    "source_frequency": series.frequency,
+                },
+                "created_at": stamped,
+                "updated_at": stamped,
+            }
+        )
+    return records
+
+
 def _write_chain_linking_log(
     session: Session,
     indicator_id: str,
@@ -671,6 +779,74 @@ def _merge_segment_series(
     )
 
 
+@dataclass
+class _DerivedSeries:
+    """Derived Gold rows and published ids for one source indicator."""
+
+    records: list[dict[str, Any]] = field(default_factory=list)
+    ids: list[str] = field(default_factory=list)
+    growth_rows: int = 0
+    month_end_rows: int = 0
+
+
+def _derive_gold_series(
+    linked: pd.DataFrame,
+    result: ChainLinkResult,
+    series: SilverSeries,
+    domain: str,
+    stamped: datetime,
+    derived_prefix: str,
+    derivation_strategy: str,
+    *,
+    include_growth: bool,
+    include_monthly: bool,
+    indicator_id: str,
+) -> _DerivedSeries:
+    """Build every derived Gold row/id for one indicator from its linked levels."""
+    derived = _DerivedSeries()
+
+    if include_growth:
+        if derivation_strategy == "yoy":
+            # Year-over-year growth for annual/quarterly/monthly data
+            derived.records = _growth_records(
+                linked, result, series, domain, stamped, prefix=derived_prefix
+            )
+            derived.ids = [derived_growth_indicator_id(indicator_id, prefix=derived_prefix)]
+            derived.growth_rows = len(derived.records)
+        elif derivation_strategy == "daily":
+            # Daily returns + 30-day MA for daily data
+            ret_records = _daily_return_records(
+                linked, series, domain, stamped, prefix=derived_prefix
+            )
+            ma_records = _moving_average_records(
+                linked, series, domain, stamped, prefix=derived_prefix
+            )
+            derived.records = [*ret_records, *ma_records]
+            derived.ids = [
+                derived_ret1d_indicator_id(indicator_id, prefix=derived_prefix),
+                derived_ma30_indicator_id(indicator_id, prefix=derived_prefix),
+            ]
+        else:
+            log_with_context(
+                logger,
+                "WARNING",
+                f"unknown derivation strategy '{derivation_strategy}'; no derived metrics",
+                indicator_id=indicator_id,
+            )
+
+    if include_monthly:
+        month_end_records = _month_end_records(
+            linked, series, domain, stamped, prefix=derived_prefix
+        )
+        derived.month_end_rows = len(month_end_records)
+        derived.records = [*derived.records, *month_end_records]
+        # Track the id even when no month is selected so a refresh clears stale
+        # .ME rows from a previous run.
+        derived.ids.append(derived_month_end_indicator_id(indicator_id, prefix=derived_prefix))
+
+    return derived
+
+
 def silver_to_gold(
     session: Session,
     indicator_id: str,
@@ -680,6 +856,7 @@ def silver_to_gold(
     statistical_fallback: bool = False,
     derived_prefix: str = DERIVED_PREFIX,
     derivation_strategy: str = "yoy",
+    include_monthly: bool = False,
     segment_indicator_ids: Sequence[str] | None = None,
 ) -> TransformResult:
     """
@@ -694,6 +871,10 @@ def silver_to_gold(
         statistical_fallback: Permit level-shift break detection without metadata
         derived_prefix: Namespace prefix for derived indicators (default: WB)
         derivation_strategy: Strategy for derived metrics - "yoy" or "daily"
+        include_monthly: Also publish a month-end downsample of the linked
+            series as ``<derived_id>.ME`` (opt-in; intended for daily sources).
+            Months with no observation produce no row. Defaults to ``False`` so
+            existing sources are unaffected.
         segment_indicator_ids: Published base-year segments to link into
             ``indicator_id`` (oldest base first is derived, not assumed). When
             supplied, ``indicator_id`` names the canonical series and its own
@@ -755,40 +936,21 @@ def silver_to_gold(
 
         records = _level_records(linked, result, series, resolved_domain, stamped)
 
-        # Apply derivation strategy
-        derived_records: list[dict[str, Any]] = []
-        derived_ids: list[str] = []
+        derived = _derive_gold_series(
+            linked,
+            result,
+            series,
+            resolved_domain,
+            stamped,
+            derived_prefix,
+            derivation_strategy,
+            include_growth=include_growth,
+            include_monthly=include_monthly,
+            indicator_id=indicator_id,
+        )
 
-        if include_growth:
-            if derivation_strategy == "yoy":
-                # Year-over-year growth for annual/quarterly/monthly data
-                derived_records = _growth_records(
-                    linked, result, series, resolved_domain, stamped, prefix=derived_prefix
-                )
-                derived_ids = [derived_growth_indicator_id(indicator_id, prefix=derived_prefix)]
-            elif derivation_strategy == "daily":
-                # Daily returns + 30-day MA for daily data
-                ret_records = _daily_return_records(
-                    linked, series, resolved_domain, stamped, prefix=derived_prefix
-                )
-                ma_records = _moving_average_records(
-                    linked, series, resolved_domain, stamped, prefix=derived_prefix
-                )
-                derived_records = [*ret_records, *ma_records]
-                derived_ids = [
-                    derived_ret1d_indicator_id(indicator_id, prefix=derived_prefix),
-                    derived_ma30_indicator_id(indicator_id, prefix=derived_prefix),
-                ]
-            else:
-                log_with_context(
-                    logger,
-                    "WARNING",
-                    f"unknown derivation strategy '{derivation_strategy}'; no derived metrics",
-                    indicator_id=indicator_id,
-                )
-
-        targets = [indicator_id, *derived_ids]
-        written = _replace_gold_rows(session, targets, [*records, *derived_records])
+        targets = [indicator_id, *derived.ids]
+        written = _replace_gold_rows(session, targets, [*records, *derived.records])
         _write_chain_linking_log(session, indicator_id, result)
 
         # Observations that reached Gold as levels; a missing Silver id is the
@@ -802,8 +964,9 @@ def silver_to_gold(
             "indicator_id": indicator_id,
             "domain": resolved_domain,
             "level_rows": len(records),
-            "growth_rows": len(derived_records) if derivation_strategy == "yoy" else 0,
-            "derived_rows": len(derived_records),
+            "growth_rows": derived.growth_rows,
+            "derived_rows": len(derived.records),
+            "month_end_rows": derived.month_end_rows,
             "derivation_strategy": derivation_strategy if include_growth else None,
             "is_chain_linked": result.is_chain_linked,
             "segments": segment_ids,
@@ -823,8 +986,8 @@ def silver_to_gold(
         indicator_id=indicator_id,
         domain=resolved_domain,
         level_rows=len(records),
-        growth_rows=len(derived_records) if derivation_strategy == "yoy" else 0,
-        derived_rows=len(derived_records),
+        growth_rows=derived.growth_rows,
+        derived_rows=len(derived.records),
         derivation_strategy=derivation_strategy if include_growth else None,
         is_chain_linked=result.is_chain_linked,
     )
@@ -842,7 +1005,10 @@ def silver_to_gold(
 
 
 def gold_indicator_ids(
-    indicator_id: str, strategy: str = "yoy", prefix: str = DERIVED_PREFIX
+    indicator_id: str,
+    strategy: str = "yoy",
+    prefix: str = DERIVED_PREFIX,
+    include_monthly: bool = False,
 ) -> tuple[str, ...]:
     """
     Every Gold indicator id derived from one source indicator.
@@ -851,20 +1017,27 @@ def gold_indicator_ids(
         indicator_id: Source indicator code
         strategy: Derivation strategy ("yoy" or "daily")
         prefix: Namespace prefix (default: WB)
+        include_monthly: Also include the derived month-end (``.ME``) series id
 
     Returns:
         Tuple of (level series id, derived indicator id(s))
         - yoy: (indicator_id, <prefix>.<indicator>.YOY)
         - daily: (indicator_id, <prefix>.<indicator>.RET1D, <prefix>.<indicator>.MA30)
+        - include_monthly appends <prefix>.<indicator>.ME
     """
+    ids: tuple[str, ...]
     if strategy == "daily":
-        return (
+        ids = (
             indicator_id,
             derived_ret1d_indicator_id(indicator_id, prefix=prefix),
             derived_ma30_indicator_id(indicator_id, prefix=prefix),
         )
-    # Default to yoy
-    return (indicator_id, derived_growth_indicator_id(indicator_id, prefix=prefix))
+    else:
+        # Default to yoy
+        ids = (indicator_id, derived_growth_indicator_id(indicator_id, prefix=prefix))
+    if include_monthly:
+        return (*ids, derived_month_end_indicator_id(indicator_id, prefix=prefix))
+    return ids
 
 
 def load_gold_series(session: Session, indicator_id: str) -> pd.DataFrame:

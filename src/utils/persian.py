@@ -280,3 +280,45 @@ def parse_jalali_ymd(
                 second = int(time_parts[2])
 
     return _jalali_components_to_utc(year, month, day, hour, minute, second, tz=tz)
+
+
+# Esfand is the last Jalali month; it has 30 days in leap years and 29 otherwise.
+ESFAND_MONTH = 12
+ESFAND_LONG_DAYS = 30
+ESFAND_SHORT_DAYS = 29
+
+
+def iranian_year_end(jalali_year: int) -> datetime:
+    """
+    Convert a Jalali survey year to its Gregorian year-end (Esfand 29 or 30).
+
+    A Jalali year ends on Esfand 29 in common years and Esfand 30 in leap years,
+    which is exactly the ``annual_period_end`` convention for this source: a
+    survey year is represented by the last instant of that survey year, stored as
+    a timezone-aware UTC timestamp at midnight.
+
+    Args:
+        jalali_year: Jalali (Solar Hijri) year, e.g. ``1403``
+
+    Returns:
+        Midnight UTC of the Gregorian date that corresponds to the year's last
+        day (e.g. ``1403`` -> ``2025-03-20T00:00:00+00:00``)
+
+    Raises:
+        ParsingError: If the year has no valid Esfand 29/30 day
+
+    Examples:
+        >>> iranian_year_end(1400).date().isoformat()
+        '2022-03-20'
+        >>> iranian_year_end(1403).date().isoformat()
+        '2025-03-20'
+    """
+    for day in (ESFAND_LONG_DAYS, ESFAND_SHORT_DAYS):
+        try:
+            gregorian = jdatetime.date(jalali_year, ESFAND_MONTH, day).togregorian()
+        except ValueError:
+            continue
+        return datetime(gregorian.year, gregorian.month, gregorian.day, tzinfo=UTC)
+
+    msg = f"Cannot resolve the Gregorian year-end for Jalali year {jalali_year}"
+    raise ParsingError(msg)

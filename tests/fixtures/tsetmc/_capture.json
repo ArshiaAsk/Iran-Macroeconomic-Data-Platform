@@ -1,0 +1,26 @@
+[
+  {
+    "fixture": "tedpix_cwi_raw.json",
+    "url": "http://cdn.tsetmc.com/api/Index/GetIndexB2History/32097828799138957",
+    "description": "Raw TSETMC cdn indexB2 payload for TEDPIX (CWI total index, insCode 32097828799138957). Fields: dEven (Gregorian yyyymmdd date), xNivInuClMresIbs (closing index level), xNivInuPbMresIbs, xNivInuPhMresIbs.",
+    "content_type": "application/json",
+    "byte_length": 772388,
+    "sha256": "6d833ce8afc0ecb0f4d6a30c5530094d329718f34ca639d9c0174ebb8a041ade"
+  },
+  {
+    "fixture": "tedpix_window_1404-06.csv",
+    "url": "finpy_tse.Get_CWI_History(start_date='1404-06-01', end_date='1404-06-15', just_adj_close=True)",
+    "description": "finpy-tse TEDPIX output for a two-week window. Indexed by Jalali date (J-Date); single column 'Adj Close' holds the index close level.",
+    "content_type": "text/csv",
+    "byte_length": 206,
+    "sha256": "89544dabe63a2c1aa1e2b1f70cc8cd6042e16a1957e2d2708eb7ca52c60c7070"
+  },
+  {
+    "fixture": "marketwatch_columns.json",
+    "url": "http://old.tsetmc.com/tsev2/data/MarketWatchPlus.aspx (+ ClientTypeAll, cdn StaticData)",
+    "description": "finpy_tse.Get_MarketWatch(save_excel=False) column inventory and sample rows (Ticker is the index). Confirms per-symbol Value/Market Cap/EPS are present and NO market P/E column exists; it is a current-day snapshot with no history.",
+    "content_type": "application/json",
+    "byte_length": 2933,
+    "sha256": "df8002b14ac6b1bf0110988cf78c9293935533afe1ec3211deb590a067118574"
+  }
+]

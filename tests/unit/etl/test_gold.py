@@ -35,6 +35,7 @@ from src.etl.gold import (
     DEFAULT_DOMAIN,
     DERIVED_MA30_METHOD,
     DERIVED_METHOD,
+    DERIVED_MONTH_END_METHOD,
     DERIVED_RET1D_METHOD,
     DERIVED_YOY_UNIT,
     BaseYearSegment,
@@ -43,6 +44,7 @@ from src.etl.gold import (
     base_year_from_indicator_id,
     derived_growth_indicator_id,
     derived_ma30_indicator_id,
+    derived_month_end_indicator_id,
     derived_ret1d_indicator_id,
     gold_indicator_ids,
     load_base_year_segments,
@@ -531,6 +533,235 @@ def test_quarterly_yoy_compares_the_same_quarter_one_year_earlier(
     assert growth[0]["timestamp"] == datetime(2024, 3, 31, tzinfo=UTC)
     assert growth[0]["value"] == pytest.approx((140.0 / 100.0 - 1) * 100)
     assert growth[0]["frequency"] == "quarterly"
+
+
+# ------------------------------------------------------------ month-end (.ME)
+
+
+TEDPIX = "TSETMC.TEDPIX"
+TEDPIX_ME = "TSETMC.TEDPIX.ME"
+
+
+def seed_daily_sessions(
+    session: FakeSession,
+    indicator_id: str,
+    sessions: list[tuple[datetime, float]],
+    unit: str = "index",
+) -> list[SilverCleaned]:
+    """Seed a daily series from explicit (timestamp, value) sessions."""
+    rows: list[SilverCleaned] = []
+    for timestamp, value in sessions:
+        row = SilverCleaned(
+            indicator_id=indicator_id,
+            timestamp=timestamp,
+            value=value,
+            unit=unit,
+            frequency="daily",
+            source_name="tsetmc",
+            bronze_id=BRONZE_ID,
+        )
+        row.id = uuid4()
+        rows.append(row)
+    session.seed(SilverCleaned, rows)
+    return rows
+
+
+def tsetmc_sessions() -> list[tuple[datetime, float]]:
+    """A daily calendar with intra-month gaps and a fully missing March."""
+    return [
+        (datetime(2026, 1, 5, tzinfo=UTC), 100.0),
+        (datetime(2026, 1, 20, tzinfo=UTC), 110.0),
+        (datetime(2026, 1, 30, tzinfo=UTC), 130.0),  # last January session
+        (datetime(2026, 2, 3, tzinfo=UTC), 140.0),
+        (datetime(2026, 2, 27, tzinfo=UTC), 150.0),  # last February session
+        # March has no sessions at all.
+        (datetime(2026, 4, 2, tzinfo=UTC), 160.0),
+        (datetime(2026, 4, 29, tzinfo=UTC), 175.0),  # last April session
+    ]
+
+
+def publish_month_end(
+    session: FakeSession,
+    indicator_id: str = TEDPIX,
+    *,
+    include_monthly: bool = True,
+) -> None:
+    """Run the daily strategy for a TSETMC-shaped series."""
+    catalog_entry_daily(session, indicator_id, domain="market")
+    silver_to_gold(
+        session,
+        indicator_id,
+        derivation_strategy="daily",
+        derived_prefix="TSETMC",
+        include_monthly=include_monthly,
+    )
+
+
+def test_derived_month_end_indicator_id_is_namespaced() -> None:
+    """The .ME id reuses the source namespace instead of double-prefixing."""
+    assert derived_month_end_indicator_id(TEDPIX, "TSETMC") == TEDPIX_ME
+
+
+def test_month_end_selects_the_last_session_of_each_month(fake_session: FakeSession) -> None:
+    """A normal downsample keeps the final available observation per month."""
+    seed_daily_sessions(fake_session, TEDPIX, tsetmc_sessions())
+    publish_month_end(fake_session)
+
+    rows = derived_daily(fake_session, "ME")
+    assert len(rows) == 3
+    assert [row["timestamp"] for row in rows] == [
+        month_period_end(2026, 1),
+        month_period_end(2026, 2),
+        month_period_end(2026, 4),
+    ]
+    # Last January session (130), not the 20th (110).
+    assert [row["value"] for row in rows] == [130.0, 150.0, 175.0]
+
+
+def test_month_end_does_not_fill_intra_month_gaps(fake_session: FakeSession) -> None:
+    """Non-trading days stay absent; only real sessions can be selected."""
+    sessions = [
+        (datetime(2026, 1, 5, tzinfo=UTC), 100.0),
+        # A three-week holiday, then two sessions.
+        (datetime(2026, 1, 27, tzinfo=UTC), 120.0),
+        (datetime(2026, 1, 28, tzinfo=UTC), 125.0),
+    ]
+    seed_daily_sessions(fake_session, TEDPIX, sessions)
+    publish_month_end(fake_session)
+
+    rows = derived_daily(fake_session, "ME")
+    assert len(rows) == 1
+    assert rows[0]["value"] == 125.0
+    assert rows[0]["timestamp"] == month_period_end(2026, 1)
+
+
+def test_month_end_creates_no_row_for_a_missing_month(fake_session: FakeSession) -> None:
+    """A month with no session is a gap, never a forward-filled observation."""
+    seed_daily_sessions(fake_session, TEDPIX, tsetmc_sessions())
+    publish_month_end(fake_session)
+
+    months = {row["timestamp"].month for row in derived_daily(fake_session, "ME")}
+    assert 3 not in months
+
+
+def test_month_end_is_opt_in_and_absent_by_default(fake_session: FakeSession) -> None:
+    """Default False keeps every existing daily source exactly as it was."""
+    seed_daily_sessions(fake_session, TEDPIX, tsetmc_sessions())
+    publish_month_end(fake_session, include_monthly=False)
+
+    assert derived_daily(fake_session, "ME") == []
+    statement, _ = fake_session.executed[0]
+    cleared = set(next(iter(statement.compile().params.values())))
+    assert cleared == {TEDPIX, f"{TEDPIX}.RET1D", f"{TEDPIX}.MA30"}
+    assert TEDPIX_ME not in cleared
+
+
+def test_month_end_rows_carry_monthly_frequency_and_derivation_metadata(
+    fake_session: FakeSession,
+) -> None:
+    """The .ME series is monthly, keeps the source unit/domain, and is auditable."""
+    seed_daily_sessions(fake_session, TEDPIX, tsetmc_sessions(), unit="points")
+    publish_month_end(fake_session)
+
+    rows = derived_daily(fake_session, "ME")
+    assert all(row["frequency"] == "monthly" for row in rows)
+    assert all(row["unit"] == "points" for row in rows)
+    assert all(row["domain"] == "market" for row in rows)
+    assert all(row["is_chain_linked"] is False for row in rows)
+    assert all(row["chain_linking_confidence"] is None for row in rows)
+    assert all(row["original_value"] == row["value"] for row in rows)
+    assert all(row["silver_id"] is not None for row in rows)
+    for row in rows:
+        metadata = row["record_metadata"]
+        assert metadata["derived_from"] == TEDPIX
+        assert metadata["method"] == DERIVED_MONTH_END_METHOD
+        assert metadata["derivation"] == DERIVED_MONTH_END_METHOD
+        assert metadata["source_frequency"] == "daily"
+
+    log = fake_session.added_of(TransformationLog)[0]
+    assert log.record_metadata["month_end_rows"] == 3
+    assert log.record_metadata["growth_rows"] == 0
+    assert log.record_metadata["derived_rows"] == (
+        len(derived_daily(fake_session, "RET1D"))
+        + len(derived_daily(fake_session, "MA30"))
+        + len(rows)
+    )
+
+
+def test_month_end_links_each_row_to_the_selected_silver_observation(
+    fake_session: FakeSession,
+) -> None:
+    """Lineage: the .ME row points at the Silver row it downsamples."""
+    rows = seed_daily_sessions(fake_session, TEDPIX, tsetmc_sessions())
+    by_timestamp = {row.timestamp: row.id for row in rows}
+    publish_month_end(fake_session)
+
+    monthly = derived_daily(fake_session, "ME")
+    assert monthly[0]["silver_id"] == by_timestamp[datetime(2026, 1, 30, tzinfo=UTC)]
+    assert monthly[1]["silver_id"] == by_timestamp[datetime(2026, 2, 27, tzinfo=UTC)]
+    assert monthly[2]["silver_id"] == by_timestamp[datetime(2026, 4, 29, tzinfo=UTC)]
+
+
+def test_month_end_refresh_replaces_the_derived_rows(fake_session: FakeSession) -> None:
+    """Re-running refreshes .ME rows too: delete and reinsert, never orphan."""
+    seed_daily_sessions(fake_session, TEDPIX, tsetmc_sessions())
+    publish_month_end(fake_session)
+    publish_month_end(fake_session)
+
+    assert fake_session.statement_kinds(GoldAnalytical) == [
+        "delete",
+        "insert",
+        "delete",
+        "insert",
+    ]
+    deletes = [
+        statement
+        for statement, _ in fake_session.executed
+        if getattr(statement, "is_delete", False)
+    ]
+    assert len(deletes) == 2
+    for statement in deletes:
+        cleared = set(next(iter(statement.compile().params.values())))
+        assert TEDPIX_ME in cleared
+
+    # Both runs inserted a full .ME series (3 rows each).
+    assert len(derived_daily(fake_session, "ME")) == 6
+
+
+def test_month_end_clears_stale_rows_when_a_run_has_no_sessions(
+    fake_session: FakeSession,
+) -> None:
+    """A now-empty daily series still issues the delete that removes old .ME rows."""
+    catalog_entry_daily(fake_session, TEDPIX, domain="market")
+
+    silver_to_gold(
+        fake_session,
+        TEDPIX,
+        derivation_strategy="daily",
+        derived_prefix="TSETMC",
+        include_monthly=True,
+    )
+
+    assert derived_daily(fake_session, "ME") == []
+    assert fake_session.statement_kinds(GoldAnalytical) == ["delete"]
+    statement, _ = fake_session.executed[0]
+    cleared = set(next(iter(statement.compile().params.values())))
+    assert TEDPIX_ME in cleared
+
+
+def test_gold_indicator_ids_includes_month_end_when_requested() -> None:
+    """Callers clearing a source from Gold get the .ME id only when opted in."""
+    assert gold_indicator_ids(TEDPIX, "daily", prefix="TSETMC") == (
+        TEDPIX,
+        f"{TEDPIX}.RET1D",
+        f"{TEDPIX}.MA30",
+    )
+    assert gold_indicator_ids(TEDPIX, "daily", prefix="TSETMC", include_monthly=True) == (
+        TEDPIX,
+        f"{TEDPIX}.RET1D",
+        f"{TEDPIX}.MA30",
+        TEDPIX_ME,
+    )
 
 
 # ------------------------------------------------------- refresh & audit rows

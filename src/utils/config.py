@@ -150,6 +150,20 @@ class APIConfig(BaseSettings):
     # future connector reads it from config rather than hardcoding it.
     cbi_tsd_url: str = Field(default="https://tsd.cbi.ir", alias="CBI_TSD_URL")
 
+    # Phase 6 — TSETMC (optional `tsetmc` extra, `finpy-tse`). The connector
+    # wraps the package's index client, but the raw cdn base URL and request
+    # timeout live here so nothing is hardcoded in the logic. `http` (not
+    # `https`) is the endpoint verified during the Task 1 gate.
+    tsetmc_base_url: str = Field(default="http://cdn.tsetmc.com/api", alias="TSETMC_BASE_URL")
+    tsetmc_timeout: int = Field(default=30, alias="TSETMC_TIMEOUT")
+
+    # Phase 6 — HBSIR (optional `hbsir` extra). The `hbsir` package loads survey
+    # microdata from a local data directory it downloads into; data is annual
+    # and loaded on demand (no scheduled run). The package version used for a
+    # run is captured from `importlib.metadata` into Bronze provenance.
+    hbsir_data_dir: str = Field(default="Data", alias="HBSIR_DATA_DIR")
+    hbsir_download_timeout: int = Field(default=60, alias="HBSIR_DOWNLOAD_TIMEOUT")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -158,6 +172,24 @@ class APIConfig(BaseSettings):
         # this, DatabaseConfig(host="x") silently drops the argument.
         populate_by_name=True,
     )
+
+    @field_validator("tsetmc_timeout")
+    @classmethod
+    def validate_tsetmc_timeout(cls, v: int) -> int:
+        """Validate tsetmc_timeout is positive."""
+        if v <= 0:
+            msg = "tsetmc_timeout must be positive"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("hbsir_download_timeout")
+    @classmethod
+    def validate_hbsir_download_timeout(cls, v: int) -> int:
+        """Validate hbsir_download_timeout is positive."""
+        if v <= 0:
+            msg = "hbsir_download_timeout must be positive"
+            raise ValueError(msg)
+        return v
 
 
 class AppConfig(BaseSettings):

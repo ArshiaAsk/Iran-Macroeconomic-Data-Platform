@@ -30,6 +30,12 @@ openpyxl = "^3.1.0"
 xlrd = "^2.0"  # legacy .xls workbooks (xlrd>=2 reads .xls only; openpyxl handles .xlsx)
 pdfplumber = "^0.11"  # Persian RTL PDF tables (SCI/CBI publications)
 kaleido = "^1.0"
+# Phase 6 optional extras (Python-package-backed transports). Neither is
+# installed by default; enable with `poetry install -E tsetmc -E hbsir`.
+# Versions are pinned from the Phase 6 Task 1 reconnaissance gate
+# (docs/phase-6/README.md) and are lazy-imported by the connectors.
+finpy-tse = {version = "1.2.10", optional = true}  # TSETMC market client (TEDPIX history)
+hbsir = {version = "0.6.6", optional = true}       # Iran Household Budget Survey loader
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
@@ -44,6 +50,8 @@ pandas-stubs = "^2.1"
 
 [tool.poetry.extras]
 airflow = ["apache-airflow"]
+tsetmc = ["finpy-tse"]
+hbsir = ["hbsir"]
 
 [build-system]
 requires = ["poetry-core"]
@@ -129,6 +137,8 @@ module = [
     "plotly.*",
     "kaleido.*",
     "airflow.*",
+    "finpy_tse.*",
+    "hbsir.*",
 ]
 ignore_missing_imports = true
 
