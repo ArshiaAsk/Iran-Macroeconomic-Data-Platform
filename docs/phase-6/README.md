@@ -193,12 +193,15 @@ validation, and the final record are in [VALIDATION.md](VALIDATION.md).
   redistributing the survey.
 - **The official Iranian (خط فقر) poverty line is not modelled.** The calorie
   requirements / official-line path is a follow-up decision, not assumed here.
-- **No `@pytest.mark.live` test exists for either source.** The live path is
-  evidenced by the Task 1 capture plus the fixture-replay suites; a gated live
-  test remains open work, recorded in
-  [VALIDATION.md](VALIDATION.md#remaining-work).
-- **This README was rewritten in Task 10.** Until then it carried the Task 1
-  gate record and a stale "Task 2 in progress, Task 3+ not started" status line
-  while Tasks 1–9 were already committed. The gate decisions are unchanged in
-  substance; the full narrative now lives in
-  [VALIDATION.md](VALIDATION.md#task-1--reconnaissance--dependency-gate).
+- **Both sources now have a gated `@pytest.mark.live` test** (Task 11), run
+  with `RUN_LIVE_API_TESTS=1`; the offline fixture-replay suites remain what CI
+  asserts. See [VALIDATION.md](VALIDATION.md#final-validation-record--task-11).
+- **HBSIR loads survey years one at a time when the package's `"all"` token
+  fails.** Neither `Total_Income` (from 1369) nor `Weight` (from 1372) is
+  constructible over the package's whole 1363–1403 calendar, so the loader falls
+  back to per-year loads, logs the years it must skip, and publishes the honest
+  intersection (1372 … 1403). See
+  [VALIDATION.md](VALIDATION.md#finding-fixed-during-task-11-hbsir-could-not-load-all-years).
+- **This README was rewritten in Task 10 and its status is current as of Task
+  11.** The gate decisions are unchanged in substance; the full narrative lives
+  in [VALIDATION.md](VALIDATION.md#task-1--reconnaissance--dependency-gate).

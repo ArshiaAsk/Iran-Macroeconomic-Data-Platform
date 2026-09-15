@@ -493,9 +493,10 @@ substance; the long-form gate narrative moved to VALIDATION.md.
 The dictionaries' observed numbers come from the Task 1 capture — 4,283 real
 TEDPIX sessions (2008-12-04 → 2026-09-13) and HBSIR survey years 1369–1403 with
 the computed Gini / poverty / decile trend — plus the fixture-replay integration
-results. They are labelled as such: the optional packages are deliberately not
-installed in the project venv, so no live end-to-end run backs them yet. That
-run is Task 11's job, and the dictionary sections say so.
+results. They were labelled as such at the time: the optional packages are
+deliberately not installed in the project venv, so no live end-to-end run backed
+them yet. **Task 11 replaced those with real live-run numbers** (see below); the
+data-dictionary sections now read from the live Gold tables.
 
 ### Validation
 
@@ -504,6 +505,40 @@ rg -n "TSETMC|HBSIR" docs/phase-2/data_dictionary.md docs/phase-6/ → PASS
 ```
 
 ---
+
+## Task 11 — End-to-end validation (Phase 6 close-out)
+
+With both extras installed (`finpy-tse 1.2.10`, `hbsir 0.6.6`), the two sources
+ran live end to end and the quality gates were re-run:
+
+- `make check` → 841 passed / 3 skipped, 88.92% coverage (gate 80%).
+- `pytest tests/integration -m integration` → 115 passed, 4 skipped.
+- `alembic check` → clean.
+- TSETMC live: 4,285 Silver sessions → 13,039 Gold rows (level + `RET1D` +
+  `MA30` + 214 `.ME` months, every one equal to its month's last session).
+- HBSIR live: 32 survey years (1372 … 1403, 1,028,642 households) × 12
+  indicators → 384 Silver / 384 Gold rows.
+- Both gated `@pytest.mark.live` tests added and passing.
+- Re-running both pipelines left every count unchanged (idempotent).
+
+### Fixed here: the HBSIR loader could not load `"all"` years
+
+The first live HBSIR run failed 12/12 indicators: `hbsir`'s `"all"` token spans
+its global calendar (1363 … 1403), but `Total_Income` only builds from 1369 and
+`Weight` only from 1372, so the package's dependency walk asserts and aborts the
+whole extract. `HbsirPackageLoader` now catches that and retries **year by
+year**, keeping the years that build and logging the rest, which publishes the
+honest intersection (1372 … 1403) with the earlier years absent, never filled.
+Five unit tests cover the fallback; the reconnaissance values for
+1390/1395/1400/1403 reproduce exactly, so no statistic changed.
+
+```text
+make check                        → 841 passed, 88.92% coverage
+tests/integration -m integration  → 115 passed, 4 skipped
+python -m src.connectors.tsetmc   → 4,285 silver, 13,039 gold
+python -m src.connectors.hbsir    → 384 silver, 384 gold (32 years)
+RUN_LIVE_API_TESTS=1 ... -m live  → 2 passed
+```
 
 ## Deviation log (summary)
 
@@ -520,6 +555,9 @@ Full detail and evidence in
 4. **No dependencies beyond the plan** — both packages are optional extras.
 5. **TSETMC `--start/--end` accepted but ignored** (no server-side window in
    the package).
-6. **No `@pytest.mark.live` test exists for either source**, although the
-   plan's Level-4 validation lists one; recorded as open work, not skipped
-   silently.
+6. ~~No `@pytest.mark.live` test exists for either source~~ — **closed in Task
+   11**: both live tests exist, are gated behind `RUN_LIVE_API_TESTS=1`, and
+   pass against the real cdn / survey extract.
+7. **HBSIR loads survey years one by one when the package's `"all"` token
+   fails** — a workaround for an upstream `bssir` defect (see Task 11 above),
+   with the skipped years logged and left as gaps.

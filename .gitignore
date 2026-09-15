@@ -115,6 +115,9 @@ data/bronze/
 !tests/fixtures/**/*.xlsx
 !tests/fixtures/**/*.xls
 
+# HBSIR local settings (written on first use; holds an absolute Data/ path)
+config/hbsir_settings.yaml
+
 # Backup files
 *.bak
 *.backup

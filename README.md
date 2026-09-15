@@ -459,6 +459,7 @@ poetry cache clear . --all
 - [x] Optional `tsetmc`/`hbsir` Poetry extras; default install stays package-free
 - [x] Gold month-end derived path (opt-in, no forward-fill)
 - [x] Daily TSETMC Airflow DAG (`tsetmc_daily`)
+- [x] Live end-to-end validation — TSETMC 4,285 sessions (13,039 Gold rows) and HBSIR 32 survey years (384 Gold rows); gated live tests pass
 - [ ] TSETMC trading value / market P/E / market cap — **deferred**: the package exposes no historical source
 
 ### Phase 7: Dashboard (Week 7-8)
@@ -507,4 +508,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** Arshia Askarzadeh 
-**Project Status:** Phases 1–7 complete — SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source); Phase 8 (production readiness) next
+**Project Status:** Phases 1–7 complete — SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented and validated against live runs (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source); Phase 8 (production readiness) next

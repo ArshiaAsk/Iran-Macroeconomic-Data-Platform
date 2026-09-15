@@ -846,16 +846,14 @@ unimplemented. Evidence: `tests/fixtures/cbi/_gate_task6.json`,
 
 # TSETMC Indicators (Phase 6)
 
-**Status:** ⚠️ PARTIALLY OBSERVED — TEDPIX is observed from the real captured
-payload; the live end-to-end run is still pending (Task 11).
+**Status:** ✅ OBSERVED — live Bronze → Silver → Gold run recorded 2026-09-15.
 
-The number counts below are the **real** values the Phase 6 integration suite
-produces from the committed capture
-(`tests/fixtures/tsetmc/tedpix_cwi_raw.json`), not from a production run: the
-optional `finpy-tse` extra is deliberately **not** installed in the project
-venv, so no live pipeline run backs these tables yet. The **coverage span** is
-genuine — it is the span of the captured payload, read from TSETMC's cdn on
-2026-09-13. See [docs/phase-6/VALIDATION.md](../phase-6/VALIDATION.md).
+The counts and coverage below are from a **real live run** of
+`python -m src.connectors.tsetmc` on 2026-09-15 (package `finpy-tse 1.2.10`),
+which wrote 4,285 Silver sessions and 13,039 Gold rows. The "Rows (fixture
+replay)" column is what the offline Phase 6 integration suite writes from the
+committed capture (`tests/fixtures/tsetmc/tedpix_cwi_raw.json`) and is what CI
+asserts. See [docs/phase-6/VALIDATION.md](../phase-6/VALIDATION.md).
 
 ## Provenance
 
@@ -865,8 +863,8 @@ genuine — it is the span of the captured payload, read from TSETMC's cdn on
 | Type | Package-backed (`finpy-tse == 1.2.10`, BSD-3), wrapped by an injectable client |
 | Index | TEDPIX — "شاخص کل", the cap-weighted total index, `insCode 32097828799138957` |
 | Endpoint | `Index/GetIndexB2History/{insCode}` |
-| Captured | 2026-09-13 |
-| Captured sessions | 4,283 (1387-09-14 = 2008-12-04 → 1405-06-22 = 2026-09-13) |
+| Live run | 2026-09-15 (package version recorded in every Bronze envelope) |
+| Live sessions | 4,285 (2008-12-04 → 2026-09-15) |
 | Fixture checksum | `sha256 6d833ce8afc0ecb0f4d6a30c5530094d329718f34ca639d9c0174ebb8a041ade` |
 | Bronze rows | 1 envelope per indicator (`raw_data = {rows, meta}`) |
 | Auth | none |
@@ -875,15 +873,15 @@ genuine — it is the span of the captured payload, read from TSETMC's cdn on
 
 All TSETMC rows are domain `market`. Levels are **daily**; the `.ME`
 downsample is stamped **monthly** at the calendar period end. Coverage is the
-captured span; "Rows (70-session replay)" is what the integration suite
-actually writes.
+live pipeline span; "Rows (fixture replay)" is what the offline integration
+suite writes.
 
-| Indicator ID | Name | Unit | Frequency | Coverage (captured) | Rows (70-session replay) |
-|--------------|------|------|-----------|---------------------|-------------------------:|
-| `TSETMC.TEDPIX` | Tehran Stock Exchange total index (TEDPIX) | `index points` | daily | 2008-12-04 ... 2026-09-13 | 70 |
-| `TSETMC.TEDPIX.RET1D` | daily return (derived) | `%` | daily | 2008-12-05 ... 2026-09-13 | 69 |
-| `TSETMC.TEDPIX.MA30` | 30-session moving average (derived) | `index points` | daily | 2009-01-18 ... 2026-09-13 | 41 |
-| `TSETMC.TEDPIX.ME` | month-end downsample (derived) | `index points` | monthly | 2008-12-31 ... 2026-09-30 | 5 |
+| Indicator ID | Name | Unit | Frequency | Coverage (live run) | Rows (live) | Rows (fixture replay) |
+|--------------|------|------|-----------|---------------------|------------:|----------------------:|
+| `TSETMC.TEDPIX` | Tehran Stock Exchange total index (TEDPIX) | `index points` | daily | 2008-12-04 ... 2026-09-15 | 4,285 | 70 |
+| `TSETMC.TEDPIX.RET1D` | daily return (derived) | `%` | daily | 2008-12-05 ... 2026-09-15 | 4,284 | 69 |
+| `TSETMC.TEDPIX.MA30` | 30-session moving average (derived) | `index points` | daily | 2009-01-18 ... 2026-09-15 | 4,256 | 41 |
+| `TSETMC.TEDPIX.ME` | month-end downsample (derived) | `index points` | monthly | 2008-12-31 ... 2026-09-30 | 214 | 5 |
 
 The derived ids carry their method in `record_metadata`:
 `RET1D` → `daily_return`, `MA30` → `30day_moving_average`, `.ME` →
@@ -898,7 +896,8 @@ row, so a 70-session window yields 41, not 70.
 `TSETMC.TEDPIX.ME` is opt-in
 (`IndicatorDerivation(include_monthly=True)`) and takes the **last session of
 each calendar month**, stamped at the calendar month end rather than at the
-session. From the captured window:
+session. From the live run (all 214 months verified: every `.ME` value equals
+the last daily observation of its month, with no month missing a row):
 
 | Timestamp | Value (index points) |
 |-----------|---------------------:|
@@ -906,7 +905,7 @@ session. From the captured window:
 | 2026-06-30 | 5,127,635.3 |
 | 2026-07-31 | 5,075,098.6 |
 | 2026-08-31 | 6,547,963.8 |
-| 2026-09-30 | 7,431,451.1 |
+| 2026-09-30 | 7,521,963.3 |
 
 A month with no session produces **no** `.ME` row — no forward-fill, no
 interpolation. This is what makes TEDPIX comparable with the monthly CPI/FX
@@ -988,6 +987,9 @@ poetry run python -m src.connectors.tsetmc
 
 # Offline (no package): the same numbers from the committed capture
 poetry run pytest tests/integration/test_tsetmc_pipeline.py -m integration -q --cov-fail-under=0
+
+# Live (real cdn fetch through the package-backed client)
+RUN_LIVE_API_TESTS=1 poetry run pytest tests/unit/connectors/test_tsetmc.py -m live
 ```
 
 ```sql
@@ -1013,15 +1015,14 @@ SELECT * FROM metadata.indicator_catalog WHERE indicator_id LIKE 'TSETMC.%';
 
 # HBSIR Indicators (Phase 6)
 
-**Status:** ⚠️ PARTIALLY OBSERVED — the survey years and every metric below are
-real, computed from the real microdata during the Phase 6 gate and committed as
-a fixture; the live end-to-end pipeline run is still pending (Task 11).
+**Status:** ✅ OBSERVED — live Bronze → Silver → Gold run recorded 2026-09-15.
 
-The 12 series are **annual**, household-weighted, and domain `welfare`. The
-values in the trend table were computed during the Task 1 reconnaissance
-directly from `hbsir`'s cleaned tables and are asserted by the unit suite
-against `tests/fixtures/hbsir/metrics_trend.json`. The **pipeline** numbers come
-from the integration suite's single survey year (1400). See
+The 12 series are **annual**, household-weighted, and domain `welfare`. A live
+run of `python -m src.connectors.hbsir` on 2026-09-15 computed all twelve from
+the real microdata of **32 survey years** (1372 … 1403, 1,028,642 households)
+and wrote 384 Silver and 384 Gold rows. The trend values below are read back
+from that run and agree exactly with the Task 1 reconnaissance numbers asserted
+by the unit suite against `tests/fixtures/hbsir/metrics_trend.json`. See
 [docs/phase-6/VALIDATION.md](../phase-6/VALIDATION.md).
 
 ## Provenance
@@ -1034,8 +1035,8 @@ from the integration suite's single survey year (1400). See
 | Source tables | `Total_Income` (`Year, ID, Income`), `Weight` (`Year, ID, Weight`) |
 | Unit of analysis | **Household** (no equivalence scaling) |
 | Income basis | `Total_Income` (can be negative — net losses) |
-| Survey years | Jalali **1369 … 1403** (35 years); 1403 ≈ Gregorian year-end 2025-03-20 |
-| Captured | 2026-09-13 |
+| Survey years | Jalali **1372 … 1403** (32 years, live-observed); 1403 ≈ Gregorian year-end 2025-03-20 |
+| Live run | 2026-09-15 (32 years, 1,028,642 households, `hbsir 0.6.6`) |
 | Auth | none |
 
 ## Indicators
@@ -1051,7 +1052,7 @@ year-end** (Esfand 29 or 30, leap-aware — never a hardcoded `12-29`):
 
 | Jalali year | Gregorian year-end |
 |-------------|--------------------|
-| 1369 | 1991-03-20 |
+| 1372 | 1993-03-20 |
 | 1390 | 2012-03-19 |
 | 1395 | 2017-03-20 |
 | 1400 | 2022-03-20 |
@@ -1074,6 +1075,7 @@ computed values, not published HBSIR figures:
 
 | Jalali year | Gini | Poverty % (`50% × weighted median`) | Poverty line (Rial) | Households (n) | Weighted households |
 |-------------|------|--------------------------------------|--------------------:|---------------:|--------------------:|
+| 1372 | 0.4563 | 21.89 | — | 12,732 | 10,697,266 |
 | 1390 | 0.3494 | 15.85 | 49,470,000 | 38,512 | 21,158,812 |
 | 1395 | 0.3767 | 16.26 | 114,100,000 | 38,146 | 24,854,004 |
 | 1400 | 0.3704 | 16.42 | 416,190,000 | 37,988 | 26,693,614 |
@@ -1083,13 +1085,16 @@ Income decile shares (`%`), which sum to ~100 by construction:
 
 | Year | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 |
 |------|----|----|----|----|----|----|----|----|----|-----|
+| 1372 | 0.38 | 2.86 | 4.18 | 5.45 | 6.84 | 8.34 | 10.13 | 12.61 | 16.52 | 32.69 |
 | 1390 | 2.15 | 4.11 | 5.46 | 6.65 | 7.87 | 9.13 | 10.59 | 12.57 | 15.76 | 25.72 |
 | 1395 | 1.88 | 3.85 | 5.17 | 6.36 | 7.51 | 8.79 | 10.32 | 12.34 | 15.59 | 28.20 |
 | 1400 | 1.88 | 3.86 | 5.21 | 6.38 | 7.58 | 8.92 | 10.54 | 12.60 | 15.81 | 27.22 |
 | 1403 | 2.14 | 4.27 | 5.63 | 6.71 | 7.84 | 9.11 | 10.57 | 12.58 | 15.55 | 25.59 |
 
 The shape is coherent: inequality peaks around 1395 and eases by 1403, while the
-weighted household count grows from 21.2 M to 28.2 M.
+weighted household count grows from 21.2 M to 28.2 M. 1372 is the first year the
+weighted extract can be built at all (see finding 7), and it is the most unequal
+year in the span.
 
 ## Measures and rules
 
@@ -1156,6 +1161,15 @@ household row ever reaches Bronze.
    analogue of `http_session`.
 6. **The package is under active development** (`0.6.6`, releases through
    2025-12), which is why it is pinned exactly.
+7. **`Total_Income`/`Weight` are not constructible for every year the package
+   advertises.** `hbsir`'s own `"all"` token expands to its whole calendar
+   (1363 … 1403), but `Total_Income` depends on `Cash_Incomes`, whose versioned
+   metadata starts at **1369**, and `Weight` only builds from **1372**. Asking
+   the package for `"all"` therefore trips an internal assertion in `bssir` and
+   aborts the entire extract. The connector's loader catches that, retries year
+   by year, keeps the years that build, and logs the rest — so the published
+   span is the honest intersection of both tables, **1372 … 1403**, and 1363 …
+   1371 stay absent rather than filled or zeroed.
 
 ## Reproducing these numbers
 
@@ -1165,8 +1179,11 @@ make db-up && poetry run alembic upgrade head
 poetry run python -m src.connectors.hbsir --dry-run
 poetry run python -m src.connectors.hbsir
 
-# Offline (no package): the same survey year from the committed sample
+# Offline (no package): the same numbers from the committed sample
 poetry run pytest tests/integration/test_hbsir_pipeline.py -m integration -q --cov-fail-under=0
+
+# Live (package + real microdata, 32 survey years; run on demand, no DAG)
+RUN_LIVE_API_TESTS=1 poetry run pytest tests/unit/connectors/test_hbsir.py -m live
 ```
 
 ```sql
