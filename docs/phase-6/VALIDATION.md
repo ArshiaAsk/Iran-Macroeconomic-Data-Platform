@@ -3,13 +3,13 @@
 Phase 6 — Market & Survey Connectors (TSETMC + HBSIR).
 Plan: [phase-6-market-survey-connectors.md](../plans/phase-6-market-survey-connectors.md).
 
-**Scope note.** Tasks 1–9 were implemented and committed on 2026-09-14/15 and
-their results are recorded here from the committed suites (`672187d` for Tasks
-1–8, `5231ee6` for Task 9). Task 11 (the full end-to-end validation pass —
-`make check`, the whole integration suite, and a real live run for each source)
-runs *after* this documentation task; the sections it will fill are marked
-**[Task 11]** and must not be read as passing today. Nothing below claims a
-result that was not actually produced by the command shown.
+**Scope note.** Tasks 1–9 were implemented and committed on 2026-09-14/15
+(`672187d` for Tasks 1–8, `5231ee6` for Task 9) and Task 10 documented them
+(`67f0e74`). **Phase 6 is now closed by Task 11**, the full end-to-end pass:
+`make check`, the whole integration suite, and a real live run of both sources
+(`finpy-tse 1.2.10` + `hbsir 0.6.6` installed). The Task 11 section records the
+commands and their real output. Nothing below claims a result that was not
+actually produced by the command shown.
 
 ---
 
@@ -24,7 +24,7 @@ the evidence is reproduced here.
 | `finpy-tse` install + import | ✅ **1.2.10**, pure-python wheel, imports on CPython 3.12 |
 | `hbsir` install + import | ✅ **0.6.6** (+ `bssir==0.6.8`), pure-python, `Requires-Python >=3.10` |
 | Smallest real read, TSETMC | ✅ `Get_CWI_History(ignore_date=True, just_adj_close=True)` → **4,283 sessions**, 1387-09-14 (2008-12-04) → 1405-06-22 (2026-09-13) |
-| Smallest real read, HBSIR | ✅ `hbsir.load_table("Weight", 1400)` → **37,988 rows**; `Total_Income` loads for 1369…1403 |
+| Smallest real read, HBSIR | ✅ `hbsir.load_table("Weight", 1400)` → **37,988 rows**; `Total_Income` loads for 1369…1403 (but `Weight` only rebuilds from 1372 — see the Task 11 finding) |
 | `tests/fixtures/tsetmc/` + `SOURCES.md` + `_capture.json` | ✅ present (3 captured files, sha256 recorded) |
 | `tests/fixtures/hbsir/` + `SOURCES.md` + `_manifest.json` | ✅ present (3 captured files + derived metrics) |
 
@@ -76,7 +76,7 @@ P/E, and market cap move to **DEFER** — no current-day reconstruction.
 | Probe | Result |
 |-------|--------|
 | `hbsir.load_table("Weight", 1400)` | ✅ 37,988 rows (`Year, ID, Weight`) — auto-downloaded cleaned Parquet from the Arvan S3 mirror |
-| `hbsir.load_table("Total_Income", years=[…])` | ✅ loads for **1369…1403** (35 Jalali years; probed 1369/1385/1390/1395/1400/1403) |
+| `hbsir.load_table("Total_Income", years=[…])` | ✅ loads for **1369…1403** (35 Jalali years; probed 1369/1385/1390/1395/1400/1403). Per-year, not `"all"`: the `"all"` token aborts, and the weighted extract only starts at 1372 — see the [Task 11 finding](#finding-fixed-during-task-11-hbsir-could-not-load-all-years) |
 | `hbsir.load_table("Total_Expenditure", 1400)` | ✅ 37,988 rows (`Gross_Expenditure`, `Net_Expenditure`) |
 
 **Findings that shaped Task 5**
@@ -251,9 +251,9 @@ the upstream sources replaced by fake transports over the committed fixtures.
 | `poetry run pytest tests/integration/test_tsetmc_pipeline.py tests/integration/test_hbsir_pipeline.py -m integration -q --cov-fail-under=0` | ✅ **29 passed in 19.24s** (reproduced 2026-09-15) |
 
 Deferred-indicator absence is checked by id at the catalog level. Note that
-after a full integration run the shared dev database is left holding the
-suites' 70-session TSETMC window; Task 11's live run is what populates the real
-coverage.
+the integration suite writes to its own `iran_macro_db_test` database, so a full
+integration run never disturbs the shared dev database; **Task 11's live run is
+what populated the real coverage** (see the final record below).
 
 ---
 
@@ -303,75 +303,162 @@ the long-form gate narrative moved to this file.
 - **The plan's acceptance criterion "ingests daily TEDPIX, trading value, and
   market P/E" cannot be met** and is superseded by the approved gate decision
   (TEDPIX only). It is recorded as a deviation rather than silently failing.
-- **The plan's data-dictionary expectation of database-observed coverage** is
-  satisfied for the shape of the series (real captured sessions, real survey
-  years and metrics) but the *pipeline* coverage is from fixture replay, not a
-  live production run, because the optional packages are deliberately not
-  installed in the project venv. Task 11 is where the live numbers land.
-- **No `@pytest.mark.live` test exists for either Phase 6 source**, although the
-  plan's Level-4 validation lists one. The fixture-replay suites cover the same
-  contract offline; the gated live test is open work.
+- **The plan's data-dictionary expectation of database-observed coverage** was
+  originally satisfied only from fixture replay, because the optional packages
+  are deliberately not installed in the project venv. **Resolved in Task 11**:
+  both packages were installed and the real pipeline runs now back every number
+  in `docs/phase-2/data_dictionary.md`.
+- **No `@pytest.mark.live` test existed for either Phase 6 source** although the
+  plan's Level-4 validation lists one. **Resolved in Task 11**: both are added
+  and gated behind `RUN_LIVE_API_TESTS=1` (`tests/unit/connectors/test_tsetmc.py`,
+  `test_hbsir.py`); the Level-4 command now selects 2 tests instead of 0.
+- **The HBSIR loader had to work around a package defect.** `hbsir`'s `"all"`
+  token aborts for `Total_Income`/`Weight` because neither is constructible over
+  its whole calendar; the loader now falls back to per-year loading. Found by
+  the live run, not by the fixture suites — recorded in full in the Task 11
+  section below.
 
 ---
 
 ## Final validation record — **[Task 11]**
 
-Task 10 does **not** run `make check` or the full integration suite (Task 11
-owns that pass). What *was* executed while documenting is recorded honestly
-below.
+Executed 2026-09-15 on a clean tree (`67f0e74` + the Task 11 change set), with
+Docker PostgreSQL/TimescaleDB up and `alembic upgrade head` applied. Both
+optional extras were really installed (`poetry install -E tsetmc -E hbsir`:
+`finpy-tse 1.2.10`, `hbsir 0.6.6`), so the two sources ran **live** against the
+real cdn and the real survey microdata. Every number below is copied from the
+run, not estimated.
+
+### Level 1–3 — quality gates
 
 ```text
-# Reproduced 2026-09-15, Task 10 (working tree at the time of writing)
-poetry run pytest tests/unit -q --no-cov            → 837 passed, 1 skipped in 22.33s
-poetry run pytest tests/unit -q --cov-fail-under=0  → 837 passed, 1 skipped, 89% coverage
-poetry run pytest tests/integration/test_tsetmc_pipeline.py \
-                   tests/integration/test_hbsir_pipeline.py \
-                   -m integration -q --cov-fail-under=0
-                                                     → 29 passed in 19.24s
-poetry run alembic check                             → No new upgrade operations detected.
-poetry run python -m src.connectors.tsetmc --dry-run → ConnectionError (missing extra), pipeline aborted
-poetry run python -m src.connectors.hbsir  --dry-run → ConnectionError (missing extra), pipeline aborted
-poetry run python -c "importlib.util.find_spec('finpy_tse'/'hbsir')" → False / False (extras absent)
-poetry run pytest tests/unit/connectors/test_tsetmc.py -m live -q --no-cov
-                                                     → 44 deselected, 0 selected (no live test exists)
+poetry run ruff check src tests airflow          → All checks passed
+poetry run ruff format --check src tests airflow → 105 files already formatted
+poetry run mypy src                              → Success: no issues found in 36 source files
+make check                                       → 841 passed, 3 skipped, 119 deselected; 88.92% coverage (gate 80%)
+poetry run pytest tests/integration -m integration -q --cov-fail-under=0
+                                                 → 115 passed, 4 skipped in 524.19s
+poetry run alembic check                         → No new upgrade operations detected.
 ```
 
-**[Task 11] still to run and record here:**
+The 3 skips in the unit run are the two new `@pytest.mark.live` tests plus the
+pre-existing one; the 4 skips in the integration run are the pre-existing
+live/Playwright gates. Neither hides a Phase 6 failure.
 
-- `make check` (ruff format + ruff check + mypy + pytest) at the 80% gate.
-- `poetry run pytest tests/integration -m integration -q --cov-fail-under=0`
-  (the full suite, not just Phase 6).
-- A **real live TSETMC run** (`poetry install -E tsetmc` + `python -m
-  src.connectors.tsetmc`) and an **HBSIR run** from the documented local extract
-  (`poetry install -E hbsir` + `python -m src.connectors.hbsir`), with the
-  resulting Gold coverage written into
-  `docs/phase-2/data_dictionary.md` and the commands/results copied here.
+### Level 4 — feature-specific, live
+
+```text
+poetry run python -m src.connectors.tsetmc --dry-run
+  → reachable=true, http 200, 4,285 rows fetched, 0 written (dry run, no DB)
+poetry run python -m src.connectors.tsetmc --indicators TSETMC.TEDPIX --dry-run
+  → 4,285 rows fetched, 0 written
+poetry run python -m src.connectors.tsetmc
+  → 4,285 fetched → 4,285 silver → 13,039 gold (bronze 1 envelope)
+poetry run python -m src.connectors.hbsir --dry-run
+  → 12/12 indicators ok, 32 survey rows each, 0 written
+poetry run python -m src.connectors.hbsir
+  → 12/12 indicators ok, 384 silver, 384 gold
+RUN_LIVE_API_TESTS=1 poetry run pytest tests/unit/connectors/test_tsetmc.py \
+                                        tests/unit/connectors/test_hbsir.py -m live -q
+                                                 → 2 passed, 84 deselected in 8.68s
+RUN_LIVE_API_TESTS=1 poetry run pytest tests/unit/connectors/test_tsetmc.py -m live -q
+                                                 → 1 passed (real cdn fetch)
+```
+
+### Observed live coverage (Gold, read back from the database)
+
+| Indicator | Rows | First | Last |
+|-----------|-----:|-------|------|
+| `TSETMC.TEDPIX` | 4,285 | 2008-12-04 | 2026-09-15 |
+| `TSETMC.TEDPIX.RET1D` | 4,284 | 2008-12-05 | 2026-09-15 |
+| `TSETMC.TEDPIX.MA30` | 4,256 | 2009-01-18 | 2026-09-15 |
+| `TSETMC.TEDPIX.ME` | 214 | 2008-12-31 | 2026-09-30 |
+| `HBSIR.GINI` … (12 series) | 32 each | 1994-03-20 | 2025-03-20 |
+
+Corroborating queries:
+
+```sql
+-- 214 months: every .ME value equals the last daily session of its month
+months=214, mismatches=0, missing_me=0
+
+-- Gaps are real: TSETMC sessions by weekday (0=Sun … 6=Sat)
+dow 0..3 ≈ 850-863 sessions each; dow 4 (Thu) = 4; dow 5 (Fri) = 3
+
+-- Survey identity rides on Silver
+HBSIR.GINI 1994-03-20 → metadata.jalali_year = 1372, n_households = 12,732
+
+-- Cross-domain join (Level 5): TEDPIX .ME vs monthly SCI CPI
+matched_months = 185 (2011-03-31 … 2026-07-31), MoM correlation = 0.2082
+```
+
+Re-running both pipelines a second time left every count unchanged
+(TSETMC 4,285/13,039; HBSIR 384/384) — the live path is idempotent exactly as
+the fixture suites assert. Bronze grew to 26 append-only envelopes
+(2 TSETMC + 24 HBSIR), which is the intended immutable-audit behaviour.
+
+### Finding fixed during Task 11: HBSIR could not load "all" years
+
+The first live HBSIR run **failed 12/12 indicators** with
+`DataRetrievalError: could not load table 'Total_Income' for years 'all'`. The
+package's own `"all"` token expands to its global calendar (1363 … 1403), but
+`Total_Income` is only constructible from **1369** (`Cash_Incomes` metadata is
+versioned from there) and `Weight` only from **1372**; the package's internal
+year-by-year dependency walk asserts and aborts the whole extract. Probing
+confirmed the boundary exactly:
+
+```text
+Total_Income  [1363] → AssertionError (in ~0 s, before any download)
+Total_Income  [1369] → 18,380 rows
+Weight        [1369..1371] → AssertionError / UnboundLocalError
+Weight        [1372] → 12,770 rows
+```
+
+`HbsirPackageLoader` now tries the bulk call, and on failure retries **year by
+year**, keeps the years that build, and logs the rest. The published span is
+therefore the honest intersection of both tables — **1372 … 1403 (32 years)** —
+with 1363 … 1371 absent rather than filled:
+
+```text
+WARNING hbsir survey years unavailable, stored as gaps
+        table=Total_Income skipped_years=[1363..1368] loaded_years=35
+WARNING hbsir survey years unavailable, stored as gaps
+        table=Weight       skipped_years=[1363..1371] loaded_years=32
+INFO    hbsir extract aggregated years=32 households=1,028,642 indicators=384
+```
+
+This is a package-behaviour fix in the loader, not a change to the statistics:
+the Task 1 reconnaissance values for 1390/1395/1400/1403 reproduce **exactly**
+(Gini 0.3494 / 0.3767 / 0.3704 / 0.3451; poverty 15.85 / 16.26 / 16.42 / 14.58).
+Five unit tests cover the fallback (bulk success, year skipping, total failure,
+missing calendar).
 
 ## Acceptance-criteria status
+
+All criteria are now met against a real live run; the one superseded item is
+struck through.
 
 | Criterion | Status |
 |-----------|--------|
 | Documented reconnaissance decision per package (open or evidenced deferral) | ✅ both OPEN; TSETMC scope narrowed with evidence |
-| `python -m src.connectors.tsetmc` ingests TEDPIX + `RET1D`/`MA30`/`.ME` | ✅ implemented; **live run pending [Task 11]** (extras not installed here) |
+| `python -m src.connectors.tsetmc` ingests TEDPIX + `RET1D`/`MA30`/`.ME` | ✅ **live run**: 4,285 silver, 13,039 gold, 214 `.ME` months verified |
 | ~~ingests trading value and market P/E~~ | ⛔ **deferred by gate decision** (no historical source) |
-| `python -m src.connectors.hbsir` ingests Gini + poverty + 10 deciles | ✅ implemented; **live run pending [Task 11]** |
-| Catalog rows with correct domain/frequency/units and observed availability | ✅ asserted in unit + integration suites; live availability pending [Task 11] |
-| Gregorian storage with Jalali year in metadata; TSETMC UTC period-ends | ✅ |
-| Holidays / missing survey years stay gaps, never filled | ✅ |
-| Optional extras keep the default install and unit suite package-free | ✅ verified today |
-| `make check` at the 80% gate; integration green; `alembic check` clean | ️ partial: unit 89%, Phase 6 integration 29 passed, `alembic check` clean — **full `make check` is [Task 11]** |
-| `docs/phase-6/` exists; data dictionary / README / AGENTS updated | ✅ (this task) |
-| No regressions in the World Bank / IMF / EIA / TGJU / SCI suites | ✅ unit suite green with Phase 6 added; **full integration sweep is [Task 11]** |
+| `python -m src.connectors.hbsir` ingests Gini + poverty + 10 deciles | ✅ **live run**: 32 survey years × 12 indicators, 384 silver / 384 gold |
+| Catalog rows with correct domain/frequency/units and observed availability | ✅ `market`/`daily` and `welfare`/`annual`, availability filled from the stored observations |
+| Gregorian storage with Jalali year in metadata; TSETMC UTC period-ends | ✅ (`jalali_year=1372` seen on Silver; sessions are tz-aware UTC) |
+| Holidays / missing survey years stay gaps, never filled | ✅ TSETMC Thu/Fri ≈ 4/3 sessions in 18 years; HBSIR 1363–1371 logged as skipped |
+| Optional extras keep the default install and unit suite package-free | ✅ suite green with the extras both absent (CI) and installed (this run) |
+| `make check` at the 80% gate; integration green; `alembic check` clean | ✅ 841 passed @ 88.92%; 115 integration passed; `alembic check` clean |
+| `docs/phase-6/` exists; data dictionary / README / AGENTS updated | ✅ |
+| No regressions in the World Bank / IMF / EIA / TGJU / SCI suites | ✅ full integration sweep 115 passed, 4 skipped |
 
 ## Remaining work
 
-1. **[Task 11]** the full end-to-end pass listed above (live runs + `make check`
-   + the whole integration suite).
-2. **Gated live tests** (`@pytest.mark.live` + `RUN_LIVE_API_TESTS=1`) for both
-   sources — the plan's Level-4 command currently selects 0 tests.
-3. **Trading value / market P/E / market cap** remain deferred. Lifting the
+1. **Trading value / market P/E / market cap** remain deferred. Lifting the
    deferral needs either forward accumulation of `MarketOverview` snapshots or a
    full per-symbol snapshot derivation — both outside "wrap the package" and
    both requiring a review decision.
-4. **Official Iranian poverty line** (calorie-based) — a methodology decision,
+2. **Official Iranian poverty line** (calorie-based) — a methodology decision,
    not an implementation gap; the relative measure is the documented default.
+3. **HBSIR pre-1372 survey years** are unavailable through the package's
+   `Weight` table; recovering 1363–1371 would need the package to publish a
+   constructible weight series for those years (upstream, not in-platform).

@@ -8,6 +8,7 @@ cdn payload recorded during the Phase 6 Task 1 gate.
 """
 
 import importlib.metadata
+import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -633,3 +634,42 @@ def test_fetch_series_propagates_a_transport_failure() -> None:
 
     with pytest.raises(DataRetrievalError, match="no indexB2"):
         build_connector(client).fetch_series(TEDPIX)
+
+
+# ------------------------------------------------------------------- live
+
+LIVE_FLAG = "RUN_LIVE_API_TESTS"
+MIN_LIVE_SESSIONS = 1000
+LIVE_START = datetime(2008, 12, 4, tzinfo=UTC)
+
+
+@pytest.mark.live()
+@pytest.mark.skipif(
+    os.environ.get(LIVE_FLAG) != "1",
+    reason=f"set {LIVE_FLAG}=1 to hit the real TSETMC cdn",
+)
+@pytest.mark.skipif(
+    not is_available(),
+    reason="the optional 'finpy-tse' extra is not installed",
+)
+def test_live_tsetmc_fetch_returns_daily_history() -> None:
+    """
+    Fetch the real TEDPIX history through the default (package-backed) client.
+
+    The cdn is public and unauthenticated; ``FinpyTseClient`` reuses the
+    ``finpy-tse`` request headers and records the package version, so this
+    exercises the same path production uses. Asserts shape and provenance,
+    never fixed index values (the index moves every session).
+    """
+    with TsetmcConnector(config=TsetmcConfig(indicators=(TEDPIX,))) as connector:
+        assert connector.connect() is True
+        result = connector.fetch_series(TEDPIX)
+
+    assert result.package_version == importlib.metadata.version(PACKAGE_DISTRIBUTION)
+    assert result.http_status_code == 200
+    assert len(result.frame) >= MIN_LIVE_SESSIONS
+    assert result.frame["timestamp"].is_monotonic_increasing
+    assert result.frame["timestamp"].min() >= LIVE_START
+    assert (result.frame["value"] > 0).all()
+    # Sessions are calendar dates in UTC; the cdn never pads holidays.
+    assert result.frame["timestamp"].dt.tz is not None

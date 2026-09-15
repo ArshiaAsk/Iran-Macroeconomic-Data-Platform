@@ -6,6 +6,7 @@ touches the network. The statistics themselves are covered by
 ``test_hbsir_parser.py``.
 """
 
+import os
 import sys
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -27,6 +28,7 @@ from src.connectors.hbsir import (
     HbsirConnector,
     HbsirPackageLoader,
     build_spec,
+    is_available,
     main,
 )
 from src.connectors.hbsir_parser import (
@@ -390,6 +392,85 @@ def test_package_loader_delegates_to_the_package(monkeypatch: pytest.MonkeyPatch
     assert calls == {"name": WEIGHT_TABLE, "years": 1400, "on_missing": "download"}
 
 
+def test_package_loader_keeps_the_bulk_path_when_all_years_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A working ``"all"`` call is returned as-is; no per-year probing happens."""
+    table = pd.DataFrame({"Year": [1400, 1401], "Weight": [1.0, 2.0]})
+    calls: list[object] = []
+
+    def load_table(table_name: str, years: object, on_missing: str | None = None) -> pd.DataFrame:
+        calls.append(years)
+        return table
+
+    loader = HbsirPackageLoader(HbsirConfig())
+    monkeypatch.setattr(loader, "_load_module", lambda: SimpleNamespace(load_table=load_table))
+
+    assert loader.load_table(WEIGHT_TABLE, "all") is table
+    assert calls == ["all"]
+
+
+def test_package_loader_skips_unconstructible_years(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``"all"`` falls back to per-year loads and drops the years that fail."""
+
+    def load_table(table_name: str, years: object, on_missing: str | None = None) -> pd.DataFrame:
+        if years == "all":
+            message = "assertion inside the package"
+            raise RuntimeError(message)
+        year = years[0] if isinstance(years, list) else years
+        if year < 1369:
+            message = "no versioned metadata for this year"
+            raise RuntimeError(message)
+        return pd.DataFrame({"Year": [year], "Income": [1.0]})
+
+    module = SimpleNamespace(
+        load_table=load_table,
+        api=SimpleNamespace(defaults=SimpleNamespace(years=[1363, 1368, 1369, 1370])),
+    )
+    loader = HbsirPackageLoader(HbsirConfig())
+    monkeypatch.setattr(loader, "_load_module", lambda: module)
+
+    result = loader.load_table(INCOME_TABLE, "all")
+
+    assert sorted(result["Year"]) == [1369, 1370]
+
+
+def test_package_loader_raises_when_no_year_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bulk error surfaces when the fallback cannot construct any year."""
+
+    def load_table(table_name: str, years: object, on_missing: str | None = None) -> pd.DataFrame:
+        message = "mirror offline"
+        raise RuntimeError(message)
+
+    module = SimpleNamespace(
+        load_table=load_table,
+        api=SimpleNamespace(defaults=SimpleNamespace(years=[1369, 1370])),
+    )
+    loader = HbsirPackageLoader(HbsirConfig())
+    monkeypatch.setattr(loader, "_load_module", lambda: module)
+
+    with pytest.raises(DataRetrievalError, match="mirror offline"):
+        loader.load_table(INCOME_TABLE, "all")
+
+
+def test_package_loader_raises_when_the_calendar_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a year calendar there is nothing to probe, so the bulk error stands."""
+
+    def load_table(table_name: str, years: object, on_missing: str | None = None) -> pd.DataFrame:
+        message = "bulk failed"
+        raise RuntimeError(message)
+
+    loader = HbsirPackageLoader(HbsirConfig())
+    monkeypatch.setattr(loader, "_load_module", lambda: SimpleNamespace(load_table=load_table))
+
+    with pytest.raises(DataRetrievalError, match="bulk failed"):
+        loader.load_table(INCOME_TABLE, "all")
+
+
 def test_package_loader_wraps_package_load_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     """A download/read failure becomes a retrieval error, not a crash."""
     loader = HbsirPackageLoader(HbsirConfig())
@@ -437,6 +518,51 @@ def test_package_loader_imports_the_module_once(monkeypatch: pytest.MonkeyPatch)
 
     assert loader._load_module() is sentinel
     assert loader._load_module() is sentinel  # cached, no re-import
+
+
+# ------------------------------------------------------------------- live
+
+LIVE_FLAG = "RUN_LIVE_API_TESTS"
+MIN_LIVE_YEARS = 10
+
+
+@pytest.mark.live()
+@pytest.mark.skipif(
+    os.environ.get(LIVE_FLAG) != "1",
+    reason=f"set {LIVE_FLAG}=1 to load the real HBSIR extract",
+)
+@pytest.mark.skipif(
+    not is_available(),
+    reason="the optional 'hbsir' extra is not installed",
+)
+def test_live_hbsir_derives_annual_welfare_series() -> None:
+    """
+    Compute the real indicators from the locally cached survey extract.
+
+    ``hbsir`` is a loader, not an HTTP client: after the first download the
+    cleaned Parquet lives in ``HBSIR_DATA_DIR`` (``Data/``) and is reused
+    offline, so this test needs no network and does not persist microdata.
+    It asserts the published contract (a decade-plus of annual, in-range,
+    gap-preserving series) rather than any particular value.
+    """
+    connector = HbsirConnector(config=HbsirConfig(indicators=(GINI_INDICATOR,)))
+    try:
+        assert connector.connect() is True
+        frame = connector.fetch(
+            GINI_INDICATOR,
+            datetime(1900, 1, 1, tzinfo=UTC),
+            datetime(2100, 1, 1, tzinfo=UTC),
+        )
+        result = connector.validate(frame)
+    finally:
+        connector.disconnect()
+
+    assert result.is_valid
+    assert len(frame) >= MIN_LIVE_YEARS
+    assert frame["value"].between(0.0, 1.0).all()
+    assert frame["timestamp"].is_monotonic_increasing
+    # One observation per survey year, snapped to the Iranian year end.
+    assert frame["timestamp"].dt.month.eq(3).all()
 
 
 def test_disconnect_closes_an_owned_loader() -> None:

@@ -80,6 +80,9 @@ INCOME_TABLE = "Total_Income"
 WEIGHT_TABLE = "Weight"
 INCOME_BASIS = "household_income"
 
+#: The package's token for "every survey year in its calendar".
+ALL_YEARS_TOKEN = "all"
+
 UNIT_MAX_LENGTH = 50
 
 SOURCE_URL = "https://github.com/Iran-Open-Data/HBSIR"
@@ -253,6 +256,17 @@ class HbsirPackageLoader:
             DataRetrievalError: If the package cannot produce the table
         """
         module = self._load_module()
+        if isinstance(years, str) and years == ALL_YEARS_TOKEN:
+            return self._load_every_year(module, table_name)
+        return self._call_package(module, table_name, years)
+
+    def _call_package(
+        self,
+        module: ModuleType,
+        table_name: str,
+        years: Sequence[int] | str,
+    ) -> pd.DataFrame:
+        """Call the package once and normalize its failures into retrieval errors."""
         try:
             table = module.load_table(table_name, years, on_missing="download")
         except Exception as exc:
@@ -262,6 +276,71 @@ class HbsirPackageLoader:
             msg = f"HBSIR table {table_name!r} did not return a DataFrame"
             raise DataRetrievalError(msg)
         return table
+
+    def _load_every_year(self, module: ModuleType, table_name: str) -> pd.DataFrame:
+        """
+        Load every year the package offers, skipping years it cannot build.
+
+        The package's own ``"all"`` token expands to its *global* survey
+        calendar (1363-1403), but derived tables are only constructible from
+        the first year their versioned metadata defines: ``Total_Income``
+        depends on ``Cash_Incomes``, whose metadata starts at 1369, so asking
+        for ``"all"`` trips an assertion inside the package and aborts the
+        whole extract. Loading year by year keeps the years that exist and
+        leaves the rest as gaps -- the same contract as missing trading
+        sessions in TSETMC, and never filled or zeroed.
+
+        Args:
+            module: Imported ``hbsir`` module
+            table_name: HBSIR table name (e.g. ``Total_Income``)
+
+        Returns:
+            Concatenated table for every constructible year
+
+        Raises:
+            DataRetrievalError: If the bulk load fails and no year loads either
+        """
+        try:
+            return self._call_package(module, table_name, ALL_YEARS_TOKEN)
+        except DataRetrievalError as exc:
+            bulk_error = exc
+
+        candidates = self._candidate_years(module)
+        if not candidates:
+            raise bulk_error from bulk_error.__cause__
+
+        frames: list[pd.DataFrame] = []
+        skipped: list[int] = []
+        for year in candidates:
+            try:
+                table = self._call_package(module, table_name, [year])
+            except DataRetrievalError:
+                skipped.append(year)
+                continue
+            if not table.empty:
+                frames.append(table)
+
+        if not frames:
+            raise bulk_error from bulk_error.__cause__
+
+        if skipped:
+            log_with_context(
+                logger,
+                "WARNING",
+                "hbsir survey years unavailable, stored as gaps",
+                table=table_name,
+                skipped_years=skipped,
+                loaded_years=len(candidates) - len(skipped),
+            )
+        return pd.concat(frames, ignore_index=True)
+
+    def _candidate_years(self, module: ModuleType) -> list[int]:
+        """Survey years in the package's calendar, or ``[]`` when unavailable."""
+        defaults = getattr(getattr(module, "api", None), "defaults", None)
+        calendar = getattr(defaults, "years", None)
+        if not calendar:
+            return []
+        return sorted(int(year) for year in calendar)
 
 
 class HbsirConnector(DataConnector):
