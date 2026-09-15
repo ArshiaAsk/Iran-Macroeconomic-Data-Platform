@@ -841,3 +841,364 @@ with data, or CBI indicator in the catalog**. The `CBI.M0`, `CBI.M2`,
 unimplemented. Evidence: `tests/fixtures/cbi/_gate_task6.json`,
 `tests/fixtures/cbi/_gate_task7.json`, and
 [docs/phase-5/VALIDATION.md](../phase-5/VALIDATION.md).
+
+---
+
+# TSETMC Indicators (Phase 6)
+
+**Status:** ⚠️ PARTIALLY OBSERVED — TEDPIX is observed from the real captured
+payload; the live end-to-end run is still pending (Task 11).
+
+The number counts below are the **real** values the Phase 6 integration suite
+produces from the committed capture
+(`tests/fixtures/tsetmc/tedpix_cwi_raw.json`), not from a production run: the
+optional `finpy-tse` extra is deliberately **not** installed in the project
+venv, so no live pipeline run backs these tables yet. The **coverage span** is
+genuine — it is the span of the captured payload, read from TSETMC's cdn on
+2026-09-13. See [docs/phase-6/VALIDATION.md](../phase-6/VALIDATION.md).
+
+## Provenance
+
+| Field | Value |
+|-------|-------|
+| Source | Tehran Stock Exchange (TSETMC), `http://cdn.tsetmc.com/api` |
+| Type | Package-backed (`finpy-tse == 1.2.10`, BSD-3), wrapped by an injectable client |
+| Index | TEDPIX — "شاخص کل", the cap-weighted total index, `insCode 32097828799138957` |
+| Endpoint | `Index/GetIndexB2History/{insCode}` |
+| Captured | 2026-09-13 |
+| Captured sessions | 4,283 (1387-09-14 = 2008-12-04 → 1405-06-22 = 2026-09-13) |
+| Fixture checksum | `sha256 6d833ce8afc0ecb0f4d6a30c5530094d329718f34ca639d9c0174ebb8a041ade` |
+| Bronze rows | 1 envelope per indicator (`raw_data = {rows, meta}`) |
+| Auth | none |
+
+## Indicators
+
+All TSETMC rows are domain `market`. Levels are **daily**; the `.ME`
+downsample is stamped **monthly** at the calendar period end. Coverage is the
+captured span; "Rows (70-session replay)" is what the integration suite
+actually writes.
+
+| Indicator ID | Name | Unit | Frequency | Coverage (captured) | Rows (70-session replay) |
+|--------------|------|------|-----------|---------------------|-------------------------:|
+| `TSETMC.TEDPIX` | Tehran Stock Exchange total index (TEDPIX) | `index points` | daily | 2008-12-04 ... 2026-09-13 | 70 |
+| `TSETMC.TEDPIX.RET1D` | daily return (derived) | `%` | daily | 2008-12-05 ... 2026-09-13 | 69 |
+| `TSETMC.TEDPIX.MA30` | 30-session moving average (derived) | `index points` | daily | 2009-01-18 ... 2026-09-13 | 41 |
+| `TSETMC.TEDPIX.ME` | month-end downsample (derived) | `index points` | monthly | 2008-12-31 ... 2026-09-30 | 5 |
+
+The derived ids carry their method in `record_metadata`:
+`RET1D` → `daily_return`, `MA30` → `30day_moving_average`, `.ME` →
+`month_end_from_daily`. **None of the three is an official TSETMC series** —
+they are computed in-platform.
+
+`MA30` needs a full window: the first 29 sessions of any run carry **no** `MA30`
+row, so a 70-session window yields 41, not 70.
+
+### The `.ME` downsample
+
+`TSETMC.TEDPIX.ME` is opt-in
+(`IndicatorDerivation(include_monthly=True)`) and takes the **last session of
+each calendar month**, stamped at the calendar month end rather than at the
+session. From the captured window:
+
+| Timestamp | Value (index points) |
+|-----------|---------------------:|
+| 2026-05-31 | 4,236,521.1 |
+| 2026-06-30 | 5,127,635.3 |
+| 2026-07-31 | 5,075,098.6 |
+| 2026-08-31 | 6,547,963.8 |
+| 2026-09-30 | 7,431,451.1 |
+
+A month with no session produces **no** `.ME` row — no forward-fill, no
+interpolation. This is what makes TEDPIX comparable with the monthly CPI/FX
+series.
+
+## Bronze: the raw `indexB2` envelope
+
+Unlike the SCI file scraper, TSETMC Bronze stores the **raw cdn payload** (the
+package's DataFrame discards the envelope), plus the package provenance:
+
+```json
+{
+  "rows": [{"insCode": 32097828799138957, "dEven": 20260913,
+            "xNivInuClMresIbs": 7431451.1, "xNivInuPbMresIbs": 7431450.0,
+            "xNivInuPhMresIbs": 7464390.0}],
+  "meta": {
+    "indicator_id": "TSETMC.TEDPIX",
+    "package": "finpy-tse",
+    "package_version": "1.2.10",
+    "ins_code": "32097828799138957",
+    "rows_returned": 4283,
+    "rows_usable": 4283,
+    "envelope_convention": "raw_data = {rows, meta}"
+  }
+}
+```
+
+`package_version` is read with `importlib.metadata.version("finpy-tse")` — the
+distribution publishes **no** `__version__` attribute.
+
+Field meanings: `dEven` = Gregorian session date `yyyymmdd`; `xNivInuClMresIbs`
+= the index close (this is what `Get_CWI_History(just_adj_close=True)` returns,
+mislabelled `"Adj Close"`); `xNivInuPbMresIbs`/`xNivInuPhMresIbs` = low/high of
+the index.
+
+## Silver and Gold
+
+- Silver is one row per session per indicator, keyed `(indicator_id, timestamp)`
+  with a **monotonic** daily timestamp; `dEven` is normalized to a UTC session
+  timestamp.
+- Gold carries the level plus the three derived ids, with `RET1D`/`MA30`
+  recomputed in SQL by the tests rather than trusted from Python.
+- **Holidays and weekends are gaps.** The exchange is closed Thu/Fri and on
+  Iranian holidays; a two-week window (`1404-06-01`…`1404-06-15`) contains only
+  **9** real sessions. No row is ever forward-filled for a non-session.
+- Re-running the same window is idempotent (Silver upsert, Gold
+  delete-and-reinsert).
+
+## Known limitations and findings
+
+1. **TEDPIX only — the plan's scope was narrowed at the Phase 6 decision gate.**
+   **Market P/E is not available**: no `finpy-tse` function or `indexB2` field
+   exposes it, and `Get_MarketWatch()` carries only per-symbol `EPS` and
+   `Close`. The probed cdn endpoints (`MarketData/GetMarketOverview/{1,2,3}`,
+   `MarketWatchInit.aspx`) expose index value, traded value, and market value —
+   **no P/E**. Evidence: `tests/fixtures/tsetmc/marketwatch_columns.json`.
+2. **Historical aggregate trading value is not available.** `Get_MarketWatch()`
+   returns a **current-day, per-symbol snapshot** (1,544 rows) and
+   `Get_MarketOverview` a **current-day aggregate** — neither is a history, so
+   there is no backfill path for a trading-value time series.
+3. **Market capitalization is likewise current-day only** and is deferred.
+4. **The "Adj Close" label is a naming artifact.** TEDPIX is a chained *total*
+   index; there is no adjusted/unadjusted choice for the index level, and
+   `adjust_price` exists only on individual-stock price functions. Rebasing of
+   the published index is not flagged by the package, so the connector records
+   `insCode` + source in metadata and treats level jumps as data, not a splice.
+5. **The package is unmaintained** (last release 2024-04-24) though its
+   endpoints are stable. Sibling index functions (`Get_CWPI_History`,
+   `Get_EWI_History`, `Get_FFI_History`, `Get_LCI30_History`, …) share the same
+   shape and could be added later if the PRD needs them.
+
+## Reproducing these numbers
+
+```bash
+poetry install --extras tsetmc
+make db-up && poetry run alembic upgrade head
+poetry run python -m src.connectors.tsetmc --dry-run
+poetry run python -m src.connectors.tsetmc
+
+# Offline (no package): the same numbers from the committed capture
+poetry run pytest tests/integration/test_tsetmc_pipeline.py -m integration -q --cov-fail-under=0
+```
+
+```sql
+-- Levels + derivations, with units
+SELECT indicator_id, unit, frequency, count(*), min(timestamp), max(timestamp)
+FROM gold.gold_analytical
+WHERE indicator_id LIKE 'TSETMC.%'
+GROUP BY 1, 2, 3 ORDER BY 1;
+
+-- The month-end downsample
+SELECT timestamp::date, value FROM gold.gold_analytical
+WHERE indicator_id = 'TSETMC.TEDPIX.ME' ORDER BY timestamp;
+
+-- Sessions that were skipped (never filled)
+SELECT date_trunc('month', timestamp) AS month, count(*)
+FROM silver.silver_cleaned WHERE indicator_id = 'TSETMC.TEDPIX'
+GROUP BY 1 ORDER BY 1;
+
+SELECT * FROM metadata.indicator_catalog WHERE indicator_id LIKE 'TSETMC.%';
+```
+
+---
+
+# HBSIR Indicators (Phase 6)
+
+**Status:** ⚠️ PARTIALLY OBSERVED — the survey years and every metric below are
+real, computed from the real microdata during the Phase 6 gate and committed as
+a fixture; the live end-to-end pipeline run is still pending (Task 11).
+
+The 12 series are **annual**, household-weighted, and domain `welfare`. The
+values in the trend table were computed during the Task 1 reconnaissance
+directly from `hbsir`'s cleaned tables and are asserted by the unit suite
+against `tests/fixtures/hbsir/metrics_trend.json`. The **pipeline** numbers come
+from the integration suite's single survey year (1400). See
+[docs/phase-6/VALIDATION.md](../phase-6/VALIDATION.md).
+
+## Provenance
+
+| Field | Value |
+|-------|-------|
+| Source | Iran Open Data — Household Budget Survey (HBSIR), `hbsir == 0.6.6` (MIT) |
+| Type | Package-backed data loader (not an HTTP client) |
+| Data | Pre-built "cleaned" Parquet per (table, year) from the Arvan S3 mirror, cached in `Data/HBSIR/4_cleaned/` |
+| Source tables | `Total_Income` (`Year, ID, Income`), `Weight` (`Year, ID, Weight`) |
+| Unit of analysis | **Household** (no equivalence scaling) |
+| Income basis | `Total_Income` (can be negative — net losses) |
+| Survey years | Jalali **1369 … 1403** (35 years); 1403 ≈ Gregorian year-end 2025-03-20 |
+| Captured | 2026-09-13 |
+| Auth | none |
+
+## Indicators
+
+| Indicator ID | Name | Unit | Frequency |
+|--------------|------|------|-----------|
+| `HBSIR.GINI` | weighted Gini of household income | `index (0-1)` | annual |
+| `HBSIR.POVERTY.RATE` | relative poverty rate | `percent` | annual |
+| `HBSIR.INCOME.DECILE.D1` … `.D10` | income share of each weighted decile | `percent` | annual |
+
+All twelve are Jalali survey years converted to the **true Gregorian Iranian
+year-end** (Esfand 29 or 30, leap-aware — never a hardcoded `12-29`):
+
+| Jalali year | Gregorian year-end |
+|-------------|--------------------|
+| 1369 | 1991-03-20 |
+| 1390 | 2012-03-19 |
+| 1395 | 2017-03-20 |
+| 1400 | 2022-03-20 |
+| 1403 | 2025-03-20 |
+
+The Jalali year is retained in the row metadata alongside the weighted household
+count, so the Gregorian timestamp never loses its survey identity. It lands on
+**Silver** (`silver.silver_cleaned.metadata ->> 'jalali_year'`); Gold level rows
+only carry chain-linking metadata (which HBSIR never uses), so an analyst should
+join Gold to Silver through `silver_id` when the survey identity is needed.
+
+The relative-poverty rule string travels at the **Bronze** observation in the
+same way — `bronze.bronze_raw` → `raw_data -> 'rows' -> 0 -> 'record_metadata'`
+— and in the Bronze manifest's `poverty_line_rule`, not in the Gold row.
+
+## Observed trend
+
+Household-weighted over `Total_Income`, no equivalence scaling. These are real
+computed values, not published HBSIR figures:
+
+| Jalali year | Gini | Poverty % (`50% × weighted median`) | Poverty line (Rial) | Households (n) | Weighted households |
+|-------------|------|--------------------------------------|--------------------:|---------------:|--------------------:|
+| 1390 | 0.3494 | 15.85 | 49,470,000 | 38,512 | 21,158,812 |
+| 1395 | 0.3767 | 16.26 | 114,100,000 | 38,146 | 24,854,004 |
+| 1400 | 0.3704 | 16.42 | 416,190,000 | 37,988 | 26,693,614 |
+| 1403 | 0.3451 | 14.58 | 1,319,500,000 | 37,504 | 28,199,495 |
+
+Income decile shares (`%`), which sum to ~100 by construction:
+
+| Year | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 |
+|------|----|----|----|----|----|----|----|----|----|-----|
+| 1390 | 2.15 | 4.11 | 5.46 | 6.65 | 7.87 | 9.13 | 10.59 | 12.57 | 15.76 | 25.72 |
+| 1395 | 1.88 | 3.85 | 5.17 | 6.36 | 7.51 | 8.79 | 10.32 | 12.34 | 15.59 | 28.20 |
+| 1400 | 1.88 | 3.86 | 5.21 | 6.38 | 7.58 | 8.92 | 10.54 | 12.60 | 15.81 | 27.22 |
+| 1403 | 2.14 | 4.27 | 5.63 | 6.71 | 7.84 | 9.11 | 10.57 | 12.58 | 15.55 | 25.59 |
+
+The shape is coherent: inequality peaks around 1395 and eases by 1403, while the
+weighted household count grows from 21.2 M to 28.2 M.
+
+## Measures and rules
+
+- **Weighted median** — the first income at which cumulative weight reaches 50%.
+  **No interpolation** between observations.
+- **Gini** — Lorenz/Brown: `1 − Σ pi (Li−1 + Li)`.
+- **Deciles** — cut by cumulative-weight position into ten equal-weight groups;
+  the shares are guarded to sum to 100 within `0.5` pp.
+- **Relative poverty rate** — the weighted share of households below
+  `k × weighted median`, `k = 0.5`.
+
+## Bronze: a derived extract and a manifest, never microdata
+
+Household rows are **never persisted**. Bronze holds the derived annual
+observations plus:
+
+```json
+{
+  "source_tables": ["Total_Income", "Weight"],
+  "survey_years_jalali": [1400],
+  "extract_checksum_sha256": "…",
+  "poverty_line_rule": "50% of weighted median household income",
+  "microdata_persisted": false
+}
+```
+
+The SHA-256 covers the income/weight extract, so the computation is
+reproducible without redistributing the survey. An integration test asserts no
+household row ever reaches Bronze.
+
+## Silver and Gold
+
+- Silver is one row per **(indicator, survey year)**, timestamped at the
+  Gregorian year-end; missing years stay **absent**, never filled.
+- Gold publishes **levels only** — all twelve indicators opt out of `YOY`,
+  because a year-over-year growth rate of a Gini coefficient or an income share
+  is meaningless. `include_monthly` is off too: the series is already annual.
+- Re-running the same survey year is idempotent.
+
+## Known limitations and findings
+
+1. **The poverty line is relative, not the official Iranian line.** It is
+   `50% × weighted median household income`, and that exact rule string is
+   written into every observation's metadata and the Bronze manifest so the
+   number can never be mistaken for the official (خط فقر) threshold. `hbsir`
+   ships no official line; the calorie-based SCI line (the package does ship
+   `internal_data/nnftri_calorie_requirements.csv`) is a **follow-up
+   methodology decision**, not implemented here.
+2. **No equivalence scaling.** These are per-household measures; OECD /
+   modified-OECD equivalence scales are available in the package but are not
+   applied, so household-size effects are not adjusted for.
+3. **Income, not expenditure.** `Total_Expenditure`
+   (`Gross_Expenditure`/`Net_Expenditure`) is loaded and documented but is not
+   part of the MVP basis; income can be negative for households with net
+   losses.
+4. **Weights are mandatory.** The parser raises `ParsingError` on missing,
+   mismatched, non-finite, negative, or all-zero weights. There is deliberately
+   **no unweighted fallback** — an unweighted statistic over ~38,000 sampled
+   households is not a population statistic, and silently degrading would
+   publish a wrong number under a right-looking id.
+5. **`hbsir` is a loader, not a client.** The first call downloads the cleaned
+   Parquet into `Data/HBSIR/4_cleaned/` (config `HBSIR_DATA_DIR`); afterwards it
+   works fully offline. The connector therefore injects a *loader* — the package
+   analogue of `http_session`.
+6. **The package is under active development** (`0.6.6`, releases through
+   2025-12), which is why it is pinned exactly.
+
+## Reproducing these numbers
+
+```bash
+poetry install --extras hbsir
+make db-up && poetry run alembic upgrade head
+poetry run python -m src.connectors.hbsir --dry-run
+poetry run python -m src.connectors.hbsir
+
+# Offline (no package): the same survey year from the committed sample
+poetry run pytest tests/integration/test_hbsir_pipeline.py -m integration -q --cov-fail-under=0
+```
+
+```sql
+-- The twelve welfare series
+SELECT indicator_id, unit, frequency, count(*), min(timestamp), max(timestamp)
+FROM gold.gold_analytical
+WHERE indicator_id LIKE 'HBSIR.%'
+GROUP BY 1, 2, 3 ORDER BY 1;
+
+-- The Jalali survey year rides on the Silver row (Gold carries chain-linking
+-- metadata only), reachable from Gold through silver_id
+SELECT g.indicator_id, g.timestamp::date, g.value,
+       s.metadata ->> 'jalali_year'         AS jalali_year,
+       s.metadata ->> 'weighted_households' AS weighted_households
+FROM gold.gold_analytical g
+JOIN silver.silver_cleaned s ON s.id = g.silver_id
+WHERE g.indicator_id = 'HBSIR.GINI';
+
+-- The relative-poverty methodology travels at the Bronze observation
+SELECT raw_data -> 'rows' -> 0 -> 'record_metadata' ->> 'poverty_line_rule' AS rule,
+       raw_data -> 'rows' -> 0 -> 'record_metadata' ->> 'jalali_year'       AS jalali_year,
+       raw_data -> 'meta' ->> 'poverty_line_rule'                           AS manifest_rule
+FROM bronze.bronze_raw WHERE metadata ->> 'indicator_id' = 'HBSIR.POVERTY.RATE';
+
+-- Decile shares sum to 100 per survey year
+SELECT timestamp::date, round(sum(value)::numeric, 2) AS decile_sum
+FROM gold.gold_analytical
+WHERE indicator_id LIKE 'HBSIR.INCOME.DECILE.%'
+GROUP BY 1 ORDER BY 1;
+
+-- No household row ever reaches Bronze
+SELECT count(*) FROM bronze.bronze_raw WHERE source_name = 'hbsir';
+
+SELECT * FROM metadata.indicator_catalog WHERE indicator_id LIKE 'HBSIR.%';
+```

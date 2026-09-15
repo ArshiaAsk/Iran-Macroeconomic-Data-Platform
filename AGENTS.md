@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phases 1–5 and 7 complete. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. The OPEC basket and the **CBI TSD** scraper are **deferred** — both sources block programmatic access (see `docs/phase-4/VALIDATION.md` and `docs/phase-5/VALIDATION.md`). Phase 6 (TSETMC/HBSIR) is next
+* **Lifecycle Stage:** Active implementation — Phases 1–7 complete. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 8 (production readiness) is next
 
 ## Tech Stack
 
@@ -88,6 +88,10 @@ iran-macro-platform/
 │   │   ├── tgju_parser.py   # TGJU HTML parser ✓
 │   │   ├── sci_scraper.py   # SCI file scraper (Excel/PDF, Persian/Jalali) ✓
 │   │   ├── sci_parser.py    # SCI workbook → Silver frame parser ✓
+│   │   ├── tsetmc.py        # TSETMC connector (injectable client, TEDPIX + derivations) ✓
+│   │   ├── tsetmc_parser.py # TSETMC indexB2 record → tidy daily frame ✓
+│   │   ├── hbsir.py         # HBSIR connector (injectable loader, 12 welfare series) ✓
+│   │   ├── hbsir_parser.py  # HBSIR weighted statistics (Gini, poverty, deciles) ✓
 │   │   └── ...              # cbi_*.py — deferred (Phase 5 bot-defense gate closed)
 │   ├── etl/                 # Bronze/Silver/Gold transformations ✓ IMPLEMENTED
 │   ├── chain_linking/       # Base year adjustment algorithms ✓ IMPLEMENTED
@@ -107,7 +111,8 @@ iran-macro-platform/
 │   ├── phase-2/             # Indicator catalog (observed coverage)
 │   ├── phase-3/             # TGJU scraper reports
 │   ├── phase-4/             # IMF/EIA reports + OPEC gate record ✓
-│   └── phase-5/             # SCI reports + CBI gate record ✓
+│   ├── phase-5/             # SCI reports + CBI gate record ✓
+│   └── phase-6/             # TSETMC/HBSIR reports + scope-narrowing record ✓
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
@@ -536,6 +541,10 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | `src/connectors/tgju_parser.py` | TGJU HTML parser (Persian digits, date conversion) |
 | `src/connectors/sci_scraper.py` | SCI file scraper (Excel downloads, TLS pinning, `--dry-run` CLI) |
 | `src/connectors/sci_parser.py` | SCI workbook → Silver frame parser (Jalali month-end) |
+| `src/connectors/tsetmc.py` | TSETMC connector (injectable `finpy-tse` client, TEDPIX + `RET1D`/`MA30`/`.ME`) |
+| `src/connectors/tsetmc_parser.py` | TSETMC cdn `indexB2` payload → tidy daily frame |
+| `src/connectors/hbsir.py` | HBSIR connector (injectable `hbsir` loader, 12 weighted welfare series) |
+| `src/connectors/hbsir_parser.py` | HBSIR weighted statistics (Gini, poverty rate, decile shares) |
 | `src/utils/persian.py` | Shared Persian digits / prices / Jalali→Gregorian helpers |
 | `src/etl/bronze.py` | Raw envelope persistence + `DataCollectionLog` |
 | `src/etl/silver.py` | Cleaning, outlier flagging, idempotent upsert |
@@ -547,6 +556,7 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | `src/utils/retry.py` | Retry/backoff policy and rate limiter |
 | `docs/phase-4/VALIDATION.md` | Phase 4 validation results + OPEC gate record |
 | `docs/phase-5/VALIDATION.md` | Phase 5 SCI validation results + CBI gate record |
+| `docs/phase-6/VALIDATION.md` | Phase 6 TSETMC/HBSIR validation results + TSETMC scope-narrowing record |
 | `src/database/schema.py` | SQLAlchemy models for all layers |
 | `src/database/connection.py` | Engine, session management, hypertable setup |
 | `alembic/versions/20260817_1456_initial_schema.py` | Initial migration (all 4 schemas + hypertable) |
@@ -594,6 +604,7 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | Loaded indicators, units, observed coverage | `docs/phase-2/data_dictionary.md` |
 | Phase 4 validation + OPEC gate decision | `docs/phase-4/VALIDATION.md` |
 | Phase 5 SCI validation + CBI gate decision | `docs/phase-5/VALIDATION.md` |
+| Phase 6 TSETMC/HBSIR validation + scope record | `docs/phase-6/VALIDATION.md` |
 | Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents
