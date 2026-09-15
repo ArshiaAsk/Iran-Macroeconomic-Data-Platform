@@ -287,15 +287,22 @@ for the detailed conventions.
 | **TGJU** | Scraper | FX, Gold (3 indicators) | Daily | ✅ Implemented (Phase 3) |
 | **SCI** | Scraper | CPI (national/urban/rural + 10 deciles), unemployment | Monthly / Quarterly | ✅ Implemented (Phase 5) |
 | **CBI TSD** | Scraper | Monetary, Banking | Monthly | ⛔ Deferred (Phase 5) — bot defense blocks programmatic access |
-| **TSETMC** | Package | Stock indices | Daily | Planned (Phase 6) |
-| **HBSIR** | Package | Household surveys | Annual | Planned (Phase 6) |
+| **TSETMC** | Package | TEDPIX index + `RET1D`/`MA30`/`.ME` derivations (1 series) | Daily | ✅ Implemented (Phase 6) — trading value, market P/E, market cap deferred (no historical source) |
+| **HBSIR** | Package | Weighted Gini, relative poverty, income deciles (12 indicators) | Annual | ✅ Implemented (Phase 6) |
 
-Phase numbers follow `PRD.md` §7. Every World Bank, IMF, EIA, and SCI
-indicator, its unit, and its **observed** coverage for Iran are documented in
-[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md). OPEC
+Phase numbers follow `PRD.md` §7. Every World Bank, IMF, EIA, SCI, TSETMC, and
+HBSIR indicator, its unit, and its **observed** coverage for Iran are documented
+in [docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md). OPEC
 (Phase 4) and CBI (Phase 5) are not ingested — see
 [docs/phase-4/VALIDATION.md](docs/phase-4/VALIDATION.md) and
-[docs/phase-5/VALIDATION.md](docs/phase-5/VALIDATION.md).
+[docs/phase-5/VALIDATION.md](docs/phase-5/VALIDATION.md). TSETMC's narrower
+scope is recorded in
+[docs/phase-6/VALIDATION.md](docs/phase-6/VALIDATION.md#deviations-from-the-plan-recorded-not-silent).
+
+TSETMC and HBSIR are **package-backed**: both ship as optional Poetry extras
+(`poetry install --extras "tsetmc hbsir"`), so the default install and the unit
+suite stay package-free. Without the extra the CLI fails loudly with the
+actionable install command.
 
 ---
 
@@ -446,9 +453,13 @@ poetry cache clear . --all
 - [x] Weekly Airflow DAG (`sci_weekly`)
 - [ ] CBI TSD monetary scraper — **deferred**: bot defense blocks programmatic access
 
-### Phase 6: Market & Survey Data (Week 6-7)
-- [ ] TSETMC stock market connector
-- [ ] HBSIR household survey connector
+### Phase 6: Market & Survey Data (Week 6-7) ✅ COMPLETE
+- [x] TSETMC connector — TEDPIX daily index + `RET1D`/`MA30`/month-end `.ME`
+- [x] HBSIR connector — weighted Gini, relative poverty, income deciles (12 series)
+- [x] Optional `tsetmc`/`hbsir` Poetry extras; default install stays package-free
+- [x] Gold month-end derived path (opt-in, no forward-fill)
+- [x] Daily TSETMC Airflow DAG (`tsetmc_daily`)
+- [ ] TSETMC trading value / market P/E / market cap — **deferred**: the package exposes no historical source
 
 ### Phase 7: Dashboard (Week 7-8)
 - [x] Streamlit multi-page app
@@ -485,6 +496,7 @@ See `AGENTS.md` for code conventions and patterns.
 
 - TimescaleDB for time-series optimizations
 - finpy-tse for TSETMC integration
+- hbsir for HBSIR household survey microdata
 - World Bank and IMF for open data APIs
 - TGJU for public FX/gold price data
 
@@ -494,5 +506,5 @@ See `AGENTS.md` for code conventions and patterns.
 
 For questions or issues, please open a GitHub issue.
 
-**Maintainer:** [Your Name]  
-**Project Status:** Phases 1–5 and 7 complete — SCI domestic CPI/labour pipeline implemented (CBI and OPEC deferred: sources block programmatic access); Phase 6 (TSETMC/HBSIR) next
+**Maintainer:** Arshia Askarzadeh 
+**Project Status:** Phases 1–7 complete — SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source); Phase 8 (production readiness) next
