@@ -3,8 +3,14 @@
 from typing import Any
 
 import pandas as pd
+import pytest
 
-from dashboard.repository import DashboardRepository
+from dashboard.repository import (
+    SERIES_CLASSIFICATION_COLUMNS,
+    SERIES_KIND_BASE,
+    SERIES_KIND_DERIVED,
+    DashboardRepository,
+)
 
 
 class FakeMappings:
@@ -39,6 +45,52 @@ class FakeSession:
         return FakeResult(self.rows)
 
 
+def gold_row(
+    indicator_id: str,
+    *,
+    catalog: bool = True,
+    name: str | None = None,
+    source_name: str | None = None,
+    source_url: str | None = None,
+    record_metadata: Any = None,
+    parent_name: str | None = None,
+    parent_source_name: str | None = None,
+    parent_source_url: str | None = None,
+    timestamp: str = "2021-01-01T00:00:00+00:00",
+    value: float = 1.0,
+) -> dict[str, Any]:
+    """Build one row shaped like the LEFT JOIN select in ``load_series``.
+
+    ``catalog=False`` models a Gold series without its own catalog row: the direct
+    catalog fields are ``NULL`` while the ``parent_*`` fields still carry whatever
+    the parent join found.
+    """
+    return {
+        "indicator_id": indicator_id,
+        "name": name if catalog else None,
+        "timestamp": pd.Timestamp(timestamp),
+        "value": value,
+        "original_value": None,
+        "is_chain_linked": False,
+        "chain_linking_confidence": None,
+        "unit": "index",
+        "frequency": "annual",
+        "domain": "gdp",
+        "source_name": source_name if catalog else None,
+        "source_url": source_url if catalog else None,
+        "record_metadata": record_metadata,
+        "catalog_indicator_id": indicator_id if catalog else None,
+        "parent_name": parent_name,
+        "parent_source_name": parent_source_name,
+        "parent_source_url": parent_source_url,
+    }
+
+
+def load_rows(rows: list[dict[str, Any]], indicator_ids: list[str]) -> pd.DataFrame:
+    """Run ``load_series`` over fabricated join rows."""
+    return DashboardRepository(FakeSession(rows)).load_series(indicator_ids)
+
+
 def test_list_indicators_returns_catalog_frame() -> None:
     rows = [
         {
@@ -65,40 +117,185 @@ def test_list_indicators_returns_catalog_frame() -> None:
 
 def test_load_series_preserves_requested_indicator_order() -> None:
     rows = [
-        {
-            "indicator_id": "second",
-            "name": "Second",
-            "timestamp": pd.Timestamp("2020-01-01", tz="UTC"),
-            "value": 2.0,
-            "original_value": 1.0,
-            "is_chain_linked": True,
-            "chain_linking_confidence": 0.9,
-            "unit": "index",
-            "frequency": "annual",
-            "domain": "gdp",
-            "source_name": "test",
-            "source_url": None,
-            "record_metadata": {"source": "test"},
-        },
-        {
-            "indicator_id": "first",
-            "name": "First",
-            "timestamp": pd.Timestamp("2021-01-01", tz="UTC"),
-            "value": 1.0,
-            "original_value": None,
-            "is_chain_linked": False,
-            "chain_linking_confidence": None,
-            "unit": "index",
-            "frequency": "annual",
-            "domain": "gdp",
-            "source_name": "test",
-            "source_url": None,
-            "record_metadata": None,
-        },
+        gold_row("second", name="Second", timestamp="2020-01-01T00:00:00+00:00", value=2.0),
+        gold_row("first", name="First", timestamp="2021-01-01T00:00:00+00:00"),
     ]
-    frame = DashboardRepository(FakeSession(rows)).load_series(["first", "second"])
+    frame = load_rows(rows, ["first", "second"])
 
     assert frame["indicator_id"].tolist() == ["first", "second"]
+
+
+def test_load_series_keeps_requested_order_then_ascending_timestamp() -> None:
+    rows = [
+        gold_row(
+            "derived",
+            catalog=False,
+            record_metadata={"derived_from": "base"},
+            timestamp="2021-01-01T00:00:00+00:00",
+        ),
+        gold_row("base", name="Base", timestamp="2022-01-01T00:00:00+00:00"),
+        gold_row("base", name="Base", timestamp="2020-01-01T00:00:00+00:00"),
+    ]
+    frame = load_rows(rows, ["base", "derived"])
+
+    assert frame["indicator_id"].tolist() == ["base", "base", "derived"]
+    assert frame["timestamp"].dt.year.tolist() == [2020, 2022, 2021]
+
+
+def test_load_series_classifies_catalog_backed_row_as_base() -> None:
+    rows = [
+        gold_row(
+            "NY.GDP.MKTP.CD",
+            name="GDP",
+            source_name="world_bank",
+            source_url="https://api.worldbank.test",
+        )
+    ]
+    row = load_rows(rows, ["NY.GDP.MKTP.CD"]).iloc[0]
+
+    assert row["name"] == "GDP"
+    assert row["source_name"] == "world_bank"
+    assert row["source_url"] == "https://api.worldbank.test"
+    assert row["series_kind"] == SERIES_KIND_BASE
+    assert row["derived_from"] is None
+    assert bool(row["has_catalog_metadata"]) is True
+
+
+def test_load_series_classifies_row_without_metadata_as_base() -> None:
+    rows = [gold_row("NY.GDP.MKTP.CD", name="GDP", source_name="world_bank")]
+    row = load_rows(rows, ["NY.GDP.MKTP.CD"]).iloc[0]
+
+    assert row["series_kind"] == SERIES_KIND_BASE
+    assert row["derived_from"] is None
+
+
+def test_load_series_inherits_parent_provenance_for_derived_series() -> None:
+    rows = [
+        gold_row(
+            "WB.NY.GDP.MKTP.CD.YOY",
+            catalog=False,
+            record_metadata={"derived_from": "NY.GDP.MKTP.CD", "method": "yoy_growth"},
+            parent_name="GDP",
+            parent_source_name="world_bank",
+            parent_source_url="https://api.worldbank.test",
+        )
+    ]
+    row = load_rows(rows, ["WB.NY.GDP.MKTP.CD.YOY"]).iloc[0]
+
+    assert row["indicator_id"] == "WB.NY.GDP.MKTP.CD.YOY"
+    assert row["series_kind"] == SERIES_KIND_DERIVED
+    assert row["derived_from"] == "NY.GDP.MKTP.CD"
+    assert row["name"] == "GDP"
+    assert row["source_name"] == "world_bank"
+    assert row["source_url"] == "https://api.worldbank.test"
+    assert bool(row["has_catalog_metadata"]) is False
+
+
+def test_load_series_prefers_direct_catalog_over_parent_catalog() -> None:
+    rows = [
+        gold_row(
+            "WB.NY.GDP.MKTP.CD.YOY",
+            name="GDP growth",
+            source_name="dashboard",
+            source_url="https://dashboard.test",
+            record_metadata={"derived_from": "NY.GDP.MKTP.CD"},
+            parent_name="GDP",
+            parent_source_name="world_bank",
+            parent_source_url="https://api.worldbank.test",
+        )
+    ]
+    row = load_rows(rows, ["WB.NY.GDP.MKTP.CD.YOY"]).iloc[0]
+
+    assert row["series_kind"] == SERIES_KIND_DERIVED
+    assert row["name"] == "GDP growth"
+    assert row["source_name"] == "dashboard"
+    assert row["source_url"] == "https://dashboard.test"
+    assert bool(row["has_catalog_metadata"]) is True
+
+
+def test_load_series_leaves_unresolved_parent_provenance_empty() -> None:
+    rows = [
+        gold_row(
+            "WB.NY.GDP.MKTP.CD.YOY",
+            catalog=False,
+            record_metadata={"derived_from": "MISSING.PARENT"},
+        )
+    ]
+    row = load_rows(rows, ["WB.NY.GDP.MKTP.CD.YOY"]).iloc[0]
+
+    assert row["series_kind"] == SERIES_KIND_DERIVED
+    assert row["derived_from"] == "MISSING.PARENT"
+    assert pd.isna(row["name"])
+    assert pd.isna(row["source_name"])
+    assert pd.isna(row["source_url"])
+    assert bool(row["has_catalog_metadata"]) is False
+
+
+def test_load_series_keeps_orphan_base_row_and_flags_it() -> None:
+    rows = [gold_row("ORPHAN.LEVEL", catalog=False)]
+    row = load_rows(rows, ["ORPHAN.LEVEL"]).iloc[0]
+
+    assert row["indicator_id"] == "ORPHAN.LEVEL"
+    assert row["series_kind"] == SERIES_KIND_BASE
+    assert bool(row["has_catalog_metadata"]) is False
+    assert pd.isna(row["name"])
+
+
+@pytest.mark.parametrize(
+    "record_metadata",
+    [
+        None,
+        {},
+        {"method": "yoy_growth"},
+        {"derived_from": None},
+        {"derived_from": ""},
+        {"derived_from": "   "},
+        {"derived_from": 1405},
+        {"derived_from": ["NY.GDP.MKTP.CD"]},
+        "NY.GDP.MKTP.CD",
+    ],
+    ids=[
+        "none",
+        "empty",
+        "absent",
+        "json-null",
+        "empty-string",
+        "blank",
+        "number",
+        "list",
+        "string",
+    ],
+)
+def test_load_series_treats_unusable_derived_from_as_base(record_metadata: Any) -> None:
+    rows = [gold_row("ODD.METADATA", name="Odd", record_metadata=record_metadata)]
+    row = load_rows(rows, ["ODD.METADATA"]).iloc[0]
+
+    assert row["series_kind"] == SERIES_KIND_BASE
+    assert row["derived_from"] is None
+
+
+def test_load_series_drops_only_the_parent_helper_columns() -> None:
+    rows = [gold_row("NY.GDP.MKTP.CD", name="GDP", source_name="world_bank")]
+    frame = load_rows(rows, ["NY.GDP.MKTP.CD"])
+
+    assert not [column for column in frame.columns if column.startswith("parent_")]
+    assert "catalog_indicator_id" not in frame.columns
+    assert frame.columns.tolist() == [
+        "indicator_id",
+        "name",
+        "timestamp",
+        "value",
+        "original_value",
+        "is_chain_linked",
+        "chain_linking_confidence",
+        "unit",
+        "frequency",
+        "domain",
+        "source_name",
+        "source_url",
+        "record_metadata",
+        *SERIES_CLASSIFICATION_COLUMNS,
+    ]
 
 
 def test_load_series_empty_selection_has_stable_columns() -> None:
@@ -107,3 +304,25 @@ def test_load_series_empty_selection_has_stable_columns() -> None:
     assert frame.empty
     assert "chain_linking_confidence" in frame.columns
     assert "record_metadata" in frame.columns
+    assert set(SERIES_CLASSIFICATION_COLUMNS) <= set(frame.columns)
+
+
+def test_load_series_without_matching_rows_has_stable_columns() -> None:
+    frame = DashboardRepository(FakeSession([])).load_series(["missing"])
+
+    assert frame.empty
+    assert set(SERIES_CLASSIFICATION_COLUMNS) <= set(frame.columns)
+
+
+def test_list_derived_ids_without_parents_queries_nothing() -> None:
+    session = FakeSession([])
+    repository = DashboardRepository(session)
+
+    assert repository.list_derived_ids([]) == []
+    assert session.statements == []
+
+
+def test_list_derived_ids_returns_discovered_ids() -> None:
+    repository = DashboardRepository(FakeSession([{"indicator_id": "WB.NY.GDP.MKTP.CD.YOY"}]))
+
+    assert repository.list_derived_ids(["NY.GDP.MKTP.CD"]) == ["WB.NY.GDP.MKTP.CD.YOY"]

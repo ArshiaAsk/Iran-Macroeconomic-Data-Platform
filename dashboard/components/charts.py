@@ -119,6 +119,16 @@ def build_coverage_chart(coverage: pd.DataFrame) -> BaseFigure:
 
 
 def _indicator_label(row: pd.Series) -> str:
+    """Label a series by catalog name, falling back to its Gold indicator id.
+
+    ``load_series`` LEFT JOINs the catalog, so ``name`` is genuinely absent for a
+    series without a catalog row (and for an unresolvable derived parent) — the
+    label must then be the Gold id, never the string ``"None"``.
+    """
+    name = row.get("name")
+    label = row["indicator_id"]
+    if isinstance(name, str) and name.strip():
+        label = name.strip()
     unit = row.get("unit")
     suffix = f" ({unit})" if pd.notna(unit) else ""
-    return f"{row.get('name', row['indicator_id'])}{suffix}"
+    return f"{label}{suffix}"

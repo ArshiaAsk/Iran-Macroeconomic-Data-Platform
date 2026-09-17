@@ -1,6 +1,7 @@
 """Unit tests for pure Plotly chart construction."""
 
 import pandas as pd
+import pytest
 
 from dashboard.components.charts import (
     build_chain_linking_chart,
@@ -49,3 +50,13 @@ def test_correlation_uses_exact_timestamp_matches() -> None:
 
     assert bundle.join_counts.loc["a", "b"] == 1
     assert pd.isna(bundle.correlation.loc["a", "b"])
+
+
+@pytest.mark.parametrize("missing", [None, float("nan"), "", "   "])
+def test_time_series_chart_labels_catalog_less_series_by_indicator_id(missing: object) -> None:
+    frame = series_frame()
+    frame["name"] = [missing, missing, "B", "B"]
+
+    figure = build_time_series_chart(frame)
+
+    assert {trace.name for trace in figure.data} == {"a (index)", "B (index)"}

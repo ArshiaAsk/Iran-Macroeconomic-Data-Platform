@@ -1,14 +1,51 @@
 """Read-only database repository for the Streamlit dashboard."""
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
 import pandas as pd
 from sqlalchemy import Integer, and_, asc, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from src.database.schema import DataCollectionLog, GoldAnalytical, IndicatorCatalog
+
+#: ``series_kind`` values. ``base`` is a level series; ``derived`` is a
+#: platform-computed series carrying ``record_metadata["derived_from"]``.
+SERIES_KIND_BASE = "base"
+SERIES_KIND_DERIVED = "derived"
+
+#: Columns resolved from the catalog: the observation's own row when it exists,
+#: otherwise the parent catalog row named by ``derived_from``.
+_CATALOG_RESOLVED_COLUMNS = ("name", "source_name", "source_url")
+
+#: Extra frame columns produced by :meth:`DashboardRepository.load_series`.
+SERIES_CLASSIFICATION_COLUMNS = ("series_kind", "derived_from", "has_catalog_metadata")
+
+
+def _derived_from(record_metadata: object) -> str | None:
+    """Return the parent indicator id recorded in Gold metadata, else ``None``.
+
+    Derivedness is read from the ETL-written ``record_metadata["derived_from"]``
+    key only; indicator ids are never parsed. A missing, non-mapping, non-string
+    or blank value is not a usable parent reference, so the row stays a base
+    series and no parent catalog row is attached to it.
+
+    Examples:
+        >>> _derived_from({"derived_from": "WB.NY.GDP.MKTP.CD"})
+        'WB.NY.GDP.MKTP.CD'
+        >>> _derived_from({"method": "yoy_growth"}) is None
+        True
+        >>> _derived_from(None) is None
+        True
+    """
+    if not isinstance(record_metadata, Mapping):
+        return None
+    parent = record_metadata.get("derived_from")
+    if not isinstance(parent, str):
+        return None
+    return parent.strip() or None
 
 
 class DashboardRepository:
@@ -73,7 +110,31 @@ class DashboardRepository:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> pd.DataFrame:
-        """Return Gold observations without interpolation or frequency conversion."""
+        """Return Gold observations without interpolation or frequency conversion.
+
+        The query is driven by Gold and LEFT JOINs ``indicator_catalog`` twice:
+        once for the observation's own catalog row and once for the parent named
+        by ``record_metadata["derived_from"]``. Derived Gold series therefore stay
+        visible even though ``connector.discover()`` never emits a catalog row for
+        them, and they inherit their parent's ``name``/``source_name``/
+        ``source_url``. A genuinely orphan series (no catalog row and no resolvable
+        parent) keeps ``NULL`` provenance and is flagged by
+        ``has_catalog_metadata`` instead of being dropped or given a guessed
+        source.
+
+        Added columns, all derived from Gold metadata rather than from ids:
+
+        ``series_kind``
+            ``derived`` when ``record_metadata["derived_from"]`` is a usable
+            parent id, otherwise ``base``.
+        ``derived_from``
+            The parent indicator id recorded in Gold metadata, else ``None``.
+        ``has_catalog_metadata``
+            Whether the observation's own indicator id has a catalog row.
+
+        Existing columns keep their names and ordering semantics: rows are
+        returned in the requested indicator order, then by ascending timestamp.
+        """
         if not indicator_ids:
             return self._empty_series()
         conditions: list[ColumnElement[bool]] = [GoldAnalytical.indicator_id.in_(indicator_ids)]
@@ -82,10 +143,14 @@ class DashboardRepository:
         if end_date is not None:
             conditions.append(GoldAnalytical.timestamp <= end_date)
 
+        catalog = aliased(IndicatorCatalog, name="catalog")
+        parent_catalog = aliased(IndicatorCatalog, name="parent_catalog")
+        derived_from = GoldAnalytical.record_metadata["derived_from"].astext
+
         statement = (
             select(
                 GoldAnalytical.indicator_id,
-                IndicatorCatalog.name,
+                catalog.name,
                 GoldAnalytical.timestamp,
                 GoldAnalytical.value,
                 GoldAnalytical.original_value,
@@ -94,20 +159,28 @@ class DashboardRepository:
                 GoldAnalytical.unit,
                 GoldAnalytical.frequency,
                 GoldAnalytical.domain,
-                IndicatorCatalog.source_name,
-                IndicatorCatalog.source_url,
+                catalog.source_name,
+                catalog.source_url,
                 GoldAnalytical.record_metadata,
+                catalog.indicator_id.label("catalog_indicator_id"),
+                parent_catalog.name.label("parent_name"),
+                parent_catalog.source_name.label("parent_source_name"),
+                parent_catalog.source_url.label("parent_source_url"),
             )
             .join(
-                IndicatorCatalog,
-                IndicatorCatalog.indicator_id == GoldAnalytical.indicator_id,
+                catalog,
+                catalog.indicator_id == GoldAnalytical.indicator_id,
+                isouter=True,
             )
+            .join(parent_catalog, parent_catalog.indicator_id == derived_from, isouter=True)
             .where(and_(*conditions))
             .order_by(asc(GoldAnalytical.timestamp), asc(GoldAnalytical.indicator_id))
         )
-        frame = self._frame(self.session.execute(statement).mappings().all())
+        frame = self._resolve_provenance(
+            self._frame(self.session.execute(statement).mappings().all())
+        )
         if frame.empty:
-            return frame
+            return self._empty_series()
         order = pd.Categorical(frame["indicator_id"], categories=indicator_ids, ordered=True)
         frame["_indicator_order"] = order
         frame = frame.sort_values(["_indicator_order", "timestamp"], kind="stable")
@@ -148,6 +221,26 @@ class DashboardRepository:
         if catalog.empty:
             return observed
         return catalog.merge(observed, on="indicator_id", how="left")
+
+    def list_derived_ids(self, parent_ids: list[str]) -> list[str]:
+        """Return the derived Gold ids whose parent is in ``parent_ids``.
+
+        Derived series are discovered from Gold's ``record_metadata``
+        (``derived_from``), never from a catalog row, an id pattern or a
+        hardcoded list, so a new derivation strategy becomes visible without a
+        dashboard change. The result is sorted and de-duplicated by the database.
+        """
+        if not parent_ids:
+            return []
+        derived_from = GoldAnalytical.record_metadata["derived_from"].astext
+        statement = (
+            select(GoldAnalytical.indicator_id)
+            .where(derived_from.in_(parent_ids))
+            .distinct()
+            .order_by(asc(GoldAnalytical.indicator_id))
+        )
+        rows = self.session.execute(statement).mappings().all()
+        return [str(row["indicator_id"]) for row in rows]
 
     def source_freshness(self) -> pd.DataFrame:
         """Return the latest collection result for each source."""
@@ -196,6 +289,35 @@ class DashboardRepository:
         return pd.DataFrame([dict(row) for row in rows])
 
     @staticmethod
+    def _resolve_provenance(frame: pd.DataFrame) -> pd.DataFrame:
+        """Classify each Gold row and fill catalog provenance from its parent.
+
+        The query returns the observation's own catalog fields plus the parent
+        catalog fields as ``parent_*``; those parent columns are only folded in
+        when the observation has no catalog row of its own, and are then dropped
+        so the frame contract stays stable. ``has_catalog_metadata`` records
+        whether the fold happened, i.e. whether the series is a genuine orphan.
+        """
+        if frame.empty:
+            return frame
+        resolved = frame.copy()
+        derived_from = resolved["record_metadata"].map(_derived_from)
+        resolved["series_kind"] = [
+            SERIES_KIND_DERIVED if parent else SERIES_KIND_BASE for parent in derived_from
+        ]
+        resolved["derived_from"] = derived_from
+        resolved["has_catalog_metadata"] = resolved["catalog_indicator_id"].notna()
+        for column in _CATALOG_RESOLVED_COLUMNS:
+            resolved[column] = resolved[column].where(
+                resolved[column].notna(), resolved[f"parent_{column}"]
+            )
+        helper_columns = [
+            "catalog_indicator_id",
+            *[f"parent_{c}" for c in _CATALOG_RESOLVED_COLUMNS],
+        ]
+        return resolved.drop(columns=helper_columns)
+
+    @staticmethod
     def _empty_series() -> pd.DataFrame:
         return pd.DataFrame(
             columns=[
@@ -212,5 +334,6 @@ class DashboardRepository:
                 "source_name",
                 "source_url",
                 "record_metadata",
+                *SERIES_CLASSIFICATION_COLUMNS,
             ]
         )
