@@ -64,6 +64,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "nav.inflation": "تورم",
         "nav.gdp": "تولید ناخالص داخلی و اقتصاد",
         "nav.trade_energy": "تجارت و انرژی",
+        "nav.welfare": "رفاه و آمارگیری خانوار",
         "nav.fx_gold": "ارز و طلا",
         # In-page titles (same keys as nav.*, kept separate so they cannot drift
         # from the routing label without a failing test).
@@ -73,6 +74,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "page.inflation": "تورم",
         "page.gdp": "تولید ناخالص داخلی و اقتصاد",
         "page.trade_energy": "تجارت و انرژی",
+        "page.welfare": "رفاه و آمارگیری خانوار",
         "page.fx_gold": "ارز و طلا",
         # Subheaders and expanders.
         "section.indicators_by_domain": "شاخص‌ها به تفکیک حوزه",
@@ -81,6 +83,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.key_indicators": "شاخص‌های کلیدی",
         "section.exact_join_counts": "تعداد تطابق‌های دقیق زمانی",
         "section.observations": "مشاهدات",
+        # Welfare & Survey page (owns the `welfare` domain).
+        "section.hbsir_gini_poverty": "روند جینی و فقر نسبی",
+        "section.hbsir_deciles": "سهم درآمدی دهک‌ها",
+        "section.hbsir_survey_years": "سال‌های آمارگیری موجود",
+        "section.welfare_other_indicators": "سایر شاخص‌های حوزه رفاه",
         # Metric blocks.
         "metric.matching_indicators": "شاخص‌های منطبق",
         "metric.active_indicators": "شاخص‌های فعال",
@@ -99,6 +106,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "filter.start_after_end": "تاریخ شروع باید پیش از تاریخ پایان یا برابر آن باشد.",
         # Chart labels and legends.
         "chart.timestamp": "زمان",
+        "chart.survey_year": "سال آمارگیری",
         "chart.value": "مقدار",
         "chart.indicator": "شاخص",
         "chart.gold_observations": "مشاهدات لایه طلایی",
@@ -138,6 +146,12 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.records_collected": "رکوردهای گردآوری‌شده",
         "table.error_message": "پیام خطا",
         "table.indicator_count": "تعداد شاخص",
+        # HBSIR survey-year metadata panel.
+        "table.survey_year": "سال آمارگیری",
+        "table.survey_year_end": "پایان سال آمارگیری (شمسی)",
+        "table.period_end": "پایان دوره ذخیره‌شده (میلادی)",
+        "table.hbsir_indicators": "سری‌های HBSIR",
+        "table.hbsir_observations": "مشاهدات HBSIR",
         # Export controls.
         "export.download_csv": "دریافت CSV",
         "export.download_excel": "دریافت Excel",
@@ -152,6 +166,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "empty.no_observations": "هیچ مشاهده‌ای با شاخص‌ها و بازه زمانی انتخاب‌شده مطابقت ندارد.",
         "empty.no_collection_runs": "هنوز هیچ اجرای گردآوری ثبت نشده است.",
         "empty.no_quality_rows": "هیچ مشاهده لایه طلایی با پالایه‌های فعلی مطابقت ندارد.",
+        "empty.no_hbsir_observations": "هیچ مشاهده HBSIR در بازه زمانی انتخاب‌شده موجود نیست.",
         # Warnings.
         "warn.catalog_empty": (
             "فهرست شاخص‌ها خالی است. پیش از استفاده از داشبورد، یک خط لوله ETL را اجرا کنید."
@@ -170,6 +185,16 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         ),
         "warn.missing_periods": (
             "بازه زمانی انتخاب‌شده دوره‌های مفقود دارد. هیچ مقداری جایگزین نشده است."
+        ),
+        # HBSIR caveats: the measure is relative and the values are computed by
+        # this platform from the survey microdata, not published HBSIR figures.
+        "warn.hbsir_relative_poverty": (
+            "نرخ فقر این صفحه **نسبی** است: سهم وزنی خانوارهای زیر «k × میانه وزنی درآمد "
+            "(k = {k})». این معیار خط فقر رسمی کالری‌پایه ایران نیست."
+        ),
+        "warn.hbsir_computed_values": (
+            "دوازده سری HBSIR از ریزمی‌کروداده آمارگیری بودجه خانوار محاسبه شده‌اند و ارقام "
+            "رسمی منتشرشده نیستند؛ واحد تحلیل، خانوار (بدون تعدیل هم‌ارز) و وزن‌ها، وزن‌های نمونه‌گیری است."
         ),
         # Shared value placeholders.
         "value.unknown": "نامشخص",

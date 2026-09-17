@@ -7,6 +7,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseFigure
 
+from dashboard.i18n import t
+
+#: Categorical x-axis column of a survey-year chart: the Jalali year label of each
+#: stored period end (see ``dashboard.page_view.survey_year_frame``).
+SURVEY_YEAR_COLUMN = "survey_year"
+
 
 def build_time_series_chart(series: pd.DataFrame) -> BaseFigure:
     """Build a time-series chart with a separate panel per indicator."""
@@ -25,6 +31,55 @@ def build_time_series_chart(series: pd.DataFrame) -> BaseFigure:
     )
     figure.for_each_yaxis(lambda axis: axis.update(matches=None))
     figure.update_layout(height=max(420, 230 * frame["indicator_id"].nunique()))
+    return figure
+
+
+def build_survey_year_chart(
+    series: pd.DataFrame,
+    *,
+    facet_indicators: bool = True,
+) -> BaseFigure:
+    """Build a line chart on a Jalali survey-year axis.
+
+    The x-axis is the categorical Jalali year label of each stored period end
+    (``SURVEY_YEAR_COLUMN``), which is how HBSIR's annual survey years are read:
+    the survey year is the Jalali year containing the stored period end, never the
+    Gregorian date's year. Rows are plotted chronologically, so the category order
+    is the survey order even though the labels are strings.
+
+    Args:
+        series: Frame carrying ``SURVEY_YEAR_COLUMN``, ``value``, ``indicator_id``
+            and (when the catalog resolved it) ``name``/``unit``
+        facet_indicators: ``True`` (the default) gives every indicator its own
+            panel, which is the unit-safe mode when the selected series carry
+            different units (a Gini index next to a percentage share). Pass
+            ``False`` for series that already share a unit, such as the ten
+            decile shares.
+
+    Returns:
+        A Plotly figure, empty when there is nothing to plot
+    """
+    if series.empty:
+        return go.Figure()
+    frame = series.copy()
+    frame["label"] = frame.apply(_indicator_label, axis=1)
+    if "timestamp" in frame.columns:
+        frame = frame.sort_values("timestamp")
+    facet: dict[str, str] = {"facet_row": "indicator_id"} if facet_indicators else {}
+    figure = px.line(
+        frame,
+        x=SURVEY_YEAR_COLUMN,
+        y="value",
+        color="label",
+        markers=True,
+        labels={SURVEY_YEAR_COLUMN: t("chart.survey_year"), "value": t("chart.value")},
+        **facet,
+    )
+    if facet_indicators:
+        figure.for_each_yaxis(lambda axis: axis.update(matches=None))
+        figure.update_layout(height=max(420, 230 * frame["indicator_id"].nunique()))
+    else:
+        figure.update_layout(height=420)
     return figure
 
 

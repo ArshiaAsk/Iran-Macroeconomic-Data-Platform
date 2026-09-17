@@ -16,9 +16,9 @@ DASHBOARD_ROOT = REPOSITORY_ROOT / "dashboard"
 PLAN_DOMAINS = frozenset(
     {"gdp", "inflation", "trade", "welfare", "energy", "fx", "gold", "labor", "market"}
 )
-# Welfare & Survey, Labor and Market are Tasks 10-12: their domains stay
-# deliberately unowned until those pages are registered here.
-PENDING_DOMAINS = frozenset({"welfare", "labor", "market"})
+# Labor and Market are later tasks: their domains stay deliberately unowned until
+# those pages are registered here. `welfare` is owned by the Welfare & Survey page.
+PENDING_DOMAINS = frozenset({"labor", "market"})
 
 
 def _owner_counts() -> Counter[str]:
@@ -67,8 +67,9 @@ def test_domain_exceptions_from_the_plan_hold() -> None:
     # `economy` is dead: no source emits it, so no page may claim it.
     assert "economy" not in _owner_counts()
     assert specs["gdp"].domains == ("gdp",)
-    # `welfare` belongs to the Welfare & Survey page (Task 12), not to this page.
+    # `welfare` belongs to the Welfare & Survey page, not to the trade page.
     assert specs["trade_energy"].domains == ("trade", "energy")
+    assert specs["welfare"].domains == ("welfare",)
     assert specs["inflation"].domains == ("inflation",)
     assert specs["fx_gold"].domains == ("fx", "gold")
     # The plan's all-domain views own no domain at all.

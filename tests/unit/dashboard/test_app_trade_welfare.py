@@ -1,4 +1,4 @@
-"""AppTest smoke test for the trade, welfare, and energy page."""
+"""AppTest smoke test for the trade and energy page."""
 
 from tests.unit.dashboard.app_smoke import app_test
 

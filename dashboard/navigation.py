@@ -9,10 +9,9 @@ entrypoint, which is what ``st.Page`` resolves against.
 Owned domains mirror the Phase 7.1 plan: the all-domain views (Overview,
 Comparison & Correlation, Data Catalog) own no domain, and every other page owns
 exactly the domains it renders. ``economy`` is a dead domain and is never
-claimed. The Welfare & Survey, Labor and Market pages land in Tasks 10-12, so
-``welfare``, ``labor`` and ``market`` stay unowned until those pages are
-registered here; until Task 12 splits it, ``pages/4_Trade_Welfare_Energy.py``
-still renders the ``welfare`` indicators standalone.
+claimed. The Welfare & Survey page owns ``welfare`` (split out of the old
+Trade/Welfare/Energy page); the Labor and Market pages land in later tasks, so
+``labor`` and ``market`` stay unowned until they are registered here.
 """
 
 from dataclasses import dataclass
@@ -81,10 +80,18 @@ PAGES: Final[tuple[PageSpec, ...]] = (
     PageSpec(
         key="trade_energy",
         path="pages/4_Trade_Welfare_Energy.py",
-        title="Trade, Welfare & Energy",
+        title="Trade & Energy",
         icon="🚢",
         group="Domains",
         domains=("trade", "energy"),
+    ),
+    PageSpec(
+        key="welfare",
+        path="pages/8_Welfare_Survey.py",
+        title="Welfare & Survey",
+        icon="🏠",
+        group="Domains",
+        domains=("welfare",),
     ),
     PageSpec(
         key="fx_gold",
