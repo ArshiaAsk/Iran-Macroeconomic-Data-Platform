@@ -1,0 +1,215 @@
+"""Display-direction formatting tests for dashboard/formatting.py.
+
+Covers the two policies that are easy to get subtly wrong: period ends are stored
+at UTC midnight (so the Tehran-local Jalali day is stable), while daily snapshot
+sources store a scrape instant that must be converted to Tehran *before* the
+displayed Jalali day is decided. The Jalali-day round trip is asserted end to end.
+"""
+
+from datetime import UTC, date, datetime, timedelta
+
+import jdatetime
+import pytest
+
+from dashboard.formatting import (
+    JALALI_MONTH_NAMES,
+    JALALI_SEASONS,
+    MISSING_VALUE,
+    PERSIAN_DECIMAL_SEPARATOR,
+    PERSIAN_PERCENT_SIGN,
+    PERSIAN_THOUSANDS_SEPARATOR,
+    TEHRAN_TIMEZONE,
+    format_large_number,
+    format_number,
+    format_percent,
+    gregorian_to_jalali,
+    gregorian_year_label,
+    jalali_date_label,
+    jalali_day_bounds,
+    jalali_month_label,
+    jalali_period_label,
+    jalali_year_label,
+    tehran_day_bounds,
+    tehran_timestamp_label,
+    to_ascii_digits,
+    to_persian_digits,
+    to_tehran,
+)
+from src.utils.periods import annual_period_end, month_period_end
+from src.utils.persian import iranian_year_end
+
+# A Jalali leap year (Esfand has 30 days) inside the retained survey window.
+JALALI_LEAP_YEAR = 1403
+EVENING_UTC = datetime(2026, 9, 8, 20, 30, tzinfo=UTC)
+EVENING_JALALI_DAY = jdatetime.date(1405, 6, 18)
+
+
+def test_digit_round_trip() -> None:
+    latin = "1405-06-18 12:34:56"
+    persian = "۱۴۰۵-۰۶-۱۸ ۱۲:۳۴:۵۶"
+
+    assert to_persian_digits(latin) == persian
+    assert to_ascii_digits(persian) == latin
+    assert to_persian_digits(to_ascii_digits(persian)) == persian
+
+
+def test_to_ascii_digits_keeps_separators() -> None:
+    # Display normalisation must not strip separators the way the ingestion
+    # normaliser does; only the numerals change.
+    assert to_ascii_digits("١٢٣٬٤٥٦") == "123٬456"
+
+
+def test_format_number_uses_persian_digits_and_separators() -> None:
+    assert PERSIAN_THOUSANDS_SEPARATOR == "٬"
+    assert PERSIAN_DECIMAL_SEPARATOR == "٫"
+    assert format_number(1234567.5) == "۱٬۲۳۴٬۵۶۷٫۵"
+
+
+def test_format_number_latin_digits_for_exports() -> None:
+    assert format_number(1234.5, digit_mode="latin") == "1,234.5"
+
+
+def test_format_number_handles_negatives() -> None:
+    assert format_number(-1234.5) == "-۱٬۲۳۴٫۵"
+    assert format_number(-1234.5, digit_mode="latin") == "-1,234.5"
+
+
+def test_format_number_decimal_places_and_thousands_toggle() -> None:
+    assert format_number(2, decimal_places=2) == "۲٫۰۰"
+    assert format_number(1234, thousands=False) == "۱۲۳۴"
+    assert format_number(1234, thousands=False, digit_mode="latin") == "1234"
+
+
+def test_missing_values_are_shown_as_unknown() -> None:
+    assert format_number(None) == MISSING_VALUE
+    assert format_number(float("nan")) == MISSING_VALUE
+    assert format_percent(None) == MISSING_VALUE
+    assert format_large_number(None) == MISSING_VALUE
+    assert MISSING_VALUE == "—"
+
+
+def test_format_percent() -> None:
+    assert PERSIAN_PERCENT_SIGN == "٪"
+    assert format_percent(2.5) == "۲٫۵٪"
+    assert format_percent(2.5, digit_mode="latin") == "2.5%"
+    assert format_percent(-0.5) == "-۰٫۵٪"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (0, "۰"),
+        (950, "۹۵۰"),
+        (1500, "۱٫۵ هزار"),
+        (2_000_000, "۲ میلیون"),
+        (1_500_000_000, "۱٫۵ میلیارد"),
+        (2_000_000_000_000, "۲ هزار میلیارد"),
+        (-1_500_000_000, "-۱٫۵ میلیارد"),
+    ],
+)
+def test_format_large_number(value: float, expected: str) -> None:
+    assert format_large_number(value) == expected
+
+
+def test_format_large_number_keeps_latin_digits_for_exports() -> None:
+    assert format_large_number(1_500_000, digit_mode="latin") == "1.5 میلیون"
+
+
+def test_to_tehran_uses_the_iana_zone_and_treats_naive_as_utc() -> None:
+    assert TEHRAN_TIMEZONE == "Asia/Tehran"
+    naive = datetime(2026, 9, 8, 20, 30)  # noqa: DTZ001 - naive input is the case under test
+    assert to_tehran(naive) == to_tehran(EVENING_UTC)
+    assert to_tehran(EVENING_UTC).utcoffset() == timedelta(hours=3, minutes=30)
+
+
+def test_gregorian_to_jalali_of_an_evening_instant_uses_tehran() -> None:
+    assert gregorian_to_jalali(datetime(2026, 9, 8, tzinfo=UTC)) == jdatetime.date(1405, 6, 17)
+    assert gregorian_to_jalali(EVENING_UTC) == EVENING_JALALI_DAY
+
+
+def test_jalali_month_names_follow_the_shared_month_map() -> None:
+    assert JALALI_MONTH_NAMES[0] == "فروردین"
+    assert JALALI_MONTH_NAMES[5] == "شهریور"
+    assert JALALI_MONTH_NAMES[-1] == "اسفند"
+    assert JALALI_SEASONS == ("بهار", "تابستان", "پاییز", "زمستان")
+
+
+def test_month_period_end_labelling() -> None:
+    end = month_period_end(2026, 7)
+
+    assert gregorian_to_jalali(end) == jdatetime.date(1405, 5, 9)
+    assert jalali_date_label(end) == "۹ مرداد ۱۴۰۵"
+    assert jalali_month_label(end) == "مرداد ۱۴۰۵"
+    assert jalali_period_label(end, "monthly") == "مرداد ۱۴۰۵"
+
+
+def test_annual_period_end_labelling() -> None:
+    end = annual_period_end(2021)
+
+    assert gregorian_to_jalali(end) == jdatetime.date(1400, 10, 10)
+    assert jalali_year_label(end) == "۱۴۰۰"
+    assert gregorian_year_label(end) == "۲۰۲۱"
+    assert jalali_period_label(end, "annual") == "۱۴۰۰"
+
+
+def test_leap_esfand_and_hbsir_year_end_round_trip() -> None:
+    end = iranian_year_end(JALALI_LEAP_YEAR)
+
+    assert jdatetime.date(JALALI_LEAP_YEAR, 12, 30).togregorian() == end.date()
+    assert gregorian_to_jalali(end) == jdatetime.date(JALALI_LEAP_YEAR, 12, 30)
+    assert jalali_date_label(end) == "۳۰ اسفند ۱۴۰۳"
+    assert jalali_period_label(end, "annual") == "۱۴۰۳"
+
+
+def test_jalali_period_label_for_other_frequencies_falls_back_to_the_date() -> None:
+    assert jalali_period_label(EVENING_UTC, "quarterly") == "تابستان ۱۴۰۵"
+    assert jalali_period_label(EVENING_UTC, "daily") == jalali_date_label(EVENING_UTC)
+    assert jalali_period_label(EVENING_UTC, "hourly") == jalali_date_label(EVENING_UTC)
+
+
+def test_latin_digit_mode_keeps_text_persian() -> None:
+    assert jalali_period_label(EVENING_UTC, "annual", digit_mode="latin") == "1405"
+    assert jalali_date_label(EVENING_UTC, digit_mode="latin") == "18 شهریور 1405"
+
+
+def test_tehran_timestamp_label_localizes_the_instant() -> None:
+    assert tehran_timestamp_label(EVENING_UTC) == "۱۸ شهریور ۱۴۰۵، ۰۰:۰۰"
+    assert (
+        tehran_timestamp_label(datetime(2026, 9, 8, 12, 5, tzinfo=UTC), digit_mode="latin")
+        == "17 شهریور 1405، 15:35"
+    )
+
+
+def test_tehran_day_bounds_are_inclusive_utc_bounds() -> None:
+    start, end = tehran_day_bounds(date(2026, 9, 8))
+
+    assert start == datetime(2026, 9, 7, 20, 30, tzinfo=UTC)
+    assert end == datetime(2026, 9, 8, 20, 29, 59, 999999, tzinfo=UTC)
+    assert to_tehran(start).date() == date(2026, 9, 8)
+    assert to_tehran(end).date() == date(2026, 9, 8)
+
+
+@pytest.mark.parametrize(
+    "jalali_day",
+    [
+        jdatetime.date(1405, 1, 1),
+        jdatetime.date(1405, 6, 18),
+        jdatetime.date(1403, 12, 30),
+        jdatetime.date(1400, 10, 10),
+    ],
+)
+def test_jalali_day_bounds_round_trip(jalali_day: jdatetime.date) -> None:
+    start, end = jalali_day_bounds(jalali_day)
+
+    assert start <= end
+    assert gregorian_to_jalali(start) == jalali_day
+    assert gregorian_to_jalali(end) == jalali_day
+    assert to_tehran(start).date() == jalali_day.togregorian()
+    assert to_tehran(end).date() == jalali_day.togregorian()
+
+
+def test_an_evening_instant_falls_inside_its_jalali_day_bounds() -> None:
+    start, end = jalali_day_bounds(EVENING_JALALI_DAY)
+
+    assert start <= EVENING_UTC <= end
+    assert gregorian_to_jalali(EVENING_UTC) == EVENING_JALALI_DAY

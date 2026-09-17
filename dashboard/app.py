@@ -7,6 +7,7 @@ still be driven directly by ``AppTest``.
 
 import streamlit as st
 
+from dashboard.components.direction import inject_direction_css
 from dashboard.connection import get_connection
 from dashboard.navigation import GROUPS, PAGES, PageSpec
 
@@ -43,6 +44,9 @@ def main() -> None:
     )
     navigation = st.navigation(build_navigation(), position="sidebar")
     with st.sidebar:
+        # Injected in the sidebar so the (invisible) stylesheet element cannot
+        # push page content down, and re-emitted every run so Streamlit keeps it.
+        inject_direction_css()
         render_database_status()
     navigation.run()
 
