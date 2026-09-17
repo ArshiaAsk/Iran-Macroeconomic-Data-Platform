@@ -3,14 +3,39 @@
 import asyncio
 import os
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Final
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 import streamlit as st
 from kaleido import Kaleido
+
+from src.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+#: Static chart formats that require Chromium and are rendered on demand.
+IMAGE_EXPORT_FORMATS: Final[tuple[str, ...]] = ("png", "svg")
+
+#: Download MIME types keyed by image format.
+IMAGE_MIME_TYPES: Final[dict[str, str]] = {
+    "png": "image/png",
+    "svg": "image/svg+xml",
+}
+
+
+@dataclass(frozen=True)
+class ChromiumCapability:
+    """Result of probing for the Chromium executable used by image exports."""
+
+    available: bool
+    executable: str | None = None
+    message: str = ""
 
 
 def prepare_export_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -94,8 +119,15 @@ def render_data_downloads(frame: pd.DataFrame, file_prefix: str) -> None:
 
 
 def render_chart_downloads(figure: go.Figure, file_prefix: str) -> None:
-    """Render HTML, PNG, and SVG chart download buttons."""
-    images = serialize_figure_images(figure, ("png", "svg"))
+    """Render an eager HTML download and lazy PNG/SVG chart download controls.
+
+    HTML is cheap, so its control is ready on page load. PNG/SVG rendering needs
+    Chromium: the page only reports whether it is usable, and the image bytes are
+    rendered (and cached per figure content) when the matching control is
+    activated. A missing browser disables those controls instead of failing the
+    page.
+    """
+    capability = detect_chromium_capability()
     columns = st.columns(3)
     with columns[0]:
         st.download_button(
@@ -103,21 +135,58 @@ def render_chart_downloads(figure: go.Figure, file_prefix: str) -> None:
             data=serialize_figure_html(figure),
             file_name=f"{file_prefix}.html",
             mime="text/html",
+            key=f"{file_prefix}-html",
         )
-    with columns[1]:
-        st.download_button(
-            "Download PNG",
-            data=images["png"],
-            file_name=f"{file_prefix}.png",
-            mime="image/png",
-        )
-    with columns[2]:
-        st.download_button(
-            "Download SVG",
-            data=images["svg"],
-            file_name=f"{file_prefix}.svg",
-            mime="image/svg+xml",
-        )
+    for column, image_format in zip(columns[1:], IMAGE_EXPORT_FORMATS, strict=True):
+        with column:
+            _render_image_download(figure, file_prefix, image_format, capability)
+    if not capability.available:
+        st.caption(capability.message)
+
+
+def _render_image_download(
+    figure: go.Figure,
+    file_prefix: str,
+    image_format: str,
+    capability: ChromiumCapability,
+) -> None:
+    """Render one on-demand image control inside the caller's column."""
+    label = f"Download {image_format.upper()}"
+    key = f"{file_prefix}-{image_format}"
+    if not capability.available:
+        st.button(label, key=f"{key}-trigger", disabled=True)
+        return
+    if not st.button(label, key=f"{key}-trigger"):
+        return
+    try:
+        payload = cached_figure_image(figure.to_json(), image_format)
+    except Exception as error:
+        logger.exception("Chart image export failed for %s", image_format)
+        st.error(f"{label} failed: {error}")
+        return
+    st.download_button(
+        label,
+        data=payload,
+        file_name=f"{file_prefix}.{image_format}",
+        mime=IMAGE_MIME_TYPES[image_format],
+        key=f"{key}-download",
+        on_click="ignore",
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
+def cached_figure_image(figure_json: str, image_format: str) -> bytes:
+    """Render one image format once per figure content and reuse the bytes."""
+    return serialize_figure_image(pio.from_json(figure_json), image_format)
+
+
+def detect_chromium_capability() -> ChromiumCapability:
+    """Probe Chromium availability without raising, so pages load without it."""
+    try:
+        executable = find_chromium_executable()
+    except RuntimeError as error:
+        return ChromiumCapability(available=False, message=str(error))
+    return ChromiumCapability(available=True, executable=executable)
 
 
 def _iso_timestamp(value: object) -> object:
@@ -137,7 +206,13 @@ def _json_value(value: object) -> object:
 
 
 def find_chromium_executable() -> str:
-    """Find a usable Chromium executable without relying on Snap wrappers."""
+    """Find a usable Chromium executable without relying on Snap wrappers.
+
+    Raises:
+        RuntimeError: If no usable executable is configured or installed. The
+            message names the ``DASHBOARD_CHROME_PATH`` override and
+            ``plotly_get_chrome`` so the caller can surface it to the user.
+    """
     configured = os.environ.get("DASHBOARD_CHROME_PATH")
     if configured:
         path = Path(configured)
