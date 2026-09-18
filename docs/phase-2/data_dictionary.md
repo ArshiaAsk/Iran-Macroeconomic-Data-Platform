@@ -2,6 +2,16 @@
 
 **Status:** ✅ OBSERVED — recorded from a real end-to-end run on August 19, 2026.
 
+> **Dashboard surfacing (Phase 7.1).** Every indicator documented below is
+> reachable in the Persian dashboard
+> ([runbook](../phase-7.1/README.md#persian-page-guide)): World Bank/IMF/EIA and
+> the SCI CPIs on the domain pages (Inflation, GDP & Economy, Trade & Energy,
+> FX & Gold), the SCI expenditure deciles on the Inflation page, the SCI
+> quarterly unemployment on the Labor page, TSETMC on the Market page, and
+> HBSIR on the Welfare & Survey page. Derived Gold series (annual `YOY`,
+> `RET1D`, `MA30`, `.ME`) are reachable through the per-page "include derived"
+> control and carry their parent's source provenance.
+
 Every number below was read out of the database after
 `poetry run python -m src.connectors.world_bank` completed, not copied from a
 source catalogue. Where the World Bank advertises coverage that Iran's series
@@ -388,12 +398,13 @@ publish derived series.
 - Parser: 45 tests with fixture HTML (Persian digits, missing elements, dates)
 - Scraper: 39 tests with mocked Playwright (retries, discovery, validation)
 
-## Orchestration (Pending)
+## Orchestration
 
-Phase 3 **Airflow DAGs** (not yet implemented):
-- **Daily scrape:** Run at 11 PM Tehran time (market close)
+Phase 3 **Airflow DAGs** are implemented (this note previously said "not yet
+implemented" — corrected during the Phase 7.1 documentation pass):
+- **Daily scrape:** runs at 11 PM Tehran time (market close)
 - **Retry logic:** 3 attempts with exponential backoff
-- **Alerting:** Slack/email on consecutive failures
+- **Alerting:** failure callbacks on consecutive failures
 - **Rate limiting:** 1-2 requests/second, respect robots.txt
 
 ## Known Limitations

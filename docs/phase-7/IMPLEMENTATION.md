@@ -2,6 +2,10 @@
 
 **Status:** ✅ IMPLEMENTED — September 11, 2026
 
+> **Superseded by [Phase 7.1](../phase-7.1/IMPLEMENTATION.md)** for navigation,
+> page structure, localization and several behaviors. Corrections to this Phase 7
+> record are marked **Correction** below; the Phase 7 data contract still holds.
+
 Phase 7 adds the first user-facing analytics surface for the platform. The
 dashboard reads the validated Gold analytical layer and indicator metadata,
 provides domain-specific exploration, preserves data-quality context, and exports
@@ -12,7 +16,7 @@ selected observations and charts without requiring SQL access.
 ### Application Structure
 
 - Streamlit entry point at `dashboard/app.py`.
-- Multipage navigation under `dashboard/pages/`:
+- Multipage navigation under `dashboard/pages/` (Phase 7 list):
   - Overview
   - Inflation
   - GDP & Economy
@@ -21,6 +25,13 @@ selected observations and charts without requiring SQL access.
   - Comparison & Correlation
   - Data Catalog
 - Shared page composition in `dashboard/page_view.py`.
+
+> **Correction (Phase 7.1).** The shipped dashboard has ten pages: the
+> "Trade, Welfare & Energy" page became **Trade & Energy**, and **Welfare &
+> Survey**, **Market** and **Labor** pages were added. Navigation is now an
+> `st.navigation` router driven by a declarative page registry
+> (`dashboard/navigation.py`) instead of implicit `pages/` discovery. See
+> [Phase 7.1 IMPLEMENTATION.md](../phase-7.1/IMPLEMENTATION.md).
 - Local foreground launch target:
 
   ```bash
@@ -55,9 +66,18 @@ selected observations and charts without requiring SQL access.
   - Invalid date-range error handling
 - **Charts** (`dashboard/components/charts.py`)
   - Multi-indicator time-series panels
-  - Original-versus-chain-linked comparison
+  - Original-versus-chain-linked comparison (built here; surfaced on a page only
+    in Phase 7.1 — see the correction under "Page Behavior")
   - Exact-timestamp correlation heatmap
   - Coverage summary chart
+
+> **Correction (Phase 7.1).** The `build_coverage_chart` helper was **deleted**
+> in Phase 7.1 (the Overview uses metrics and tables instead). The
+> original-vs-chain-linked chart and derived growth series were **not reachable
+> in the Phase 7 UI**: the chart was called only from a unit test, and derived
+> Gold series were unreachable because `load_series` inner-joined the catalog
+> while the catalog is seeded only from `discover()` (which never emits derived
+> ids). Phase 7.1 exposed both.
 - **Exports** (`dashboard/components/exports.py`)
   - UTF-8 CSV
   - Excel `.xlsx`
@@ -77,9 +97,14 @@ selected observations and charts without requiring SQL access.
 - **Inflation** treats `FP.CPI.TOTL.ZG` as an annual inflation rate, not a CPI
   index.
 - **GDP & Economy** supports levels and derived annual growth series when they
-  exist in Gold.
+  exist in Gold. **Correction (Phase 7.1):** derived series were *not* reachable
+  in the Phase 7 UI — the "include derived" toggle validated hardcoded
+  candidates against the catalog and was inert in production. Phase 7.1 exposes
+  them through metadata-driven discovery.
 - **Trade, Welfare & Energy** keeps mixed-unit indicators in separate chart
-  panels and does not normalize values silently.
+  panels and does not normalize values silently. **Correction (Phase 7.1):**
+  this page is now **Trade & Energy**; the `welfare` domain moved to the
+  **Welfare & Survey** page.
 - **FX & Gold** explicitly identifies TGJU as a snapshot source and warns when
   history is sparse.
 - **Comparison & Correlation** uses exact timestamp matches and displays a
@@ -147,10 +172,17 @@ validates:
 
 ## Deferred Items
 
-- Monetary-domain page: no monetary indicators are loaded yet.
-- CPI decile analysis: decile-level CPI data is not loaded yet.
+- Monetary-domain page: no monetary indicators are loaded yet (CBI TSD is
+  gated).
+- ~~CPI decile analysis: decile-level CPI data is not loaded yet.~~
+  **Correction (Phase 7.1):** the ten SCI expenditure-decile CPI series have
+  existed in the catalog since Phase 5 and are surfaced on the Phase 7.1
+  Inflation page. This deferral was based on a false premise.
 - Authentication, multi-user authorization, cloud deployment, and mobile-specific
   design remain out of scope.
+
+See the [Phase 7.1 deferred scope](../phase-7.1/README.md#deferred-scope-phase-72-candidates)
+for the current deferral list.
 
 ## Key Files
 

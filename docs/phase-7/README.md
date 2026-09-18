@@ -1,5 +1,11 @@
 # Phase 7 Dashboard Runbook
 
+> **Superseded for navigation, page structure, localization and quality behavior
+> by [Phase 7.1](../phase-7.1/README.md)** (Persian/RTL UI, a `st.navigation`
+> router, new Market/Labor/Welfare pages, Jalali dates, derived-series exposure,
+> chain-linking transparency and catalog search). This document is kept as the
+> Phase 7 record; the data contract it describes still holds.
+
 The Streamlit dashboard publishes the validated Gold analytical layer without
 requiring SQL access. It reads only from PostgreSQL; it does not call external
 APIs, transform frequencies, or fill missing observations.
@@ -46,6 +52,11 @@ poetry run streamlit run dashboard/app.py
 
 ## Page Guide
 
+The Phase 7 page list below is **historical**. Phase 7.1 grew it to ten pages and
+split the Welfare domain out; see
+[Phase 7.1's Persian page guide](../phase-7.1/README.md#persian-page-guide) for
+the current structure.
+
 - **Overview** — active indicator counts, Gold observation totals, observed
   coverage, and the latest `DataCollectionLog` result per source.
 - **Inflation** — annual inflation indicators. `FP.CPI.TOTL.ZG` is an annual
@@ -62,25 +73,42 @@ poetry run streamlit run dashboard/app.py
 - **Data Catalog** — searchable indicator IDs, names, units, domains, sources,
   source links, availability, base-year flags, and active status.
 
+> **Corrections for the Phase 7.1 refresh.** The Phase 7 pages above no longer
+> match the shipped dashboard: the "Trade, Welfare & Energy" page became
+> **Trade & Energy**, and **Welfare & Survey**, **Market** and **Labor** pages
+> were added. Derived annual growth series were **not reachable in Phase 7**
+> (the catalog is seeded only from `discover()`, which never emits derived ids,
+> and `load_series` inner-joined the catalog); Phase 7.1 made them reachable
+> through a metadata-driven discovery path. The chain-linking chart existed in
+> Phase 7 but was called only from a unit test; Phase 7.1 surfaced it on the
+> Inflation page. Catalog search across the Persian label layer and the
+> inactive-base-year-segment toggle were also added in Phase 7.1.
+
 ## Filters And Exports
 
 Domain pages support source, domain, frequency, indicator, and date filters.
 Default date bounds come from observed catalog coverage, not hardcoded years.
 
+> **Phase 7.1 additions.** Jalali year/month/day presets (with the applied
+> Jalali label and UTC Gregorian bounds echoed back), an "include derived series"
+> toggle, opt-in overlay and small-multiples chart modes, and catalog-page search
+> were added in Phase 7.1. See
+> [Phase 7.1's filters/search](../phase-7.1/README.md#filters-search-and-date-selection)
+> and [chart modes](../phase-7.1/README.md#chart-modes).
+
 Selected observations can be downloaded as:
 
-- UTF-8 CSV
-- Excel workbook (`.xlsx`)
+- UTF-8 CSV (with a BOM so spreadsheet tooling decodes Persian headers)
+- Excel workbook (`.xlsx`, right-to-left sheet view)
 
 Charts can be downloaded as:
 
-- Standalone interactive HTML
-- PNG
-- SVG
+- Standalone interactive HTML (eager)
+- PNG and SVG (on demand; disabled cleanly when Chromium is unavailable)
 
 CSV and Excel exports include indicator metadata, units, timezone-aware
-timestamps in ISO-8601 form, original values, chain-linking flags, confidence,
-and source metadata.
+timestamps in ISO-8601 form, a Jalali display column, original values,
+chain-linking flags, confidence, and source metadata.
 
 ## Static Chart Browser Setup
 
@@ -147,9 +175,13 @@ matrix; the dashboard does not forward-fill annual or daily values.
 ## Known Limitations
 
 - TGJU is a current-price snapshot source, not a historical backfill.
-- CPI decile and monetary-domain pages are deferred until their source data
-  is implemented in later phases.
+- **Correction:** CPI **decile** data has existed since Phase 5 (the SCI
+  connector loads ten expenditure-decile CPI series) and is surfaced on the
+  Phase 7.1 Inflation page; it was never blocked on missing source data. The
+  **monetary-domain** page remains deferred because no monetary indicators are
+  loaded (CBI TSD is gated).
 - The dashboard is local and single-user; it has no authentication or cloud
   deployment.
 - Updates require rerunning the relevant ETL pipeline or Airflow DAG; the UI
-  does not use real-time or WebSocket updates.
+  does not use real-time or WebSocket updates. The Phase 7.1 cache has no TTL or
+  refresh control, so a pipeline run needs an app restart to appear.

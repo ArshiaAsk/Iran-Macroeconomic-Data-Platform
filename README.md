@@ -134,7 +134,7 @@ make test
 make check
 ```
 
-### 7. Launch Dashboard (Phase 7)
+### 7. Launch Dashboard (Phase 7.1)
 
 ```bash
 # Start the local Streamlit dashboard
@@ -144,9 +144,17 @@ make dashboard
 poetry run streamlit run dashboard/app.py
 ```
 
-See [`docs/phase-7/README.md`](docs/phase-7/README.md) for the page guide,
-exports, browser setup for PNG/SVG charts, troubleshooting, and current data
-limitations.
+The dashboard is Persian and right-to-left: a single `st.navigation` router
+driven by a declarative page registry, ten pages covering every active domain,
+Jalali dates and Persian digits, derived-series exposure with parent
+provenance, chain-linking transparency, catalog search and lazy chart image
+export.
+
+See [`docs/phase-7.1/README.md`](docs/phase-7.1/README.md) for the current page
+guide, exports, Jalali/Tehran policy, browser setup for PNG/SVG charts,
+troubleshooting and known limitations. The Phase 7 runbook
+([`docs/phase-7/README.md`](docs/phase-7/README.md)) is kept as the historical
+record.
 
 ---
 
@@ -211,7 +219,7 @@ iran-macro-platform/
 │   ├── database/            # Schema and connection management
 │   └── utils/               # Config, logging, validation, retry, period helpers
 ├── alembic/                 # Migration environment and versions
-├── dashboard/               # Streamlit multi-page dashboard
+├── dashboard/               # Streamlit dashboard (Persian/RTL, st.navigation router)
 ├── airflow/                 # DAG definitions (TGJU daily + SCI weekly)
 ├── tests/
 │   ├── unit/                # Unit tests (no network, no database)
@@ -225,7 +233,9 @@ iran-macro-platform/
 │   ├── phase-3/             # TGJU scraper reports
 │   ├── phase-4/             # IMF/EIA reports + OPEC gate record
 │   ├── phase-5/             # SCI reports + CBI gate record
-│   └── phase-7/             # Dashboard runbook
+│   ├── phase-6/             # TSETMC/HBSIR reports + scope record
+│   ├── phase-7/             # Dashboard runbook (historical)
+│   └── phase-7.1/           # Dashboard refresh runbook + validation
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies
@@ -324,7 +334,10 @@ make test-all
 RUN_LIVE_API_TESTS=1 poetry run pytest -m live
 ```
 
-Current status: **739 tests** — 648 unit tests at **86.8% coverage** (plus 1 gated live test skipped by default) and 90 integration tests (86 pass; 4 live tests skipped by default). No known failing tests; `mypy src/` and `ruff` are clean.
+Current status: **1,141 unit tests passing** (3 live tests skipped by default) at
+**89.22% coverage**, plus **133 integration tests** (128 pass, 4 live tests
+skipped by default; one stale dashboard-export assertion pending the deferred
+Phase 7.1 Task 27). `mypy src dashboard` and `ruff` are clean.
 
 ### Coverage Requirements
 
@@ -354,6 +367,8 @@ it.
 - **[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md)** — Indicator catalog with observed coverage (World Bank, IMF, EIA)
 - **[docs/phase-3/README.md](docs/phase-3/README.md)** — TGJU scraper implementation and validation
 - **[docs/phase-4/README.md](docs/phase-4/README.md)** — IMF/EIA implementation, validation, and the OPEC gate record
+- **[docs/phase-6/README.md](docs/phase-6/README.md)** — TSETMC/HBSIR connectors and the TSETMC scope record
+- **[docs/phase-7.1/README.md](docs/phase-7.1/README.md)** — Dashboard refresh runbook (Persian/RTL, navigation, Jalali policy, deferred scope)
 - **[docs/phase-1/VALIDATION.md](docs/phase-1/VALIDATION.md)** — Phase 1 validation checklist
 - **[docs/plans/](docs/plans/)** — Per-phase implementation plans
 
@@ -462,10 +477,21 @@ poetry cache clear . --all
 - [x] Live end-to-end validation — TSETMC 4,285 sessions (13,039 Gold rows) and HBSIR 32 survey years (384 Gold rows); gated live tests pass
 - [ ] TSETMC trading value / market P/E / market cap — **deferred**: the package exposes no historical source
 
-### Phase 7: Dashboard (Week 7-8)
+### Phase 7: Dashboard (Week 7-8) ✅ COMPLETE
 - [x] Streamlit multi-page app
 - [x] Domain-specific analytics
 - [x] Export functionality
+
+### Phase 7.1: Dashboard Refresh ✅ IMPLEMENTED (Tasks 1–25)
+- [x] `st.navigation` router + declarative page registry (single IA/ownership declaration)
+- [x] Full Persian (fa) localization + RTL layout; OS font stack, no webfont/CDN
+- [x] Market (TSETMC), Labor (SCI) and Welfare & Survey (HBSIR) pages; CPI decile view
+- [x] Derived-series exposure with parent-source provenance (metadata-driven)
+- [x] Jalali display + Jalali-aware date presets under an explicit `Asia/Tehran` policy
+- [x] Bounded chart modes, lazy PNG/SVG export, calendar-aware expected periods
+- [x] Chain-linking transparency, correlation overlap guardrails, catalog search
+- [ ] Tasks 27–28: extended test suite (AST literal guard) and analyst acceptance pass — deferred
+- [ ] Cache TTL / manual refresh — not shipped (needs app restart to see a pipeline run)
 
 ### Phase 8: Production Readiness (Week 8)
 - [ ] CI/CD pipeline
@@ -508,4 +534,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** Arshia Askarzadeh 
-**Project Status:** Phases 1–7 complete — SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented and validated against live runs (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source); Phase 8 (production readiness) next
+**Project Status:** Phases 1–7 complete; Phase 7.1 dashboard refresh implemented (Persian/RTL `st.navigation` UI, Market/Labor/Welfare pages, Jalali dates, derived-series exposure, chain-linking transparency) — Tasks 27–28 (extended tests, analyst acceptance pass) and the cache-TTL item remain deferred. SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented and validated against live runs (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source); Phase 8 (production readiness) next
