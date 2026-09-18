@@ -64,8 +64,13 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
 _RULES: Final[tuple[tuple[str, str], ...]] = (
     ("sidebar", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
     ("sidebar_nav", "direction: rtl; text-align: right;"),
-    ("markdown", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
-    ("heading", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
+    # Generous line-height keeps Persian ascenders/descenders and the mixed
+    # Persian-digit runs readable in the RTL text blocks (Task 22 polish).
+    (
+        "markdown",
+        f"direction: rtl; text-align: right; line-height: 1.9; font-family: {FONT_STACK};",
+    ),
+    ("heading", f"direction: rtl; text-align: right; line-height: 1.7; font-family: {FONT_STACK};"),
     ("metric", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
     ("metric_label", "direction: rtl; text-align: right;"),
     ("widget_label", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),

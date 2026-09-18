@@ -21,7 +21,8 @@ from dashboard.components.charts import (
     build_time_series_chart,
     shared_series_unit,
 )
-from dashboard.formatting import format_number
+from dashboard.components.direction import FONT_STACK
+from dashboard.formatting import format_number, jalali_date_label
 from dashboard.i18n import t
 from dashboard.labels import derived_label
 
@@ -275,3 +276,52 @@ def test_shared_series_unit_accepts_one_consistent_unit(units: pd.DataFrame) -> 
 )
 def test_shared_series_unit_rejects_anything_but_one_known_unit(units: pd.DataFrame) -> None:
     assert shared_series_unit(units) is None
+
+
+def test_time_series_chart_localizes_titles_ticks_and_hover() -> None:
+    figure = build_time_series_chart(series_frame())
+
+    assert figure.layout.xaxis.title.text == t("chart.timestamp")
+    assert figure.layout.yaxis.title.text == t("chart.value")
+    # Jalali tick labels carry Persian digits and a Gregorian echo in the hover.
+    assert t("chart.gregorian") in figure.data[0].hovertemplate
+    assert t("chart.value") in figure.data[0].hovertemplate
+    assert tuple(figure.layout.xaxis.ticktext) == tuple(
+        jalali_date_label(timestamp)
+        for timestamp in (
+            pd.Timestamp("2020-01-01", tz="UTC"),
+            pd.Timestamp("2021-01-01", tz="UTC"),
+        )
+    )
+
+
+def test_chart_legends_use_the_label_layer_with_a_catalog_fallback() -> None:
+    # Unmapped ids fall back to the catalog name (never hidden), and the unit is
+    # carried through the label layer into the legend.
+    figure = build_time_series_chart(series_frame())
+
+    assert {trace.name for trace in figure.data} == {"A (index)", "B (index)"}
+
+
+def test_every_chart_builder_applies_the_persian_typography_template() -> None:
+    frame = series_frame()
+    frame["original_value"] = [None, 1.5, None, None]
+    frame["is_chain_linked"] = [True, True, False, False]
+
+    figures = (
+        build_time_series_chart(frame),
+        build_scaled_time_series_chart(frame, mode=CHART_MODE_OVERLAY).figure,
+        build_small_multiples_chart(frame).figure,
+        build_correlation_chart(frame).figure,
+    )
+
+    for figure in figures:
+        assert figure.layout.template.layout.font.family == FONT_STACK
+
+
+def test_correlation_chart_localizes_its_axis_and_colorbar_titles() -> None:
+    bundle = build_correlation_chart(series_frame())
+
+    assert bundle.figure.layout.xaxis.title.text == t("chart.indicator")
+    assert bundle.figure.layout.yaxis.title.text == t("chart.indicator")
+    assert bundle.figure.data[0].colorbar.title.text == t("chart.pearson_r")

@@ -2,7 +2,7 @@
 
 import math
 from collections.abc import Iterable
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Any, Final
 
 import pandas as pd
@@ -20,7 +20,7 @@ from dashboard.components.charts import (
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
 from dashboard.components.filters import FilterState, render_filters
 from dashboard.components.quality import render_quality_summary, summarize_quality
-from dashboard.components.tables import cap_table_rows
+from dashboard.components.tables import cap_table_rows, localize_table_frame
 from dashboard.formatting import (
     format_number,
     gregorian_to_jalali,
@@ -482,10 +482,7 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     if filters.indicator_ids:
         result = result[result["indicator_id"].isin(filters.indicator_ids)]
     st.metric(t("metric.matching_indicators"), format_number(len(result)))
-    display = result.copy()
-    for column in ("availability_start", "availability_end"):
-        display[column] = display[column].map(_display_timestamp)
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    st.dataframe(localize_table_frame(result), use_container_width=True, hide_index=True)
 
 
 def render_overview_page(repository: DashboardRepository | None = None) -> None:
@@ -538,7 +535,7 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
         )
 
     st.subheader(t("section.available_coverage"))
-    st.dataframe(coverage, use_container_width=True, hide_index=True)
+    st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
 
 
 def _render_series_inventory(inventory: pd.DataFrame) -> None:
@@ -846,7 +843,7 @@ def _render_capped_rows(series: pd.DataFrame) -> None:
                 total=format_number(capped.total_rows),
             )
         )
-    st.dataframe(capped.frame, use_container_width=True, hide_index=True)
+    st.dataframe(localize_table_frame(capped.frame), use_container_width=True, hide_index=True)
 
 
 def survey_year_frame(series: pd.DataFrame) -> pd.DataFrame:
@@ -1012,11 +1009,3 @@ def derived_series_ids(
     )
     excluded = set(exclude)
     return [indicator_id for indicator_id in discovered if indicator_id not in excluded]
-
-
-def _display_timestamp(value: object) -> str:
-    if value is None:
-        return t("value.unknown")
-    if isinstance(value, datetime | date | pd.Timestamp):
-        return pd.Timestamp(value).strftime("%Y-%m-%d")
-    return str(value)

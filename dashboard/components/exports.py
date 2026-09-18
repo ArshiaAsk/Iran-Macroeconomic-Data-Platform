@@ -15,6 +15,12 @@ import plotly.io as pio
 import streamlit as st
 from kaleido import Kaleido
 
+from dashboard.components.tables import (
+    NUMBER_COLUMNS,
+    localized_column_values,
+    localized_header,
+)
+from dashboard.formatting import DigitMode
 from dashboard.i18n import t
 from src.utils.logging import get_logger
 
@@ -22,6 +28,15 @@ logger = get_logger(__name__)
 
 #: Static chart formats that require Chromium and are rendered on demand.
 IMAGE_EXPORT_FORMATS: Final[tuple[str, ...]] = ("png", "svg")
+
+#: Byte-order mark prepended to CSV output so Excel decodes the Persian headers
+#: and indicator names correctly. Spreadsheet tooling detects the encoding from it.
+UTF8_BOM: Final[str] = "\ufeff"
+
+#: Display column carrying the Jalali date of the stored timestamp. The ISO-8601
+#: Gregorian ``timestamp`` column is kept alongside it, never replaced: the stored
+#: value stays the auditable source of truth.
+JALALI_EXPORT_COLUMN: Final[str] = "timestamp_jalali"
 
 #: Download MIME types keyed by image format.
 IMAGE_MIME_TYPES: Final[dict[str, str]] = {
@@ -39,28 +54,74 @@ class ChromiumCapability:
     message: str = ""
 
 
-def prepare_export_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    """Convert timestamps and JSON metadata into stable export representations."""
+def prepare_export_frame(
+    frame: pd.DataFrame,
+    *,
+    digit_mode: DigitMode = "latin",
+) -> pd.DataFrame:
+    """Convert a selected frame into a localized, spreadsheet-ready export.
+
+    The stored values stay the source of truth: the ISO-8601 Gregorian
+    ``timestamp`` column is kept and a Jalali display column is added beside it,
+    indicator names are shown through the label layer, and Persian headers come
+    from the shared table registry (:mod:`dashboard.components.tables`) so the
+    grid and the exports cannot drift.
+
+    Numbers default to Latin digits and stay numeric, so downstream tooling keeps
+    reading them; passing ``digit_mode="fa"`` renders them as Persian strings for
+    a human-facing copy. ``record_metadata``, ``original_value``,
+    ``is_chain_linked`` and the chain-linking confidence columns are always kept.
+
+    Args:
+        frame: Selected Gold frame
+        digit_mode: ``"latin"`` (default) keeps numeric cells machine-readable;
+            ``"fa"`` renders them with Persian digits
+
+    Returns:
+        A localized frame with Persian headers
+    """
     result = frame.copy()
     if "timestamp" in result.columns:
+        jalali = localized_column_values(result, "timestamp", digit_mode=digit_mode)
+        position = list(result.columns).index("timestamp") + 1
+        result.insert(position, JALALI_EXPORT_COLUMN, jalali)
         result["timestamp"] = result["timestamp"].map(_iso_timestamp)
-    for column in ("record_metadata", "base_years"):
-        if column in result.columns:
-            result[column] = result[column].map(_json_value)
-    return result
+    for column in list(result.columns):
+        if column in ("timestamp", JALALI_EXPORT_COLUMN):
+            continue
+        if digit_mode == "latin" and column in NUMBER_COLUMNS:
+            continue
+        result[column] = localized_column_values(  # type: ignore[assignment]
+            result, str(column), digit_mode=digit_mode
+        )
+    return result.rename(
+        columns={str(column): localized_header(str(column)) for column in result.columns}
+    )
 
 
-def serialize_csv(frame: pd.DataFrame) -> bytes:
-    """Serialize a selected dataframe to UTF-8 CSV."""
-    csv_text = prepare_export_frame(frame).to_csv(index=False)
-    return csv_text.encode("utf-8")
+def serialize_csv(frame: pd.DataFrame, *, digit_mode: DigitMode = "latin") -> bytes:
+    """Serialize a selected dataframe to UTF-8 CSV with a BOM.
+
+    The BOM makes Excel decode the Persian headers and indicator names correctly;
+    the bytes are still UTF-8.
+    """
+    csv_text = prepare_export_frame(frame, digit_mode=digit_mode).to_csv(index=False)
+    return (UTF8_BOM + csv_text).encode("utf-8")
 
 
-def serialize_excel(frame: pd.DataFrame) -> bytes:
-    """Serialize a selected dataframe to an Excel workbook."""
+def serialize_excel(frame: pd.DataFrame, *, digit_mode: DigitMode = "latin") -> bytes:
+    """Serialize a selected dataframe to an RTL Excel workbook.
+
+    The sheet name is Persian and the sheet direction is right-to-left so the
+    Persian headers read naturally in a spreadsheet application.
+    """
     output = BytesIO()
+    sheet_name = t("export.sheet_name")
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        prepare_export_frame(frame).to_excel(writer, index=False, sheet_name="Selected data")
+        prepare_export_frame(frame, digit_mode=digit_mode).to_excel(
+            writer, index=False, sheet_name=sheet_name
+        )
+        writer.sheets[sheet_name].sheet_view.rightToLeft = True
     return bytes(output.getvalue())
 
 
@@ -99,12 +160,18 @@ def serialize_figure_images(
 
 
 def render_data_downloads(frame: pd.DataFrame, file_prefix: str) -> None:
-    """Render CSV and Excel download buttons for the selected data."""
+    """Render the digit-mode control and CSV/Excel download buttons.
+
+    Exports default to Latin digits (machine-readable); the toggle switches to
+    Persian digits for a human-facing copy. File names stay ASCII so a browser
+    cannot mangle them; the Persian label lives in the button and the sheet name.
+    """
+    digit_mode = _export_digit_mode(file_prefix)
     columns = st.columns(2)
     with columns[0]:
         st.download_button(
             t("export.download_csv"),
-            data=serialize_csv(frame),
+            data=serialize_csv(frame, digit_mode=digit_mode),
             file_name=f"{file_prefix}.csv",
             mime="text/csv",
             disabled=frame.empty,
@@ -112,11 +179,21 @@ def render_data_downloads(frame: pd.DataFrame, file_prefix: str) -> None:
     with columns[1]:
         st.download_button(
             t("export.download_excel"),
-            data=serialize_excel(frame),
+            data=serialize_excel(frame, digit_mode=digit_mode),
             file_name=f"{file_prefix}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=frame.empty,
         )
+
+
+def _export_digit_mode(file_prefix: str) -> DigitMode:
+    """Render the export digit-mode toggle and return the chosen direction."""
+    persian = st.toggle(
+        t("export.persian_digits"),
+        value=False,
+        key=f"{file_prefix}-persian-digits",
+    )
+    return "fa" if persian else "latin"
 
 
 def render_chart_downloads(figure: go.Figure, file_prefix: str) -> None:
@@ -142,7 +219,7 @@ def render_chart_downloads(figure: go.Figure, file_prefix: str) -> None:
         with column:
             _render_image_download(figure, file_prefix, image_format, capability)
     if not capability.available:
-        st.caption(capability.message)
+        st.caption(t("export.image_unavailable"))
 
 
 def _render_image_download(
@@ -195,14 +272,6 @@ def _iso_timestamp(value: object) -> object:
         return value.isoformat()
     if isinstance(value, datetime):
         return value.isoformat()
-    return value
-
-
-def _json_value(value: object) -> object:
-    if value is None:
-        return value
-    if isinstance(value, dict | list):
-        return str(value)
     return value
 
 

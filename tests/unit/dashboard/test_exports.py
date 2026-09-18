@@ -10,6 +10,7 @@ import pytest
 
 import dashboard.components.exports as exports_module
 from dashboard.components.exports import (
+    UTF8_BOM,
     ChromiumCapability,
     cached_figure_image,
     detect_chromium_capability,
@@ -20,6 +21,7 @@ from dashboard.components.exports import (
     serialize_figure_html,
     serialize_figure_image,
 )
+from dashboard.formatting import format_number, jalali_date_label
 from dashboard.i18n import t
 
 MISSING_CHROMIUM_MESSAGE = (
@@ -97,18 +99,34 @@ def selected_frame() -> pd.DataFrame:
             "timestamp": [pd.Timestamp("2024-01-01T12:30:00+00:00")],
             "value": [12.5],
             "unit": ["%"],
+            "original_value": [12.0],
             "is_chain_linked": [True],
+            "chain_linking_confidence": [0.9],
             "record_metadata": [{"method": "test"}],
         }
     )
 
 
 def test_csv_preserves_metadata_and_iso_timestamp() -> None:
-    content = serialize_csv(selected_frame()).decode("utf-8")
+    payload = serialize_csv(selected_frame())
+    content = payload.decode("utf-8")
 
+    # UTF-8 with a BOM so Excel decodes the Persian headers correctly.
+    assert payload.startswith(UTF8_BOM.encode("utf-8"))
     assert "2024-01-01T12:30:00+00:00" in content
     assert "تورم" in content
     assert "method" in content
+
+
+def test_csv_carries_persian_headers_and_a_jalali_display_column() -> None:
+    frame = prepare_export_frame(selected_frame())
+    timestamp = selected_frame()["timestamp"].iloc[0]
+
+    assert t("table.indicator_id") in frame.columns
+    assert t("table.jalali_date") in frame.columns
+    # The Jalali display column is additive: the ISO Gregorian value is kept.
+    assert t("table.timestamp") in frame.columns
+    assert frame.loc[0, t("table.jalali_date")] == jalali_date_label(timestamp, digit_mode="latin")
 
 
 def test_excel_round_trip_preserves_selected_rows() -> None:
@@ -116,15 +134,37 @@ def test_excel_round_trip_preserves_selected_rows() -> None:
     frame = pd.read_excel(output, engine="openpyxl")
 
     assert len(frame) == 1
-    assert frame.loc[0, "indicator_id"] == "a"
-    assert frame.loc[0, "value"] == 12.5
+    # Latin digits keep the numeric cells machine-readable for downstream tooling.
+    assert frame.loc[0, t("table.indicator_id")] == "a"
+    assert frame.loc[0, t("table.value")] == 12.5
+
+
+def test_excel_sheet_is_persian_and_right_to_left() -> None:
+    import openpyxl
+
+    output = BytesIO(serialize_excel(selected_frame()))
+    workbook = openpyxl.load_workbook(output)
+
+    assert t("export.sheet_name") in workbook.sheetnames
+    assert workbook[t("export.sheet_name")].sheet_view.rightToLeft is True
 
 
 def test_prepare_export_frame_keeps_quality_columns() -> None:
     frame = prepare_export_frame(selected_frame())
 
-    assert list(frame.columns) == list(selected_frame().columns)
-    assert isinstance(frame.loc[0, "record_metadata"], str)
+    # The underlying keys are still present (with Persian headers): the derived
+    # provenance and the chain-linking fields are never dropped.
+    assert t("table.record_metadata") in frame.columns
+    assert t("table.original_value") in frame.columns
+    assert t("table.is_chain_linked") in frame.columns
+    assert t("table.chain_linking_confidence") in frame.columns
+    assert isinstance(frame.loc[0, t("table.record_metadata")], str)
+
+
+def test_prepare_export_frame_can_render_persian_digits() -> None:
+    frame = prepare_export_frame(selected_frame(), digit_mode="fa")
+
+    assert frame.loc[0, t("table.value")] == format_number(12.5)
 
 
 def test_chart_exports_html_and_svg(monkeypatch) -> None:
@@ -231,7 +271,7 @@ def test_render_chart_downloads_reports_missing_chromium(
     assert renderer.calls == []
     assert [button["disabled"] for button in fake_st.buttons] == [True, True]
     assert {entry["label"] for entry in fake_st.download_buttons} == {t("export.download_html")}
-    assert fake_st.captions == [MISSING_CHROMIUM_MESSAGE]
+    assert fake_st.captions == [t("export.image_unavailable")]
     assert fake_st.errors == []
 
 

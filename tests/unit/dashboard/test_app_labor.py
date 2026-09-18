@@ -10,7 +10,9 @@ trend), the registry ownership, and the plan's rule that IMF ``LUR`` stays in th
 import pandas as pd
 
 from dashboard.components.charts import build_time_series_chart
+from dashboard.formatting import format_number, jalali_date_label
 from dashboard.i18n import t
+from dashboard.labels import frequency_label
 from dashboard.navigation import GROUPS, PAGES
 from tests.unit.dashboard.app_smoke import (
     LABOR_INDICATOR,
@@ -20,17 +22,23 @@ from tests.unit.dashboard.app_smoke import (
     REPOSITORY_ROOT,
     FakeDashboardRepository,
     app_test,
+    labor_series,
 )
 
 LABOR_PAGE = "10_Labor.py"
 
 
 def _observations_frame(app) -> pd.DataFrame:
-    return next(frame.value for frame in app.dataframe if "timestamp" in frame.value.columns)
+    """The localized observations grid: headers and cells are Persian."""
+    return next(
+        frame.value for frame in app.dataframe if t("table.timestamp") in frame.value.columns
+    )
 
 
 def _quality_frame(app) -> pd.DataFrame:
-    return next(frame.value for frame in app.dataframe if "rows_returned" in frame.value.columns)
+    return next(
+        frame.value for frame in app.dataframe if t("table.rows_returned") in frame.value.columns
+    )
 
 
 def test_labor_page_renders_the_single_published_quarter(
@@ -48,10 +56,11 @@ def test_labor_page_renders_the_single_published_quarter(
     assert len(app.get("plotly_chart")) == 1
     observations = _observations_frame(app)
     assert len(observations) == 1
-    assert observations["indicator_id"].tolist() == [LABOR_INDICATOR]
-    assert observations["value"].tolist() == [LABOR_VALUE]
-    assert observations["timestamp"].tolist() == [LABOR_TIMESTAMP]
-    assert observations["frequency"].tolist() == ["quarterly"]
+    # The grid is localized: Persian headers, Persian digits and a Jalali date.
+    assert observations[t("table.indicator_id")].tolist() == [LABOR_INDICATOR]
+    assert observations[t("table.value")].tolist() == [format_number(LABOR_VALUE)]
+    assert observations[t("table.timestamp")].tolist() == [jalali_date_label(LABOR_TIMESTAMP)]
+    assert observations[t("table.frequency")].tolist() == [frequency_label("quarterly")]
 
 
 def test_labor_page_does_not_imply_a_trend_from_one_quarter(
@@ -60,13 +69,13 @@ def test_labor_page_does_not_imply_a_trend_from_one_quarter(
     app = app_test(LABOR_PAGE)
     app.run()
 
-    observations = _observations_frame(app)
     quality = _quality_frame(app)
     # One published quarter: the quality row reports exactly one returned row and
-    # no missing periods, and the chart carries a single marker, not a line.
-    assert quality["rows_returned"].tolist() == [1]
-    assert quality["missing_periods"].tolist() == [0]
-    figure = build_time_series_chart(observations)
+    # no missing periods, and the chart carries a single marker, not a line. The
+    # grid is localized, so the counts render as Persian digits.
+    assert quality[t("table.rows_returned")].tolist() == [format_number(1)]
+    assert quality[t("table.missing_periods")].tolist() == [format_number(0)]
+    figure = build_time_series_chart(labor_series())
     assert len(figure.data) == 1
     # Plotly stores the axis as timezone-naive UTC; the stored value is tz-aware.
     assert [pd.Timestamp(value) for value in figure.data[0].x] == [
@@ -86,7 +95,7 @@ def test_labor_page_derived_toggle_is_inert_without_derived_rows(
     assert not app.exception
     # One observation cannot support a derived series, so the shared toggle
     # changes nothing and the page keeps rendering the same single quarter.
-    assert _observations_frame(app)["indicator_id"].tolist() == [LABOR_INDICATOR]
+    assert _observations_frame(app)[t("table.indicator_id")].tolist() == [LABOR_INDICATOR]
 
 
 def test_labor_page_is_registered_in_the_navigation_registry() -> None:

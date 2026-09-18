@@ -46,6 +46,7 @@ from typing import Final, Literal
 import pandas as pd
 import streamlit as st
 
+from dashboard.components.tables import localize_table_frame
 from dashboard.formatting import TEHRAN_TIMEZONE
 from dashboard.i18n import t
 from dashboard.labels import FREQUENCY_LABELS
@@ -424,7 +425,7 @@ def render_quality_summary(quality: pd.DataFrame) -> None:
     if quality.empty:
         st.info(t("empty.no_quality_rows"))
         return
-    st.dataframe(quality, use_container_width=True, hide_index=True)
+    st.dataframe(localize_table_frame(quality), use_container_width=True, hide_index=True)
     if (quality["rows_returned"] == 1).any():
         st.warning(t("warn.single_observation"))
     if _has_material_gap(quality):

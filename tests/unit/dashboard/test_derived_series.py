@@ -12,7 +12,8 @@ import pandas as pd
 import pytest
 
 from dashboard.components.charts import build_time_series_chart
-from dashboard.labels import derived_label
+from dashboard.i18n import t
+from dashboard.labels import derived_label, domain_label, frequency_label, indicator_label
 from dashboard.page_view import derived_series_ids
 from dashboard.repository import SERIES_KIND_DERIVED
 from tests.unit.dashboard.app_smoke import (
@@ -63,18 +64,25 @@ class MetadataRepository:
 
 
 def _observations_frame(app) -> pd.DataFrame:
-    """The loaded Gold observations table rendered by a domain page."""
-    return next(frame.value for frame in app.dataframe if "timestamp" in frame.value.columns)
+    """The loaded Gold observations table rendered by a domain page.
+
+    The grid is localized (Task 20), so its headers are the Persian catalog keys.
+    """
+    return next(
+        frame.value for frame in app.dataframe if t("table.timestamp") in frame.value.columns
+    )
 
 
 def _quality_frame(app) -> pd.DataFrame:
     """The per-indicator quality table rendered by a domain page."""
-    return next(frame.value for frame in app.dataframe if "rows_returned" in frame.value.columns)
+    return next(
+        frame.value for frame in app.dataframe if t("table.rows_returned") in frame.value.columns
+    )
 
 
 def _loaded_indicator_ids(app) -> set[str]:
-    frames = [frame.value for frame in app.dataframe if "timestamp" in frame.value.columns]
-    return {indicator for frame in frames for indicator in frame["indicator_id"]}
+    frames = [frame.value for frame in app.dataframe if t("table.timestamp") in frame.value.columns]
+    return {indicator for frame in frames for indicator in frame[t("table.indicator_id")]}
 
 
 def test_derived_series_ids_read_gold_metadata_through_the_repository() -> None:
@@ -232,21 +240,25 @@ def test_inflation_page_toggle_on_includes_the_derived_series(
 
     assert not app.exception
     assert _loaded_indicator_ids(app) == {INFLATION_INDICATOR, INFLATION_DERIVED_ID}
-    assert set(_quality_frame(app)["indicator_id"]) == {
+    assert set(_quality_frame(app)[t("table.indicator_id")]) == {
         INFLATION_INDICATOR,
         INFLATION_DERIVED_ID,
     }
-    # The derived rows keep their parent provenance and their derived flag.
+    # The derived rows keep their parent provenance and their derived flag. The
+    # grid is localized, so the classification is rendered through the label layer.
     derived = _observations_frame(app)
-    derived = derived[derived["indicator_id"] == INFLATION_DERIVED_ID]
+    derived = derived[derived[t("table.indicator_id")] == INFLATION_DERIVED_ID]
     assert not derived.empty
-    assert set(derived["derived_from"]) == {INFLATION_INDICATOR}
-    assert set(derived["series_kind"]) == {SERIES_KIND_DERIVED}
-    assert set(derived["name"]) == {"Inflation"}
-    # Unit, frequency and domain travel with the Gold row, as stored.
-    assert set(derived["unit"]) == {"annual %"}
-    assert set(derived["frequency"]) == {"annual"}
-    assert set(derived["domain"]) == {"inflation"}
+    assert set(derived[t("table.derived_from")]) == {indicator_label(INFLATION_INDICATOR)}
+    assert set(derived[t("table.series_kind")]) == {t("value.derived")}
+    assert set(derived[t("table.name")]) == {
+        indicator_label(INFLATION_DERIVED_ID, "Inflation", INFLATION_INDICATOR)
+    }
+    # Unit, frequency and domain travel with the Gold row, as stored; the labels
+    # are the Persian display names.
+    assert set(derived[t("table.unit")]) == {"annual %"}
+    assert set(derived[t("table.frequency")]) == {frequency_label("annual")}
+    assert set(derived[t("table.domain")]) == {domain_label("inflation")}
 
 
 @pytest.mark.parametrize(("page", "derived_key"), DOMAIN_PAGE_TOGGLES)

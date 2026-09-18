@@ -142,6 +142,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "filter.cpi_deciles": "دهک‌های هزینه",
         # Chart labels and legends.
         "chart.timestamp": "زمان",
+        "chart.gregorian": "میلادی",
         "chart.survey_year": "سال آمارگیری",
         "chart.value": "مقدار",
         "chart.indicator": "شاخص",
@@ -183,13 +184,18 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.base_years": "سال‌های پایه",
         "table.is_active": "فعال",
         "table.timestamp": "زمان",
+        "table.jalali_date": "تاریخ شمسی",
         "table.value": "مقدار",
         "table.original_value": "مقدار اصلی",
         "table.is_chain_linked": "زنجیره‌شده",
         "table.chain_linking_confidence": "اطمینان زنجیره‌سازی",
         "table.record_metadata": "فراداده",
+        "table.series_kind": "نوع سری",
+        "table.derived_from": "سری والد",
+        "table.has_catalog_metadata": "فراداده فهرست",
         "table.rows_returned": "تعداد ردیف",
         "table.expected_observations": "مشاهدات مورد انتظار",
+        "table.expected_is_estimated": "برآوردی",
         "table.missing_periods": "دوره‌های مفقود",
         "table.collection_timestamp": "زمان گردآوری",
         "table.status": "وضعیت",
@@ -218,6 +224,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "export.download_png": "دریافت PNG",
         "export.download_svg": "دریافت SVG",
         "export.image_failed": "ساخت تصویر {format} ناموفق بود: {error}",
+        "export.image_unavailable": (
+            "نمایش تصویری نمودار (PNG/SVG) در دسترس نیست؛ برای فعال‌سازی، کرومیوم را نصب کنید."
+        ),
+        "export.persian_digits": "ارقام فارسی در خروجی",
+        "export.sheet_name": "داده‌های انتخاب‌شده",
         # Empty states.
         "empty.no_indicators_for_page": "هنوز شاخص فعالی برای این صفحه وجود ندارد.",
         "empty.select_indicators": "برای دیدن مشاهدات لایه طلایی، یک یا چند شاخص را انتخاب کنید.",
@@ -300,6 +311,12 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "value.unknown": "نامشخص",
         "value.fresh": "به‌روز",
         "value.stale": "کهنه",
+        "value.yes": "بله",
+        "value.no": "خیر",
+        # Gold series classification (repository ``series_kind``), displayed in
+        # the observations grid and the exports.
+        "value.base": "پایه",
+        "value.derived": "مشتق‌شده",
     }
 )
 

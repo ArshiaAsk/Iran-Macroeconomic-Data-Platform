@@ -9,7 +9,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseFigure
 
-from dashboard.formatting import format_number
+from dashboard.components.direction import apply_plotly_typography
+from dashboard.formatting import format_number, jalali_date_label
 from dashboard.i18n import t
 from dashboard.labels import indicator_label
 
@@ -61,6 +62,15 @@ CHART_MODES: Final[tuple[ChartMode, ...]] = (
     CHART_MODE_OVERLAY,
     CHART_MODE_SMALL_MULTIPLES,
 )
+
+#: Upper bound on Jalali tick labels drawn on a date axis. Plotly renders tick
+#: labels client-side, so Persian digits need explicit ``ticktext``; a bounded
+#: sample keeps a 4,000-session daily series legible instead of drawing every day.
+MAX_JALALI_TICKS: Final[int] = 8
+
+#: Frame columns passed to Plotly as hover ``customdata``: the Jalali label, the
+#: Gregorian echo and the digit-grouped value.
+_TIME_CUSTOM_DATA: Final[list[str]] = ["__jalali", "__gregorian", "__value"]
 
 
 @dataclass(frozen=True)
@@ -136,11 +146,16 @@ def shared_series_unit(series: pd.DataFrame) -> str | None:
 
 
 def build_time_series_chart(series: pd.DataFrame) -> BaseFigure:
-    """Build a time-series chart with a separate panel per indicator."""
+    """Build a time-series chart with a separate panel per indicator.
+
+    Axis titles, legend/panel names and hover text are Persian; the date axis is
+    labelled with Jalali ticks and the hover names the Gregorian date alongside
+    the Jalali one. The underlying scale, facets and heights are unchanged from
+    Task 15 -- only the presentation is localized.
+    """
     if series.empty:
         return go.Figure()
-    frame = series.copy()
-    frame["label"] = frame.apply(_indicator_label, axis=1)
+    frame = _time_frame(series)
     figure = px.line(
         frame,
         x="timestamp",
@@ -148,11 +163,12 @@ def build_time_series_chart(series: pd.DataFrame) -> BaseFigure:
         color="label",
         facet_row="indicator_id",
         markers=True,
-        labels={"timestamp": "Timestamp", "value": "Value"},
+        custom_data=_TIME_CUSTOM_DATA,
+        labels=_time_axis_labels(),
     )
     figure.for_each_yaxis(lambda axis: axis.update(matches=None))
     figure.update_layout(height=bounded_chart_height(frame["indicator_id"].nunique()))
-    return figure
+    return _style_time_figure(figure, frame)
 
 
 def build_overlay_chart(series: pd.DataFrame) -> BaseFigure:
@@ -166,21 +182,21 @@ def build_overlay_chart(series: pd.DataFrame) -> BaseFigure:
     """
     if series.empty:
         return go.Figure()
-    frame = series.copy()
-    frame["label"] = frame.apply(_indicator_label, axis=1)
+    frame = _time_frame(series)
     figure = px.line(
         frame,
         x="timestamp",
         y="value",
         color="label",
         markers=True,
-        labels={"timestamp": "Timestamp", "value": "Value"},
+        custom_data=_TIME_CUSTOM_DATA,
+        labels=_time_axis_labels(),
     )
     unit = shared_series_unit(frame)
     if unit is not None:
         figure.update_layout(yaxis_title=unit)
     figure.update_layout(height=MIN_CHART_HEIGHT, legend={"orientation": "h"})
-    return figure
+    return _style_time_figure(figure, frame)
 
 
 def build_small_multiples_chart(
@@ -208,12 +224,10 @@ def build_small_multiples_chart(
         raise ValueError(msg)
     if series.empty:
         return ScaledChart(go.Figure(), CHART_MODE_SMALL_MULTIPLES)
-    frame = series.copy()
-    ordered = list(dict.fromkeys(frame["indicator_id"]))
+    ordered = list(dict.fromkeys(series["indicator_id"]))
     kept = ordered[:max_series]
     dropped = len(ordered) - len(kept)
-    frame = frame[frame["indicator_id"].isin(kept)].copy()
-    frame["label"] = frame.apply(_indicator_label, axis=1)
+    frame = _time_frame(series[series["indicator_id"].isin(kept)])
     figure = px.line(
         frame,
         x="timestamp",
@@ -222,12 +236,14 @@ def build_small_multiples_chart(
         facet_col="indicator_id",
         facet_col_wrap=SMALL_MULTIPLES_COLUMNS,
         markers=True,
-        labels={"timestamp": "Timestamp", "value": "Value"},
+        custom_data=_TIME_CUSTOM_DATA,
+        labels=_time_axis_labels(),
     )
     figure.for_each_yaxis(lambda axis: axis.update(matches=None))
     figure.update_layout(
         height=bounded_chart_height(len(kept), columns=SMALL_MULTIPLES_COLUMNS),
     )
+    _style_time_figure(figure, frame)
     notice = None
     if dropped:
         notice = t("chart.small_multiples_capped", count=format_number(dropped))
@@ -300,6 +316,8 @@ def build_survey_year_chart(
     frame["label"] = frame.apply(_indicator_label, axis=1)
     if "timestamp" in frame.columns:
         frame = frame.sort_values("timestamp")
+    frame["__gregorian"] = _gregorian_dates(frame)
+    frame["__value"] = [format_number(value) for value in frame["value"]]
     facet: dict[str, str] = {"facet_row": "indicator_id"} if facet_indicators else {}
     figure = px.line(
         frame,
@@ -307,17 +325,20 @@ def build_survey_year_chart(
         y="value",
         color="label",
         markers=True,
+        custom_data=["__gregorian", "__value"],
         labels={SURVEY_YEAR_COLUMN: t("chart.survey_year"), "value": t("chart.value")},
         **facet,
     )
+    figure.update_traces(hovertemplate=_survey_year_hover_template())
     if facet_indicators:
+        _localize_facet_titles(figure, frame)
         figure.for_each_yaxis(lambda axis: axis.update(matches=None))
         figure.update_layout(
             height=bounded_chart_height(frame["indicator_id"].nunique()),
         )
     else:
         figure.update_layout(height=MIN_CHART_HEIGHT)
-    return figure
+    return apply_plotly_typography(figure)
 
 
 def build_chain_linking_chart(series: pd.DataFrame) -> BaseFigure:
@@ -333,7 +354,7 @@ def build_chain_linking_chart(series: pd.DataFrame) -> BaseFigure:
         go.Scatter(
             x=frame["timestamp"],
             y=frame["value"],
-            name="Chain-linked",
+            name=t("chart.chain_linked"),
             mode="lines+markers",
         )
     )
@@ -341,17 +362,19 @@ def build_chain_linking_chart(series: pd.DataFrame) -> BaseFigure:
         go.Scatter(
             x=frame["timestamp"],
             y=frame["original_value"],
-            name="Original",
+            name=t("chart.original"),
             mode="lines+markers",
             line={"dash": "dash"},
         )
     )
     figure.update_layout(
-        xaxis_title="Timestamp",
-        yaxis_title="Value",
+        xaxis_title=t("chart.timestamp"),
+        yaxis_title=t("chart.value"),
         legend={"orientation": "h"},
     )
-    return figure
+    tickvals, ticktext = _jalali_tick_labels(frame["timestamp"])
+    figure.update_xaxes(tickmode="array", tickvals=tickvals, ticktext=ticktext)
+    return apply_plotly_typography(figure)
 
 
 @dataclass(frozen=True)
@@ -383,11 +406,111 @@ def build_correlation_chart(series: pd.DataFrame) -> CorrelationBundle:
             y=correlation.columns.tolist(),
             zmin=-1,
             zmax=1,
-            colorbar={"title": "Pearson r"},
+            colorbar={"title": t("chart.pearson_r")},
         )
     )
-    figure.update_layout(xaxis_title="Indicator", yaxis_title="Indicator")
+    figure.update_layout(xaxis_title=t("chart.indicator"), yaxis_title=t("chart.indicator"))
+    apply_plotly_typography(figure)
     return CorrelationBundle(figure, correlation, join_counts)
+
+
+def _time_axis_labels() -> dict[str, str]:
+    """Persian axis titles shared by the time-series builders."""
+    return {"timestamp": t("chart.timestamp"), "value": t("chart.value")}
+
+
+def _time_hover_template() -> str:
+    """Hover text naming the Jalali date, its Gregorian echo and the value."""
+    return (
+        f"{t('chart.timestamp')}: %{{customdata[0]}}<br>"
+        f"{t('chart.gregorian')}: %{{customdata[1]}}<br>"
+        f"{t('chart.value')}: %{{customdata[2]}}"
+        "<extra>%{fullData.name}</extra>"
+    )
+
+
+def _survey_year_hover_template() -> str:
+    """Hover text for the categorical survey-year axis, with a Gregorian echo."""
+    return (
+        f"{t('chart.survey_year')}: %{{x}}<br>"
+        f"{t('chart.gregorian')}: %{{customdata[0]}}<br>"
+        f"{t('chart.value')}: %{{customdata[1]}}"
+        "<extra>%{fullData.name}</extra>"
+    )
+
+
+def _time_frame(series: pd.DataFrame) -> pd.DataFrame:
+    """Add the display label and hover columns a localized chart needs.
+
+    The frame is copied; the caller's data is never mutated. ``label`` is the
+    Persian indicator name (parent + derivation for a derived row, plus its unit),
+    and the ``__*`` columns are pre-formatted display strings: Persian-digit
+    Jalali labels, the ISO Gregorian echo and the digit-grouped value.
+    """
+    frame = series.copy()
+    frame["label"] = frame.apply(_indicator_label, axis=1)
+    timestamps = pd.to_datetime(frame["timestamp"], utc=True)
+    frame["__jalali"] = [jalali_date_label(timestamp) for timestamp in timestamps]
+    frame["__gregorian"] = [timestamp.date().isoformat() for timestamp in timestamps]
+    frame["__value"] = [format_number(value) for value in frame["value"]]
+    return frame
+
+
+def _gregorian_dates(frame: pd.DataFrame) -> list[str]:
+    """ISO Gregorian date per row, or the unknown placeholder without timestamps."""
+    if "timestamp" not in frame.columns:
+        return [t("value.unknown")] * len(frame)
+    timestamps = pd.to_datetime(frame["timestamp"], utc=True)
+    return [timestamp.date().isoformat() for timestamp in timestamps]
+
+
+def _jalali_tick_labels(timestamps: pd.Series) -> tuple[list[pd.Timestamp], list[str]]:
+    """Bounded Jalali tick positions and labels for a date axis.
+
+    Returns ``(tickvals, ticktext)``: a chronological sample of at most
+    :data:`MAX_JALALI_TICKS` stored timestamps and their Jalali labels. Persian
+    digits cannot be produced by Plotly's client-side tick formatting, so the
+    labels are pre-formatted here and handed to the axis explicitly.
+    """
+    unique = sorted({pd.Timestamp(value) for value in pd.to_datetime(timestamps, utc=True)})
+    if not unique:
+        return [], []
+    if len(unique) > MAX_JALALI_TICKS:
+        step = math.ceil(len(unique) / MAX_JALALI_TICKS)
+        selected = unique[::step]
+        if selected[-1] != unique[-1]:
+            selected.append(unique[-1])
+    else:
+        selected = unique
+    return selected, [jalali_date_label(timestamp) for timestamp in selected]
+
+
+def _localize_facet_titles(figure: BaseFigure, frame: pd.DataFrame) -> None:
+    """Replace ``indicator_id=<id>`` facet annotations with the display label.
+
+    Plotly express titles a facet ``"<facet_column>=<value>"``. The facet column
+    stays ``indicator_id`` so the grouping is unchanged from Task 15; only the
+    rendered title is rewritten to the Persian label, which is what the analyst
+    reads.
+    """
+    labels = {
+        str(indicator): str(label)
+        for indicator, label in zip(frame["indicator_id"], frame["label"], strict=True)
+    }
+    for annotation in figure.layout.annotations:
+        _, separator, value = (annotation.text or "").partition("=")
+        key = value.strip()
+        if separator and key in labels:
+            annotation.text = labels[key]
+
+
+def _style_time_figure(figure: BaseFigure, frame: pd.DataFrame) -> BaseFigure:
+    """Apply hover text, Jalali tick labels and Persian typography to a figure."""
+    figure.update_traces(hovertemplate=_time_hover_template())
+    _localize_facet_titles(figure, frame)
+    tickvals, ticktext = _jalali_tick_labels(frame["timestamp"])
+    figure.update_xaxes(tickmode="array", tickvals=tickvals, ticktext=ticktext)
+    return apply_plotly_typography(figure)
 
 
 def _indicator_label(row: pd.Series) -> str:
