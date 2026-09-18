@@ -1,5 +1,7 @@
 """Unit tests for pure Plotly chart construction."""
 
+import math
+
 import pandas as pd
 import pytest
 from plotly.basedatatypes import BaseFigure
@@ -11,6 +13,7 @@ from dashboard.components.charts import (
     FACET_PANEL_HEIGHT,
     MAX_CHART_HEIGHT,
     MIN_CHART_HEIGHT,
+    MIN_CORRELATION_OVERLAP,
     SMALL_MULTIPLES_COLUMNS,
     SMALL_MULTIPLES_MAX_SERIES,
     bounded_chart_height,
@@ -325,3 +328,82 @@ def test_correlation_chart_localizes_its_axis_and_colorbar_titles() -> None:
     assert bundle.figure.layout.xaxis.title.text == t("chart.indicator")
     assert bundle.figure.layout.yaxis.title.text == t("chart.indicator")
     assert bundle.figure.data[0].colorbar.title.text == t("chart.pearson_r")
+
+
+def overlapping_frame() -> pd.DataFrame:
+    """Two indicators sharing exactly two timestamps (below the overlap guard)."""
+    return pd.DataFrame(
+        {
+            "indicator_id": ["a", "a", "b", "b"],
+            "name": ["A", "A", "B", "B"],
+            "timestamp": [
+                pd.Timestamp("2020-01-01", tz="UTC"),
+                pd.Timestamp("2021-01-01", tz="UTC"),
+                pd.Timestamp("2020-01-01", tz="UTC"),
+                pd.Timestamp("2021-01-01", tz="UTC"),
+            ],
+            "value": [1.0, 2.0, 3.0, 4.0],
+            "unit": ["index"] * 4,
+        }
+    )
+
+
+def test_correlation_axes_use_display_names_not_ids() -> None:
+    bundle = build_correlation_chart(series_frame())
+
+    assert list(bundle.figure.data[0].x) == ["A", "B"]
+    assert list(bundle.figure.data[0].y) == ["A", "B"]
+
+
+def test_correlation_suppresses_cells_below_the_minimum_overlap() -> None:
+    bundle = build_correlation_chart(overlapping_frame())
+
+    # Two paired observations: the coefficient exists but is below the guard, so
+    # the raw frame keeps it while the drawn cell is masked (insufficient overlap,
+    # never read as zero).
+    assert bundle.join_counts.loc["a", "b"] == 2
+    assert bundle.min_overlap == MIN_CORRELATION_OVERLAP
+    assert not pd.isna(bundle.correlation.loc["a", "b"])
+    assert bundle.suppressed_pairs == (("a", "b"),)
+    assert math.isnan(bundle.figure.data[0].z[0][1])
+
+
+def test_correlation_keeps_cells_meeting_the_minimum_overlap() -> None:
+    timestamps = [pd.Timestamp(f"20{year}-01-01", tz="UTC") for year in (20, 21, 22)]
+    frame = pd.DataFrame(
+        {
+            "indicator_id": ["a"] * 3 + ["b"] * 3,
+            "name": ["A"] * 3 + ["B"] * 3,
+            "timestamp": timestamps * 2,
+            "value": [1.0, 2.0, 3.0, 3.0, 4.0, 5.0],
+            "unit": ["index"] * 6,
+        }
+    )
+
+    bundle = build_correlation_chart(frame)
+
+    assert bundle.join_counts.loc["a", "b"] == MIN_CORRELATION_OVERLAP
+    assert bundle.suppressed_pairs == ()
+    assert not math.isnan(bundle.figure.data[0].z[0][1])
+
+
+def test_correlation_summary_reports_matched_observations_per_pair() -> None:
+    bundle = build_correlation_chart(overlapping_frame())
+
+    summary = bundle.overlap_summary
+    assert list(summary.columns) == ["indicator_pair", "matched_observations", "meets_minimum"]
+    assert summary.loc[0, "indicator_pair"] == "A ↔ B"
+    assert summary.loc[0, "matched_observations"] == 2
+    assert bool(summary.loc[0, "meets_minimum"]) is False
+
+
+def test_empty_correlation_bundle_has_stable_summary_columns() -> None:
+    bundle = build_correlation_chart(pd.DataFrame())
+
+    assert bundle.figure.data == ()
+    assert bundle.suppressed_pairs == ()
+    assert list(bundle.overlap_summary.columns) == [
+        "indicator_pair",
+        "matched_observations",
+        "meets_minimum",
+    ]

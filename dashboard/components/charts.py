@@ -377,6 +377,13 @@ def build_chain_linking_chart(series: pd.DataFrame) -> BaseFigure:
     return apply_plotly_typography(figure)
 
 
+#: Minimum exact-timestamp matches for a correlation cell to be drawn. A Pearson
+#: coefficient over fewer than three paired observations is not a usable estimate,
+#: so cells below this are masked (left blank) in the heatmap and reported by the
+#: page. Presentation-only: no stored value changes.
+MIN_CORRELATION_OVERLAP: Final[int] = 3
+
+
 @dataclass(frozen=True)
 class CorrelationBundle:
     """Correlation output plus the exact-timestamp join diagnostics."""
@@ -384,12 +391,34 @@ class CorrelationBundle:
     figure: BaseFigure
     correlation: pd.DataFrame
     join_counts: pd.DataFrame
+    overlap_summary: pd.DataFrame
+    min_overlap: int
+    suppressed_pairs: tuple[tuple[str, str], ...] = ()
 
 
-def build_correlation_chart(series: pd.DataFrame) -> CorrelationBundle:
-    """Build a correlation heatmap using only exact timestamp matches."""
+def build_correlation_chart(
+    series: pd.DataFrame,
+    *,
+    min_overlap: int = MIN_CORRELATION_OVERLAP,
+) -> CorrelationBundle:
+    """Build a correlation heatmap using only exact timestamp matches.
+
+    A cell whose exact-timestamp join holds fewer than ``min_overlap`` paired
+    observations is masked (left blank) rather than drawn, so a thin overlap
+    reads as insufficient overlap instead of as a correlation. The raw
+    ``correlation`` frame keeps every computed coefficient; only the figure's
+    cells are suppressed, and the page warns about the affected pairs. Axis
+    labels are the Persian display names from :mod:`dashboard.labels`, never the
+    raw indicator ids.
+    """
     if series.empty:
-        return CorrelationBundle(go.Figure(), pd.DataFrame(), pd.DataFrame())
+        return CorrelationBundle(
+            go.Figure(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            _empty_overlap_summary(),
+            min_overlap,
+        )
     wide = series.pivot_table(
         index="timestamp",
         columns="indicator_id",
@@ -399,11 +428,14 @@ def build_correlation_chart(series: pd.DataFrame) -> CorrelationBundle:
     correlation = wide.corr()
     present = wide.notna()
     join_counts = present.astype(int).T.dot(present.astype(int))
+    names = _indicator_names(series)
+    masked = correlation.where(join_counts >= min_overlap)
+    axis_labels = [_display_name(names, indicator) for indicator in correlation.columns]
     figure = go.Figure(
         go.Heatmap(
-            z=correlation,
-            x=correlation.columns.tolist(),
-            y=correlation.columns.tolist(),
+            z=masked,
+            x=axis_labels,
+            y=axis_labels,
             zmin=-1,
             zmax=1,
             colorbar={"title": t("chart.pearson_r")},
@@ -411,7 +443,88 @@ def build_correlation_chart(series: pd.DataFrame) -> CorrelationBundle:
     )
     figure.update_layout(xaxis_title=t("chart.indicator"), yaxis_title=t("chart.indicator"))
     apply_plotly_typography(figure)
-    return CorrelationBundle(figure, correlation, join_counts)
+    return CorrelationBundle(
+        figure=figure,
+        correlation=correlation,
+        join_counts=join_counts,
+        overlap_summary=_overlap_summary(join_counts, names, min_overlap),
+        min_overlap=min_overlap,
+        suppressed_pairs=_suppressed_pairs(join_counts, min_overlap),
+    )
+
+
+def _suppressed_pairs(
+    join_counts: pd.DataFrame,
+    min_overlap: int,
+) -> tuple[tuple[str, str], ...]:
+    """Unordered indicator pairs whose exact-timestamp overlap is below the guard."""
+    indicators = [str(indicator) for indicator in join_counts.columns]
+    pairs: list[tuple[str, str]] = []
+    for position, first in enumerate(indicators):
+        for second in indicators[position + 1 :]:
+            if int(join_counts.loc[first, second]) < min_overlap:  # type: ignore[arg-type]
+                pairs.append((first, second))
+    return tuple(pairs)
+
+
+def _overlap_summary(
+    join_counts: pd.DataFrame,
+    names: dict[str, str],
+    min_overlap: int,
+) -> pd.DataFrame:
+    """One row per indicator pair: matched observations and whether they suffice."""
+    indicators = [str(indicator) for indicator in join_counts.columns]
+    rows: list[dict[str, object]] = []
+    for position, first in enumerate(indicators):
+        for second in indicators[position + 1 :]:
+            matched = int(join_counts.loc[first, second])  # type: ignore[arg-type]
+            rows.append(
+                {
+                    "indicator_pair": (
+                        f"{_display_name(names, first)} ↔ {_display_name(names, second)}"
+                    ),
+                    "matched_observations": matched,
+                    "meets_minimum": matched >= min_overlap,
+                }
+            )
+    return pd.DataFrame(rows, columns=["indicator_pair", "matched_observations", "meets_minimum"])
+
+
+def _empty_overlap_summary() -> pd.DataFrame:
+    """Empty matched-observation summary with the stable display columns."""
+    return pd.DataFrame(columns=["indicator_pair", "matched_observations", "meets_minimum"])
+
+
+def _indicator_names(series: pd.DataFrame) -> dict[str, str]:
+    """Persian display label per indicator id, resolved through the label layer.
+
+    ``load_series`` LEFT JOINs the catalog, so ``name`` may be absent for a
+    derived or orphan row; the label layer then falls back to the parent name and
+    finally the Gold id, so an axis is never blank.
+    """
+    names: dict[str, str] = {}
+    for row in series.drop_duplicates("indicator_id").to_dict("records"):
+        indicator_id = str(row["indicator_id"])
+        names[indicator_id] = indicator_label(
+            indicator_id,
+            _optional_text(row.get("name")),
+            _optional_text(row.get("derived_from")),
+        )
+    return names
+
+
+def _display_name(names: dict[str, str], indicator_id: str) -> str:
+    """Display label for one indicator id, falling back to the raw id."""
+    return names.get(str(indicator_id), str(indicator_id))
+
+
+def _optional_text(value: object) -> str | None:
+    """A non-empty stripped string, or ``None`` for a null/non-text value."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
 
 
 def _time_axis_labels() -> dict[str, str]:

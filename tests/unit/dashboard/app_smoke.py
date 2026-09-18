@@ -500,6 +500,41 @@ def inflation_series() -> pd.DataFrame:
     )
 
 
+#: The four inactive SCI base-year segments the catalog keeps for the segment
+#: view. They are seeded inactive, so they only appear when the catalog page's
+#: inactive-segment toggle is on (``active_only=False``).
+INACTIVE_SEGMENT_IDS = (
+    "SCI.CPI.URBAN.B2016",
+    "SCI.CPI.URBAN.B2021",
+    "SCI.CPI.NATIONAL.B2021",
+    "SCI.CPI.RURAL.B2021",
+)
+
+
+def inactive_segment_catalog() -> pd.DataFrame:
+    """Catalog rows for the inactive SCI base-year segments."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": indicator,
+                "name": f"CPI base-year segment {indicator}",
+                "description": None,
+                "unit": "index",
+                "frequency": "monthly",
+                "domain": "inflation",
+                "source_name": "sci",
+                "source_url": None,
+                "availability_start": SCI_CPI_TIMESTAMPS[0],
+                "availability_end": SCI_CPI_TIMESTAMPS[-1],
+                "has_base_year_changes": True,
+                "base_years": "[2016, 2021]",
+                "is_active": False,
+            }
+            for indicator in INACTIVE_SEGMENT_IDS
+        ]
+    )
+
+
 #: TSETMC fixture: trading sessions for the market domain. The Thursday/Friday
 #: weekend and a one-day holiday (2026-09-08) are **absent**, exactly as the
 #: source reports them -- the platform never fills a session, so the page must
@@ -744,6 +779,7 @@ class FakeDashboardRepository:
         self.catalog = _append_rows(self.catalog, labor_catalog())
         self.catalog = _append_rows(self.catalog, trade_energy_catalog())
         self.catalog = _append_rows(self.catalog, inflation_catalog())
+        self.catalog = _append_rows(self.catalog, inactive_segment_catalog())
         self.series = _append_rows(self.series, welfare_series())
         self.series = _append_rows(self.series, market_series())
         self.series = _append_rows(self.series, inflation_derived_series())
@@ -783,8 +819,17 @@ class FakeDashboardRepository:
         active_only: bool = True,
     ) -> pd.DataFrame:
         result = self.catalog
+        if active_only:
+            result = result[result["is_active"].astype(bool)]
         if domains:
             result = result[result["domain"].isin(domains)]
+        if search:
+            needle = search.strip().casefold()
+            result = result[
+                result["indicator_id"].str.casefold().str.contains(needle, regex=False)
+                | result["name"].fillna("").str.casefold().str.contains(needle, regex=False)
+                | result["description"].fillna("").str.casefold().str.contains(needle, regex=False)
+            ]
         return result.reset_index(drop=True)
 
     def load_series(
@@ -815,7 +860,8 @@ class FakeDashboardRepository:
         return self.freshness
 
     def available_domains(self) -> pd.DataFrame:
-        return self.catalog.groupby("domain").size().reset_index(name="indicator_count")
+        active = self.catalog[self.catalog["is_active"].astype(bool)]
+        return active.groupby("domain").size().reset_index(name="indicator_count")
 
     def series_inventory(self) -> pd.DataFrame:
         """Distinct Gold series classified by catalog presence and derivedness."""

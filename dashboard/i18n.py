@@ -92,6 +92,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.hbsir_deciles": "سهم درآمدی دهک‌ها",
         "section.hbsir_survey_years": "سال‌های آمارگیری موجود",
         "section.welfare_other_indicators": "سایر شاخص‌های حوزه رفاه",
+        # Chain-linking transparency (Task 23) and the correlation overlap
+        # summary (Task 24).
+        "section.chain_linking": "شفافیت زنجیره‌سازی و سال پایه",
+        "section.matched_observations": "مشاهدات منطبق",
         # Inflation page (Task 13): the SCI expenditure-decile comparison, the
         # canonical chain-linked comparison, and the generic composition below.
         "section.cpi_deciles": "شاخص قیمت مصرف‌کننده به تفکیک دهک هزینه",
@@ -122,6 +126,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "filter.end_date": "تاریخ پایان",
         "filter.include_derived": "نمایش سری‌های مشتق‌شده در صورت وجود",
         "filter.start_after_end": "تاریخ شروع باید پیش از تاریخ پایان یا برابر آن باشد.",
+        # Catalog-page search and the inactive base-year segment toggle (Task 25).
+        "filter.search": "جست‌وجو در فهرست",
+        "filter.clear": "پاک‌کردن پالایه‌ها",
+        "filter.include_inactive_segments": "نمایش بازه‌های غیرفعال سال پایه",
         # Jalali-aware date selection (Task 18): convenience presets that resolve
         # to the same UTC Gregorian bounds, plus the echo of what was applied.
         "filter.jalali_presets": "میانبرهای تاریخ شمسی",
@@ -205,6 +213,12 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         # Overview freshness (Task 16): the staleness verdict against the
         # source's expected collection cadence (dashboard.labels).
         "table.staleness": "وضعیت تازگی",
+        # Chain-linking provenance (Task 23) and the correlation matched-
+        # observation summary (Task 24).
+        "table.base_year_segments": "بازه‌های سال پایه",
+        "table.indicator_pair": "جفت شاخص",
+        "table.matched_observations": "مشاهدات منطبق",
+        "table.meets_minimum_overlap": "حداقل همپوشانی",
         # HBSIR survey-year metadata panel.
         "table.survey_year": "سال آمارگیری",
         "table.survey_year_end": "پایان سال آمارگیری (شمسی)",
@@ -240,6 +254,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "empty.no_hbsir_observations": "هیچ مشاهده HBSIR در بازه زمانی انتخاب‌شده موجود نیست.",
         "empty.no_cpi_deciles": "هیچ سری شاخص قیمت مصرف‌کننده به تفکیک دهک هزینه در فهرست شاخص‌ها موجود نیست.",
         "empty.no_cpi_canonical": "هیچ سری زنجیره‌شده شاخص قیمت مصرف‌کننده در فهرست شاخص‌ها موجود نیست.",
+        "empty.search_no_match": "هیچ شاخصی با عبارت جست‌وجو مطابقت ندارد.",
+        "empty.no_chain_linked": "هیچ شاخصی با تغییر سال پایه در فهرست این صفحه وجود ندارد.",
+        "empty.no_chain_linked_observations": (
+            "در بازه انتخاب‌شده هیچ ردیف زنجیره‌شده‌ای برای نمایش وجود ندارد."
+        ),
         # Warnings.
         "warn.catalog_empty": (
             "فهرست شاخص‌ها خالی است. پیش از استفاده از داشبورد، یک خط لوله ETL را اجرا کنید."
@@ -258,6 +277,35 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         ),
         "warn.missing_periods": (
             "بازه زمانی انتخاب‌شده دوره‌های مفقود دارد. هیچ مقداری جایگزین نشده است."
+        ),
+        # Chain-linking transparency (Task 23): the linked and original values are
+        # stored fields, and the segment overlap is what identifies the splice.
+        "warn.chain_linking_stored": (
+            "مقادیر زنجیره‌شده و مقادیر اصلی هر دو به‌صورت ذخیره‌شده نمایش داده می‌شوند؛ "
+            "هیچ بازمحاسبه، درون‌یابی یا نرمال‌سازی در این صفحه انجام نمی‌شود."
+        ),
+        "warn.chain_linking_overlap": (
+            "سری زنجیره‌شده از هم‌پوشانی مشاهدات بازه‌های سال پایه ساخته می‌شود و مقادیر "
+            "پیش از سال پایه جدید با ضریبی که از همین هم‌پوشانی برآورد شده مقیاس شده‌اند. "
+            "بازه‌های سال پایه در جدول بالا آمده است."
+        ),
+        # Correlation guardrails (Task 24): low overlap is suppressed rather than
+        # drawn, and the exact-timestamp join's limitation stays visible.
+        "warn.correlation_low_overlap": (
+            "برای {count} جفت شاخص، تعداد مشاهدات منطبق کمتر از حداقل {minimum} است؛ این "
+            "خانه‌ها در نقشه همبستگی نمایش داده نمی‌شوند تا مقدار نامعتبر به‌جای همبستگی "
+            "خوانده نشود."
+        ),
+        "warn.correlation_exact_join": (
+            "همبستگی تنها بر تطابق دقیق زمان مبتنی است و هیچ درون‌یابی، جلو‌بری یا "
+            "هم‌تواترسازی انجام نمی‌شود؛ خانه خالی یعنی هم‌پوشانی ناکافی، نه مقدار صفر."
+        ),
+        # IMF forecast disclosure (Phase 7.1 deferral): forecast labeling needs an
+        # ETL change, so forecast rows are indistinguishable in this release.
+        "warn.forecasts_indistinguishable": (
+            "ردیف‌های پیش‌بینی صندوق بین‌المللی پول در این نسخه از ردیف‌های واقعی قابل "
+            "تشخیص نیستند و مانند هر مشاهده دیگری نمایش داده می‌شوند؛ برچسب‌گذاری "
+            "پیش‌بینی به فاز بعد موکول شده است."
         ),
         # HBSIR caveats: the measure is relative and the values are computed by
         # this platform from the survey microdata, not published HBSIR figures.

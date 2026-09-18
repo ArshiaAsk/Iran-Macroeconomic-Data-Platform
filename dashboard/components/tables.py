@@ -92,6 +92,10 @@ COLUMN_HEADER_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "hbsir_indicators": "table.hbsir_indicators",
         "hbsir_observations": "table.hbsir_observations",
         "staleness": "table.staleness",
+        "base_year_segments": "table.base_year_segments",
+        "indicator_pair": "table.indicator_pair",
+        "matched_observations": "table.matched_observations",
+        "meets_minimum": "table.meets_minimum_overlap",
     }
 )
 
@@ -125,12 +129,19 @@ NUMBER_COLUMNS: Final[frozenset[str]] = frozenset(
         "missing_periods",
         "records_collected",
         "indicator_count",
+        "matched_observations",
     }
 )
 
 #: Boolean columns rendered as yes/no.
 BOOLEAN_COLUMNS: Final[frozenset[str]] = frozenset(
-    {"is_chain_linked", "is_active", "has_base_year_changes", "expected_is_estimated"}
+    {
+        "is_chain_linked",
+        "is_active",
+        "has_base_year_changes",
+        "expected_is_estimated",
+        "meets_minimum",
+    }
 )
 
 _LABEL_COLUMNS: Final[Mapping[str, Callable[[str], str]]] = MappingProxyType(

@@ -24,6 +24,8 @@ from dashboard.navigation import PAGES
 from dashboard.page_view import (
     SCI_CANONICAL_CPI_INDICATORS,
     SCI_DECILE_INDICATORS,
+    chain_linked_catalog_ids,
+    chain_linking_provenance,
     cpi_canonical_ids,
     cpi_decile_ids,
 )
@@ -182,3 +184,46 @@ def test_inflation_domain_is_still_owned_by_exactly_one_page() -> None:
     assert [spec.key for spec in PAGES if "inflation" in spec.domains] == ["inflation"]
     assert specs["inflation"].domains == ("inflation",)
     assert specs["inflation"].path == "pages/2_Inflation.py"
+
+
+def test_chain_linked_catalog_ids_read_the_stored_base_year_flag() -> None:
+    catalog = inflation_catalog()
+
+    assert set(chain_linked_catalog_ids(catalog)) == set(SCI_CANONICAL_IDS)
+
+
+def test_chain_linked_catalog_ids_are_empty_safe() -> None:
+    assert chain_linked_catalog_ids(pd.DataFrame()) == []
+    assert chain_linked_catalog_ids(pd.DataFrame({"indicator_id": ["x"]})) == []
+
+
+def test_chain_linking_provenance_lists_base_years_and_segment_ancestry() -> None:
+    catalog = inflation_catalog()
+    flagged = catalog[catalog["indicator_id"].isin(chain_linked_catalog_ids(catalog))]
+
+    table = chain_linking_provenance(flagged)
+    urban = table[table[t("table.name")] == indicator_label("SCI.CPI.URBAN")]
+
+    assert list(table.columns) == [
+        t("table.name"),
+        t("table.has_base_year_changes"),
+        t("table.base_years"),
+        t("table.base_year_segments"),
+    ]
+    assert len(urban) == 1
+    assert urban.iloc[0][t("table.has_base_year_changes")] == t("value.yes")
+    segments = urban.iloc[0][t("table.base_year_segments")]
+    assert indicator_label("SCI.CPI.URBAN.B2016") in segments
+    assert indicator_label("SCI.CPI.URBAN.B2021") in segments
+
+
+def test_inflation_page_renders_the_chain_linking_section(
+    fake_streamlit_connection,
+) -> None:
+    app = app_test(INFLATION_PAGE)
+    app.run()
+
+    assert not app.exception
+    assert t("section.chain_linking") in {subheader.value for subheader in app.subheader}
+    assert t("warn.chain_linking_stored") in {caption.value for caption in app.caption}
+    assert t("warn.chain_linking_overlap") in {caption.value for caption in app.caption}

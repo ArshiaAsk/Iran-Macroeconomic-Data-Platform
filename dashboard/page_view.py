@@ -1,7 +1,7 @@
 """Composable page-rendering functions used by Streamlit page modules."""
 
 import math
-from collections.abc import Iterable
+from collections.abc import Hashable, Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Final
 
@@ -13,6 +13,7 @@ from dashboard.components.charts import (
     CHART_MODES,
     SURVEY_YEAR_COLUMN,
     ScaledChart,
+    build_chain_linking_chart,
     build_scaled_time_series_chart,
     build_survey_year_chart,
     build_time_series_chart,
@@ -27,9 +28,13 @@ from dashboard.formatting import (
     jalali_date_label,
     jalali_year_label,
     tehran_timestamp_label,
+    to_ascii_digits,
+    to_persian_digits,
 )
 from dashboard.i18n import t
 from dashboard.labels import (
+    DERIVED_SUFFIX_LABELS,
+    derived_label,
     domain_label,
     indicator_label,
     source_expected_cadence,
@@ -113,6 +118,22 @@ INFLATION_DEFAULT_INDICATORS: Final[tuple[str, ...]] = ("FP.CPI.TOTL.ZG",)
 #: canonical and decile CPI series are catalog domain ``inflation``.
 INFLATION_DOMAIN: Final[str] = "inflation"
 
+#: Session-state keys of the catalog page's filter and search widgets. The
+#: clear-filters button resets exactly these; the inactive-segment toggle is a view
+#: control, not a filter, so it is deliberately not in the list.
+CATALOG_FILTER_STATE_KEYS: Final[tuple[str, ...]] = (
+    "catalog_domains",
+    "catalog_frequencies",
+    "catalog_sources",
+    "catalog_indicators",
+    "catalog_start",
+    "catalog_end",
+    "catalog_jalali_year",
+    "catalog_jalali_month",
+    "catalog_jalali_day",
+    "catalog_search",
+)
+
 
 def render_domain_page(
     title: str,
@@ -194,6 +215,7 @@ def render_inflation_page(repository: DashboardRepository | None = None) -> None
     filters = render_filters(catalog, "inflation", list(INFLATION_DEFAULT_INDICATORS))
     _render_cpi_decile_section(catalog, filters, repository)
     _render_cpi_canonical_section(catalog, filters, repository)
+    _render_chain_linking_section(catalog, filters, repository)
     st.subheader(t("section.inflation_all_indicators"))
     render_domain_body(
         (INFLATION_DOMAIN,),
@@ -287,6 +309,105 @@ def _render_cpi_canonical_section(
         st.info(t("empty.no_observations"))
         return
     st.plotly_chart(build_time_series_chart(series), use_container_width=True)
+
+
+def chain_linked_catalog_ids(catalog: pd.DataFrame) -> list[str]:
+    """Catalog ids whose stored base-year flag marks them as chain-linked.
+
+    The flag is the catalog's own ``has_base_year_changes`` column, read as
+    stored: the dashboard never re-derives whether a series was chain-linked.
+    """
+    if catalog.empty or "has_base_year_changes" not in catalog.columns:
+        return []
+    flagged = catalog["has_base_year_changes"].fillna(False).astype(bool)
+    return [str(indicator) for indicator in catalog.loc[flagged, "indicator_id"]]
+
+
+def chain_linking_provenance(catalog: pd.DataFrame) -> pd.DataFrame:
+    """Per chain-linked indicator: display name, base-year badge, years and segments.
+
+    The badge is the catalog's stored ``has_base_year_changes`` flag, the nominal
+    base years are the catalog's stored ``base_years`` value, and the segment
+    ancestry comes from the connector registry
+    (:data:`SCI_CANONICAL_INDICATORS`) rather than from a dashboard id list, so a
+    registry change is reflected without a page edit. Nothing is recomputed.
+    """
+    columns = [
+        t("table.name"),
+        t("table.has_base_year_changes"),
+        t("table.base_years"),
+        t("table.base_year_segments"),
+    ]
+    rows: list[dict[str, str]] = []
+    for row in catalog.to_dict("records"):
+        indicator_id = str(row["indicator_id"])
+        canonical = SCI_CANONICAL_INDICATORS.get(indicator_id)
+        segments = (
+            "، ".join(indicator_label(segment) for segment in canonical.segment_ids)
+            if canonical is not None
+            else ""
+        )
+        rows.append(
+            {
+                columns[0]: indicator_label(indicator_id, _catalog_name(row)),
+                columns[1]: _flag_label(row.get("has_base_year_changes")),
+                columns[2]: _base_years_text(row.get("base_years")),
+                columns[3]: segments,
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _flag_label(value: object) -> str:
+    """Display a stored boolean flag as the Persian yes/no, never inventing a yes."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return t("value.no")
+    return t("value.yes") if bool(value) else t("value.no")
+
+
+def _base_years_text(value: object) -> str:
+    """Display a stored ``base_years`` value, or the unknown placeholder when absent."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return t("value.unknown")
+    if isinstance(value, list | tuple):
+        return "، ".join(to_persian_digits(str(year)) for year in value)
+    return str(value)
+
+
+def _render_chain_linking_section(
+    catalog: pd.DataFrame,
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> None:
+    """Surface the stored chain-linking provenance and the original-vs-linked panel.
+
+    Everything shown is read from Gold as stored: the chart draws
+    ``original_value`` against ``value`` for rows with ``is_chain_linked`` set,
+    the provenance table shows the catalog's base-year flag and years plus the
+    registry's segment ancestry, and the observations grid carries
+    ``chain_linking_confidence`` and ``record_metadata`` unchanged. No value is
+    recomputed, interpolated or normalized.
+    """
+    st.subheader(t("section.chain_linking"))
+    st.caption(t("warn.chain_linking_stored"))
+    chain_ids = chain_linked_catalog_ids(catalog)
+    if not chain_ids:
+        st.info(t("empty.no_chain_linked"))
+        return
+    flagged = catalog[catalog["indicator_id"].isin(chain_ids)]
+    st.dataframe(chain_linking_provenance(flagged), use_container_width=True, hide_index=True)
+    st.caption(t("warn.chain_linking_overlap"))
+    series = _load_series(chain_ids, filters.start_date, filters.end_date, repository)
+    if series.empty:
+        st.info(t("empty.no_chain_linked_observations"))
+        return
+    figure = build_chain_linking_chart(series)
+    if not figure.data:
+        st.info(t("empty.no_chain_linked_observations"))
+        return
+    st.plotly_chart(figure, use_container_width=True)
+    with st.expander(t("section.observations"), expanded=False):
+        _render_capped_rows(series)
 
 
 def render_market_page(repository: DashboardRepository | None = None) -> None:
@@ -465,13 +586,52 @@ def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> Non
 
 
 def render_catalog_page(repository: DashboardRepository | None = None) -> None:
-    """Render the searchable indicator catalog."""
+    """Render the searchable indicator catalog.
+
+    The inactive-segment toggle re-queries with ``active_only=False`` so the four
+    seeded SCI base-year segments are inspectable; search matches the catalog's
+    own values (id, name, unit, source, domain) *and* the Persian display labels
+    from :mod:`dashboard.labels`, because a Persian needle lives in the label
+    layer rather than in the catalog. The SQL ``search`` path is exercised for
+    catalog columns and unioned with the label-layer match, so neither path can
+    hide a row the other would find.
+    """
     st.title(t("page.catalog"))
-    catalog = repository.list_indicators() if repository else cached_list_indicators()
+    include_inactive = st.checkbox(
+        t("filter.include_inactive_segments"),
+        key="catalog_include_inactive",
+    )
+    active_only = not include_inactive
+    catalog = _catalog_frame(repository, active_only=active_only)
     if catalog.empty:
         st.info(t("empty.catalog_empty"))
         return
     filters = render_filters(catalog, "catalog")
+    st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
+    needle = st.text_input(t("filter.search"), key="catalog_search")
+    result = _apply_catalog_filters(catalog, filters)
+    if needle.strip():
+        result = _apply_catalog_search(result, catalog, needle, repository, active_only)
+    st.metric(t("metric.matching_indicators"), format_number(len(result)))
+    if needle.strip() and result.empty:
+        st.info(t("empty.search_no_match"))
+    st.dataframe(localize_table_frame(result), use_container_width=True, hide_index=True)
+
+
+def _catalog_frame(
+    repository: DashboardRepository | None,
+    *,
+    active_only: bool,
+    search: str | None = None,
+) -> pd.DataFrame:
+    """Fetch the catalog through the repository seam (or its cached wrapper)."""
+    if repository is None:
+        return cached_list_indicators(search=search, active_only=active_only)
+    return repository.list_indicators(search=search, active_only=active_only)
+
+
+def _apply_catalog_filters(catalog: pd.DataFrame, filters: FilterState) -> pd.DataFrame:
+    """Apply the shared filter state to the catalog frame (empty-safe)."""
     result = catalog
     if filters.domains:
         result = result[result["domain"].isin(filters.domains)]
@@ -481,8 +641,102 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
         result = result[result["source_name"].isin(filters.sources)]
     if filters.indicator_ids:
         result = result[result["indicator_id"].isin(filters.indicator_ids)]
-    st.metric(t("metric.matching_indicators"), format_number(len(result)))
-    st.dataframe(localize_table_frame(result), use_container_width=True, hide_index=True)
+    return result
+
+
+def _apply_catalog_search(
+    result: pd.DataFrame,
+    catalog: pd.DataFrame,
+    needle: str,
+    repository: DashboardRepository | None,
+    active_only: bool,
+) -> pd.DataFrame:
+    """Restrict ``result`` to the union of SQL and label-layer search matches."""
+    matched = _indicator_id_set(search_catalog(catalog, needle))
+    matched |= _indicator_id_set(_catalog_frame(repository, active_only=active_only, search=needle))
+    if not matched:
+        return result.iloc[0:0]
+    return result[result["indicator_id"].isin(matched)]
+
+
+def _indicator_id_set(frame: pd.DataFrame) -> set[str]:
+    """Indicator ids of a frame as a set, empty when the column is absent."""
+    if frame.empty or "indicator_id" not in frame.columns:
+        return set()
+    return {str(indicator) for indicator in frame["indicator_id"]}
+
+
+def normalise_search_needle(text: str) -> str:
+    """Normalize a search needle for matching, never rewriting stored data.
+
+    Persian/Arabic-Indic digits become ASCII (so ``۱۴۰۰`` finds ``1400``), Arabic
+    yeh/kaf fold to their Persian forms (so a keyboard variant still matches a
+    Persian label), and the result is case-folded for ASCII catalog values. Only
+    the needle is rewritten; stored values are compared as-is.
+
+    Examples:
+        >>> normalise_search_needle("۱۴۰۰")
+        '1400'
+        >>> normalise_search_needle("  Inflation  ")
+        'inflation'
+    """
+    normalized = to_ascii_digits(text.strip())
+    normalized = normalized.replace("ي", "ی").replace("ك", "ک")
+    return normalized.casefold()
+
+
+def search_catalog(frame: pd.DataFrame, needle: str) -> pd.DataFrame:
+    """Catalog rows matching ``needle`` across catalog values and display labels.
+
+    The match covers the indicator id, the Persian display name, the catalog
+    (English) name, the unit, the source and the domain -- each in both its stored
+    slug and its Persian label form -- plus a known derived-series suffix label.
+    An empty needle returns the frame unchanged.
+    """
+    normalized = normalise_search_needle(needle)
+    if not normalized or frame.empty:
+        return frame
+    matched = [
+        any(normalized in candidate for candidate in _search_terms(row))
+        for row in frame.to_dict("records")
+    ]
+    return frame[matched]
+
+
+def _search_terms(row: Mapping[Hashable, Any]) -> tuple[str, ...]:
+    """Case-folded searchable strings of one catalog row (labels included)."""
+    indicator_id = str(row.get("indicator_id", ""))
+    catalog_name = _catalog_name(row)
+    source_name = str(row.get("source_name") or "")
+    domain = str(row.get("domain") or "")
+    terms = [
+        indicator_id,
+        catalog_name or "",
+        indicator_label(indicator_id, catalog_name),
+        str(row.get("unit") or ""),
+        source_name,
+        source_label(source_name),
+        domain,
+        domain_label(domain),
+    ]
+    suffix = indicator_id.rsplit(".", 1)[-1]
+    if suffix in DERIVED_SUFFIX_LABELS:
+        terms.append(derived_label(suffix))
+    return tuple(term.casefold() for term in terms if term)
+
+
+def _catalog_name(row: Mapping[Hashable, Any]) -> str | None:
+    """A catalog row's ``name`` as stripped text, or ``None`` when absent."""
+    value = row.get("name")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _clear_catalog_filters() -> None:
+    """Reset the catalog page's filter and search widgets (button callback)."""
+    for key in CATALOG_FILTER_STATE_KEYS:
+        st.session_state.pop(key, None)
 
 
 def render_overview_page(repository: DashboardRepository | None = None) -> None:
@@ -499,6 +753,7 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
     does not store an expected frequency, so this is a dashboard convention).
     """
     st.title(t("page.overview"))
+    st.warning(t("warn.forecasts_indistinguishable"))
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
         st.warning(t("warn.catalog_empty"))
@@ -778,9 +1033,26 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
     if len(frequencies) > 1:
         st.warning(t("warn.mixed_frequencies"))
     bundle = build_correlation_chart(series)
+    if bundle.suppressed_pairs:
+        st.warning(
+            t(
+                "warn.correlation_low_overlap",
+                count=format_number(len(bundle.suppressed_pairs)),
+                minimum=format_number(bundle.min_overlap),
+            )
+        )
+    st.caption(t("warn.correlation_exact_join"))
     st.plotly_chart(bundle.figure, use_container_width=True)
     st.subheader(t("section.exact_join_counts"))
-    st.dataframe(bundle.join_counts, use_container_width=True)
+    matrix_column, summary_column = st.columns(2)
+    with matrix_column:
+        st.dataframe(bundle.join_counts, use_container_width=True)
+    with summary_column:
+        st.dataframe(
+            localize_table_frame(bundle.overlap_summary),
+            use_container_width=True,
+            hide_index=True,
+        )
     render_quality_summary(summarize_quality(series, filters.start_date, filters.end_date))
     render_data_downloads(series, "iran-macro-correlation")
 
