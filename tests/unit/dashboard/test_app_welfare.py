@@ -171,10 +171,13 @@ def test_existing_page_ownership_is_unchanged() -> None:
         # The Market page (Task 10) is appended: it claims only `market` and
         # leaves every page above exactly as the welfare split left it.
         "market",
+        # The Labor page (Task 11) is appended: it claims only `labor`.
+        "labor",
     ]
     assert specs["inflation"].domains == ("inflation",)
     assert specs["gdp"].domains == ("gdp",)
     assert specs["fx_gold"].domains == ("fx", "gold")
+    assert specs["labor"].domains == ("labor",)
     assert {spec.key for spec in PAGES if not spec.domains} == {
         "overview",
         "correlation",

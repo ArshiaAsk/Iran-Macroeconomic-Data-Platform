@@ -63,6 +63,11 @@ MARKET_DOMAIN: Final[str] = "market"
 #: daily derived series and the downsample uses this stored value, never an id.
 MARKET_MONTHLY_FREQUENCY: Final[str] = "monthly"
 
+#: The Labor page's domain. SCI publishes the labour-force unemployment rate for
+#: one quarter per release, so the domain is legitimately a single-observation
+#: series and the page renders it without implying a trend.
+LABOR_DOMAIN: Final[str] = "labor"
+
 
 def render_domain_page(
     title: str,
@@ -109,8 +114,10 @@ def render_domain_body(
     if filters is None:
         filters = render_filters(catalog, key_prefix, default_indicators)
     selected_ids = list(filters.indicator_ids)
-    if st.checkbox("Include derived series when available", key=f"{key_prefix}_derived"):
-        selected_ids.extend(_derived_ids(catalog, filters.indicator_ids))
+    if st.checkbox(t("filter.include_derived"), key=f"{key_prefix}_derived"):
+        selected_ids.extend(
+            derived_series_ids(filters.indicator_ids, repository, exclude=selected_ids)
+        )
     if not selected_ids:
         st.info("Select one or more indicators to view Gold observations.")
         return
@@ -206,22 +213,10 @@ def _load_market_series(
 ) -> pd.DataFrame:
     """Load the selected market levels plus every derived series Gold records."""
     parent_ids = list(filters.indicator_ids)
-    derived_ids = _list_derived_ids(parent_ids, repository)
+    derived_ids = derived_series_ids(parent_ids, repository, exclude=parent_ids)
     return _load_series(
         [*parent_ids, *derived_ids], filters.start_date, filters.end_date, repository
     )
-
-
-def _list_derived_ids(
-    parent_ids: list[str],
-    repository: DashboardRepository | None,
-) -> list[str]:
-    """Discover the derived Gold ids of the given parents from Gold metadata."""
-    if not parent_ids:
-        return []
-    if repository is None:
-        return cached_list_derived_ids(tuple(parent_ids))
-    return repository.list_derived_ids(parent_ids)
 
 
 def _render_market_level(level: pd.DataFrame) -> None:
@@ -424,6 +419,38 @@ def render_welfare_page(repository: DashboardRepository | None = None) -> None:
     )
 
 
+def render_labor_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Labor page, owner of the whole ``labor`` domain.
+
+    SCI publishes the labour-force unemployment rate for one quarter per release,
+    so the domain is legitimately sparse (the catalog observes a single spring
+    1405 quarter). The composition therefore reads the whole domain from the
+    catalog, defaults the selection to it, and renders through the shared Gold
+    path: nothing is interpolated, extrapolated or zero-filled, and a lone
+    quarter is presented as one marker with its quality row rather than an
+    implied trend. The unemployment series carries no derived Gold rows today, so
+    the "Include derived series" control is inert until the ETL publishes one --
+    exactly as it behaves for every other domain without derived rows.
+    """
+    st.title(t("page.labor"))
+    st.info(t("warn.labor_publication"))
+    domain_list = [LABOR_DOMAIN]
+    if repository is None:
+        catalog = cached_list_indicators(domains=tuple(domain_list))
+    else:
+        catalog = repository.list_indicators(domains=domain_list)
+    if catalog.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    render_domain_body(
+        domain_list,
+        "labor",
+        list(catalog["indicator_id"]),
+        repository=repository,
+        catalog=catalog,
+    )
+
+
 def render_correlation_page(repository: DashboardRepository | None = None) -> None:
     """Render exact-timestamp correlation diagnostics."""
     from dashboard.components.charts import build_correlation_chart
@@ -613,17 +640,40 @@ def _load_series(
     return repository.load_series(list(indicator_ids), start_date, end_date)
 
 
-def _derived_ids(catalog: pd.DataFrame, selected_ids: list[str]) -> list[str]:
-    available = set(catalog["indicator_id"])
-    derived: list[str] = []
-    for indicator_id in selected_ids:
-        candidates = (
-            f"WB.{indicator_id}.YOY",
-            f"TGJU.{indicator_id}.RET1D",
-            f"TGJU.{indicator_id}.MA30",
-        )
-        derived.extend(candidate for candidate in candidates if candidate in available)
-    return derived
+def derived_series_ids(
+    parent_ids: Iterable[str],
+    repository: DashboardRepository | None,
+    *,
+    exclude: Iterable[str] = (),
+) -> list[str]:
+    """Discover the derived Gold ids of ``parent_ids`` from Gold metadata.
+
+    Derivedness is read from the ETL-written ``record_metadata["derived_from"]``
+    through the repository (or its cached query seam), so the discovery is
+    independent of indicator-id prefixes and suffixes, of the suffix map and of
+    the catalog: a derived series without a catalog row is still returned, and a
+    new derivation strategy becomes visible without a dashboard change. Ids in
+    ``exclude`` -- normally the caller's current selection -- are never returned,
+    so a derived series cannot be appended twice.
+
+    Args:
+        parent_ids: Selected parent indicator ids (duplicates are ignored)
+        repository: Repository seam, or ``None`` for the cached query wrapper
+        exclude: Ids already selected, dropped from the result
+
+    Returns:
+        Derived Gold ids, in the repository's order, without duplicates
+    """
+    parents = list(dict.fromkeys(parent_ids))
+    if not parents:
+        return []
+    discovered = (
+        cached_list_derived_ids(tuple(parents))
+        if repository is None
+        else repository.list_derived_ids(parents)
+    )
+    excluded = set(exclude)
+    return [indicator_id for indicator_id in discovered if indicator_id not in excluded]
 
 
 def _display_timestamp(value: object) -> str:

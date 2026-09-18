@@ -16,10 +16,8 @@ DASHBOARD_ROOT = REPOSITORY_ROOT / "dashboard"
 PLAN_DOMAINS = frozenset(
     {"gdp", "inflation", "trade", "welfare", "energy", "fx", "gold", "labor", "market"}
 )
-# Labor is a later task: its domain stays deliberately unowned until that page is
-# registered here. `market` is owned by the Market page (Task 10) and `welfare` by
-# the Welfare & Survey page.
-PENDING_DOMAINS = frozenset({"labor"})
+# Every plan domain has an owner now: `market` by the Market page (Task 10),
+# `welfare` by the Welfare & Survey page and `labor` by the Labor page (Task 11).
 
 
 def _owner_counts() -> Counter[str]:
@@ -59,7 +57,7 @@ def test_every_plan_domain_has_exactly_one_owner() -> None:
     owners = _owner_counts()
 
     assert [domain for domain, count in owners.items() if count > 1] == []
-    assert set(owners) == PLAN_DOMAINS - PENDING_DOMAINS
+    assert set(owners) == PLAN_DOMAINS
 
 
 def test_domain_exceptions_from_the_plan_hold() -> None:
@@ -71,6 +69,9 @@ def test_domain_exceptions_from_the_plan_hold() -> None:
     # `welfare` belongs to the Welfare & Survey page, not to the trade page.
     assert specs["trade_energy"].domains == ("trade", "energy")
     assert specs["welfare"].domains == ("welfare",)
+    # `labor` (SCI's quarterly unemployment) is its own page, not merged into
+    # Welfare through IMF `LUR`, which stays domain `welfare`.
+    assert specs["labor"].domains == ("labor",)
     assert specs["inflation"].domains == ("inflation",)
     assert specs["fx_gold"].domains == ("fx", "gold")
     # The plan's all-domain views own no domain at all.

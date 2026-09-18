@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 from plotly.basedatatypes import BaseFigure
 
 from dashboard.i18n import t
+from dashboard.labels import indicator_label
 
 #: Categorical x-axis column of a survey-year chart: the Jalali year label of each
 #: stored period end (see ``dashboard.page_view.survey_year_frame``).
@@ -174,16 +175,22 @@ def build_coverage_chart(coverage: pd.DataFrame) -> BaseFigure:
 
 
 def _indicator_label(row: pd.Series) -> str:
-    """Label a series by catalog name, falling back to its Gold indicator id.
+    """Label a series by its display name, falling back to its Gold indicator id.
 
-    ``load_series`` LEFT JOINs the catalog, so ``name`` is genuinely absent for a
-    series without a catalog row (and for an unresolvable derived parent) — the
-    label must then be the Gold id, never the string ``"None"``.
+    The label comes from :func:`dashboard.labels.indicator_label`, so a derived
+    row (``record_metadata["derived_from"]`` is set) is named after its parent
+    plus the suffix fragment and is distinguishable from the level in the
+    legend. ``load_series`` LEFT JOINs the catalog, so ``name`` is genuinely
+    absent for a series without a catalog row (and for an unresolvable derived
+    parent) — the label must then be the Gold id, never the string ``"None"``.
     """
     name = row.get("name")
-    label = row["indicator_id"]
-    if isinstance(name, str) and name.strip():
-        label = name.strip()
+    catalog_name = name.strip() if isinstance(name, str) and name.strip() else None
+    derived_from = row.get("derived_from")
+    parent = (
+        derived_from.strip() if isinstance(derived_from, str) and derived_from.strip() else None
+    )
+    label = indicator_label(str(row["indicator_id"]), catalog_name, parent)
     unit = row.get("unit")
     suffix = f" ({unit})" if pd.notna(unit) else ""
     return f"{label}{suffix}"

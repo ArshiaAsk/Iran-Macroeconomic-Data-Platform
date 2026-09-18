@@ -177,6 +177,246 @@ def welfare_series() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+#: Derived inflation series: a parent with a `record_metadata["derived_from"]`
+#: Gold row but **no catalog row**, which is exactly how the ETL publishes the
+#: derived `YOY` series. It exists so the Inflation page's "Include derived
+#: series" toggle has something metadata-driven to discover; the toggle stays off
+#: by default, so the page renders unchanged when it is not requested.
+INFLATION_INDICATOR = "FP.CPI.TOTL.ZG"
+INFLATION_DERIVED_ID = "WB.FP.CPI.TOTL.ZG.YOY"
+INFLATION_DERIVED_UNIT = "annual %"
+INFLATION_TIMESTAMPS = (
+    pd.Timestamp("2020-01-01", tz="UTC"),
+    pd.Timestamp("2021-01-01", tz="UTC"),
+    pd.Timestamp("2022-01-01", tz="UTC"),
+)
+INFLATION_DERIVED_VALUES = (100.0, 50.0)
+
+
+def inflation_derived_series() -> pd.DataFrame:
+    """Gold-shaped derived (`YOY`) rows for the inflation parent."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": INFLATION_DERIVED_ID,
+                "name": "Inflation",
+                "timestamp": timestamp,
+                "value": value,
+                "original_value": None,
+                "is_chain_linked": False,
+                "chain_linking_confidence": None,
+                "unit": INFLATION_DERIVED_UNIT,
+                "frequency": "annual",
+                "domain": "inflation",
+                "source_name": "world_bank",
+                "source_url": None,
+                "record_metadata": {"derived_from": INFLATION_INDICATOR},
+                "series_kind": SERIES_KIND_DERIVED,
+                "derived_from": INFLATION_INDICATOR,
+                "has_catalog_metadata": False,
+            }
+            for timestamp, value in zip(
+                INFLATION_TIMESTAMPS[1:], INFLATION_DERIVED_VALUES, strict=True
+            )
+        ]
+    )
+
+
+#: SCI fixture: the labour-force unemployment rate for one quarter. SCI publishes
+#: one quarter per release, so the domain is legitimately a single observation and
+#: the page must present it without implying a trend.
+LABOR_INDICATOR = "SCI.UNEMPLOYMENT.QUARTERLY"
+LABOR_NAME = "Unemployment rate (labour force survey, quarterly)"
+LABOR_UNIT = "percent"
+LABOR_TIMESTAMP = pd.Timestamp("2026-05-31", tz="UTC")
+LABOR_VALUE = 9.0
+
+
+def labor_catalog() -> pd.DataFrame:
+    """Catalog row for the `labor` domain: the quarterly SCI unemployment rate."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": LABOR_INDICATOR,
+                "name": LABOR_NAME,
+                "description": None,
+                "unit": LABOR_UNIT,
+                "frequency": "quarterly",
+                "domain": "labor",
+                "source_name": "sci",
+                "source_url": None,
+                "availability_start": LABOR_TIMESTAMP,
+                "availability_end": LABOR_TIMESTAMP,
+                "has_base_year_changes": False,
+                "base_years": None,
+                "is_active": True,
+            }
+        ]
+    )
+
+
+def labor_series() -> pd.DataFrame:
+    """Gold-shaped `labor` rows: a single published quarter (spring 1405)."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": LABOR_INDICATOR,
+                "name": LABOR_NAME,
+                "timestamp": LABOR_TIMESTAMP,
+                "value": LABOR_VALUE,
+                "original_value": None,
+                "is_chain_linked": False,
+                "chain_linking_confidence": None,
+                "unit": LABOR_UNIT,
+                "frequency": "quarterly",
+                "domain": "labor",
+                "source_name": "sci",
+                "source_url": None,
+                "record_metadata": None,
+                "series_kind": SERIES_KIND_BASE,
+                "derived_from": None,
+                "has_catalog_metadata": True,
+            }
+        ]
+    )
+
+
+#: Trade and energy fixture: one World Bank trade indicator and one EIA energy
+#: indicator, so the Trade & Energy page has a catalog and can exercise the same
+#: derived toggle as every other domain page. The trade indicator carries a
+#: derived `YOY` row; the energy indicator stays monthly and undriven.
+TRADE_INDICATOR = "NE.EXP.GNFS.CD"
+TRADE_DERIVED_ID = "WB.NE.EXP.GNFS.CD.YOY"
+TRADE_NAME = "Exports of goods and services (current US$)"
+ENERGY_INDICATOR = "EIA.IRN.CRUDE_PRODUCTION"
+ENERGY_NAME = "Crude oil, NGPL, and other liquids production"
+TRADE_TIMESTAMPS = (
+    pd.Timestamp("2020-01-01", tz="UTC"),
+    pd.Timestamp("2021-01-01", tz="UTC"),
+    pd.Timestamp("2022-01-01", tz="UTC"),
+)
+ENERGY_TIMESTAMPS = (
+    pd.Timestamp("2026-08-31", tz="UTC"),
+    pd.Timestamp("2026-09-30", tz="UTC"),
+)
+
+
+def _gold_row(
+    indicator_id: str,
+    name: str,
+    timestamp: pd.Timestamp,
+    value: float,
+    unit: str,
+    frequency: str,
+    domain: str,
+    source_name: str,
+    *,
+    derived_from: str | None = None,
+) -> dict[str, object]:
+    """One Gold-shaped row, base by default and metadata-derived when a parent is given."""
+    return {
+        "indicator_id": indicator_id,
+        "name": name,
+        "timestamp": timestamp,
+        "value": value,
+        "original_value": None,
+        "is_chain_linked": False,
+        "chain_linking_confidence": None,
+        "unit": unit,
+        "frequency": frequency,
+        "domain": domain,
+        "source_name": source_name,
+        "source_url": None,
+        "record_metadata": {"derived_from": derived_from} if derived_from else None,
+        "series_kind": SERIES_KIND_DERIVED if derived_from else SERIES_KIND_BASE,
+        "derived_from": derived_from,
+        "has_catalog_metadata": derived_from is None,
+    }
+
+
+def trade_energy_catalog() -> pd.DataFrame:
+    """Catalog rows for the `trade` and `energy` domains."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": TRADE_INDICATOR,
+                "name": TRADE_NAME,
+                "description": None,
+                "unit": "current US$",
+                "frequency": "annual",
+                "domain": "trade",
+                "source_name": "world_bank",
+                "source_url": None,
+                "availability_start": TRADE_TIMESTAMPS[0],
+                "availability_end": TRADE_TIMESTAMPS[-1],
+                "has_base_year_changes": False,
+                "base_years": None,
+                "is_active": True,
+            },
+            {
+                "indicator_id": ENERGY_INDICATOR,
+                "name": ENERGY_NAME,
+                "description": None,
+                "unit": "thousand barrels per day",
+                "frequency": "monthly",
+                "domain": "energy",
+                "source_name": "eia",
+                "source_url": None,
+                "availability_start": ENERGY_TIMESTAMPS[0],
+                "availability_end": ENERGY_TIMESTAMPS[-1],
+                "has_base_year_changes": False,
+                "base_years": None,
+                "is_active": True,
+            },
+        ]
+    )
+
+
+def trade_energy_series() -> pd.DataFrame:
+    """Gold-shaped `trade` / `energy` rows, including one derived trade series."""
+    rows = [
+        _gold_row(
+            TRADE_INDICATOR,
+            TRADE_NAME,
+            timestamp,
+            value,
+            "current US$",
+            "annual",
+            "trade",
+            "world_bank",
+        )
+        for timestamp, value in zip(TRADE_TIMESTAMPS, (1.0, 2.0, 3.0), strict=True)
+    ]
+    rows += [
+        _gold_row(
+            ENERGY_INDICATOR,
+            ENERGY_NAME,
+            timestamp,
+            value,
+            "thousand barrels per day",
+            "monthly",
+            "energy",
+            "eia",
+        )
+        for timestamp, value in zip(ENERGY_TIMESTAMPS, (100.0, 110.0), strict=True)
+    ]
+    rows += [
+        _gold_row(
+            TRADE_DERIVED_ID,
+            TRADE_NAME,
+            timestamp,
+            value,
+            "annual %",
+            "annual",
+            "trade",
+            "world_bank",
+            derived_from=TRADE_INDICATOR,
+        )
+        for timestamp, value in zip(TRADE_TIMESTAMPS[1:], (100.0, 50.0), strict=True)
+    ]
+    return pd.DataFrame(rows)
+
+
 #: TSETMC fixture: trading sessions for the market domain. The Thursday/Friday
 #: weekend and a one-day holiday (2026-09-08) are **absent**, exactly as the
 #: source reports them -- the platform never fills a session, so the page must
@@ -342,11 +582,7 @@ def app_test(page_filename: str) -> AppTest:
 
 class FakeDashboardRepository:
     def __init__(self) -> None:
-        timestamps = [
-            pd.Timestamp("2020-01-01", tz="UTC"),
-            pd.Timestamp("2021-01-01", tz="UTC"),
-            pd.Timestamp("2022-01-01", tz="UTC"),
-        ]
+        timestamps = list(INFLATION_TIMESTAMPS)
         self.catalog = pd.DataFrame(
             {
                 "indicator_id": ["FP.CPI.TOTL.ZG", "NY.GDP.MKTP.CD", "USD_FREE"],
@@ -417,11 +653,18 @@ class FakeDashboardRepository:
         # population and IMF LUR) and the `market` domain (TSETMC's level plus its
         # three derived series) are appended so the Welfare & Survey and Market
         # pages render real rows; the frames above are left untouched for the
-        # other pages.
+        # other pages. The derived inflation series and the single-observation
+        # `labor` domain are appended for the derived-toggle and Labor page tests;
+        # the `trade`/`energy` pair keeps the Trade & Energy page non-empty too.
         self.catalog = _append_rows(self.catalog, welfare_catalog())
         self.catalog = _append_rows(self.catalog, market_catalog())
+        self.catalog = _append_rows(self.catalog, labor_catalog())
+        self.catalog = _append_rows(self.catalog, trade_energy_catalog())
         self.series = _append_rows(self.series, welfare_series())
         self.series = _append_rows(self.series, market_series())
+        self.series = _append_rows(self.series, inflation_derived_series())
+        self.series = _append_rows(self.series, labor_series())
+        self.series = _append_rows(self.series, trade_energy_series())
 
     def list_indicators(
         self,

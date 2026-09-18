@@ -67,6 +67,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "nav.welfare": "رفاه و آمارگیری خانوار",
         "nav.fx_gold": "ارز و طلا",
         "nav.market": "بازار سرمایه",
+        "nav.labor": "بازار کار",
         # In-page titles (same keys as nav.*, kept separate so they cannot drift
         # from the routing label without a failing test).
         "page.overview": "مرور کلی",
@@ -78,6 +79,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "page.welfare": "رفاه و آمارگیری خانوار",
         "page.fx_gold": "ارز و طلا",
         "page.market": "بازار سرمایه",
+        "page.labor": "بازار کار",
         # Subheaders and expanders.
         "section.indicators_by_domain": "شاخص‌ها به تفکیک حوزه",
         "section.available_coverage": "پوشش موجود",
@@ -224,6 +226,14 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "warn.hbsir_computed_values": (
             "دوازده سری HBSIR از ریزمی‌کروداده آمارگیری بودجه خانوار محاسبه شده‌اند و ارقام "
             "رسمی منتشرشده نیستند؛ واحد تحلیل، خانوار (بدون تعدیل هم‌ارز) و وزن‌ها، وزن‌های نمونه‌گیری است."
+        ),
+        # Labor caveat: SCI releases one quarter per survey, so the series is
+        # legitimately sparse and a lone observation must not read as a trend.
+        "warn.labor_publication": (
+            "مرکز آمار ایران نرخ بیکاری را بر پایه آمارگیری نیروی کار و به‌صورت فصلی منتشر "
+            "می‌کند؛ در هر انتشار تنها یک فصل تازه افزوده می‌شود و ممکن است در یک بازه تنها "
+            "یک فصل موجود باشد. یک مشاهدهٔ تنها روند را نشان نمی‌دهد و هیچ مقداری درون‌یابی، "
+            "برون‌یابی یا جای‌گذاری نمی‌شود."
         ),
         # Shared value placeholders.
         "value.unknown": "نامشخص",
