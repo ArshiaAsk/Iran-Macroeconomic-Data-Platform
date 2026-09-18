@@ -92,6 +92,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.hbsir_deciles": "سهم درآمدی دهک‌ها",
         "section.hbsir_survey_years": "سال‌های آمارگیری موجود",
         "section.welfare_other_indicators": "سایر شاخص‌های حوزه رفاه",
+        # Inflation page (Task 13): the SCI expenditure-decile comparison, the
+        # canonical chain-linked comparison, and the generic composition below.
+        "section.cpi_deciles": "شاخص قیمت مصرف‌کننده به تفکیک دهک هزینه",
+        "section.cpi_canonical": "مقایسه شاخص قیمت مصرف‌کننده (کل کشور، شهری، روستایی)",
+        "section.inflation_all_indicators": "سایر شاخص‌های تورم",
         # Market (TSETMC) page: the daily level panel. Every derived panel is
         # titled through dashboard.labels (parent name + derivation), not here.
         "section.market_level": "شاخص کل بورس تهران (سطح روزانه)",
@@ -112,6 +117,8 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "filter.end_date": "تاریخ پایان",
         "filter.include_derived": "نمایش سری‌های مشتق‌شده در صورت وجود",
         "filter.start_after_end": "تاریخ شروع باید پیش از تاریخ پایان یا برابر آن باشد.",
+        # CPI decile selector on the Inflation page (Task 13).
+        "filter.cpi_deciles": "دهک‌های هزینه",
         # Chart labels and legends.
         "chart.timestamp": "زمان",
         "chart.survey_year": "سال آمارگیری",
@@ -195,6 +202,8 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "empty.no_collection_runs": "هنوز هیچ اجرای گردآوری ثبت نشده است.",
         "empty.no_quality_rows": "هیچ مشاهده لایه طلایی با پالایه‌های فعلی مطابقت ندارد.",
         "empty.no_hbsir_observations": "هیچ مشاهده HBSIR در بازه زمانی انتخاب‌شده موجود نیست.",
+        "empty.no_cpi_deciles": "هیچ سری شاخص قیمت مصرف‌کننده به تفکیک دهک هزینه در فهرست شاخص‌ها موجود نیست.",
+        "empty.no_cpi_canonical": "هیچ سری زنجیره‌شده شاخص قیمت مصرف‌کننده در فهرست شاخص‌ها موجود نیست.",
         # Warnings.
         "warn.catalog_empty": (
             "فهرست شاخص‌ها خالی است. پیش از استفاده از داشبورد، یک خط لوله ETL را اجرا کنید."
@@ -254,6 +263,13 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
             "می‌کند؛ در هر انتشار تنها یک فصل تازه افزوده می‌شود و ممکن است در یک بازه تنها "
             "یک فصل موجود باشد. یک مشاهدهٔ تنها روند را نشان نمی‌دهد و هیچ مقداری درون‌یابی، "
             "برون‌یابی یا جای‌گذاری نمی‌شود."
+        ),
+        # CPI decile caveat (Task 13): the ten deciles share one unit and one
+        # base year, so the comparison needs no normalization.
+        "warn.cpi_deciles_shared_base": (
+            "دهک‌های هزینه با یک واحد مشترک (شاخص) و یک سال پایه مشترک منتشر می‌شوند؛ "
+            "به همین دلیل مقایسه آن‌ها روی یک مقیاس مشترک انجام می‌شود و هیچ نرمال‌سازی "
+            "یا تبدیل واحدی اعمال نمی‌شود."
         ),
         # Shared value placeholders.
         "value.unknown": "نامشخص",

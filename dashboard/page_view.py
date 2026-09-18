@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from dashboard.components.charts import (
+    CHART_MODE_SMALL_MULTIPLES,
     CHART_MODES,
     SURVEY_YEAR_COLUMN,
     ScaledChart,
@@ -46,6 +47,7 @@ from src.connectors.hbsir_parser import (
     GINI_INDICATOR,
     POVERTY_INDICATOR,
 )
+from src.connectors.sci_scraper import SCI_CANONICAL_INDICATORS, SCI_INDICATOR_REGISTRY
 from src.utils.persian import iranian_year_end
 
 #: HBSIR indicator ids the Welfare & Survey page emphasises. They come from the
@@ -71,6 +73,35 @@ MARKET_MONTHLY_FREQUENCY: Final[str] = "monthly"
 #: one quarter per release, so the domain is legitimately a single-observation
 #: series and the page renders it without implying a trend.
 LABOR_DOMAIN: Final[str] = "labor"
+
+#: The SCI publication key whose members are the ten household-expenditure-decile
+#: CPI series. The ids come from the connector's authoritative registry
+#: (``src/connectors/sci_scraper.py``) rather than a list invented in the
+#: dashboard, so a registry change is reflected without a page edit.
+SCI_DECILE_PUBLICATION: Final[str] = "cpi_decile"
+
+#: The ten expenditure-decile CPI ids (``SCI.CPI.DECILE.B2021.D1`` … ``D10``), in
+#: the registry's order. They are ten separate catalog indicators with an
+#: identical unit and a shared base year, which is why the Inflation page groups
+#: them into one comparison instead of presenting ten unrelated series.
+SCI_DECILE_INDICATORS: Final[tuple[str, ...]] = tuple(
+    SCI_INDICATOR_REGISTRY[SCI_DECILE_PUBLICATION].member_ids
+)
+
+#: The canonical chain-linked CPI ids (national, urban, rural), in the registry's
+#: order. The canonical ids -- not the inactive ``B<year>`` segments -- are what
+#: Gold publishes and the catalog marks active.
+SCI_CANONICAL_CPI_INDICATORS: Final[tuple[str, ...]] = tuple(SCI_CANONICAL_INDICATORS)
+
+#: Default selection of the Inflation page's generic composition: the World Bank
+#: headline CPI, exactly as before the decile view landed. The SCI decile and
+#: canonical series have their own dedicated sections, so they are not selected
+#: here by default.
+INFLATION_DEFAULT_INDICATORS: Final[tuple[str, ...]] = ("FP.CPI.TOTL.ZG",)
+
+#: The Inflation page's domain. Both the World Bank/IMF headline CPIs and the SCI
+#: canonical and decile CPI series are catalog domain ``inflation``.
+INFLATION_DOMAIN: Final[str] = "inflation"
 
 
 def render_domain_page(
@@ -129,6 +160,123 @@ def render_domain_body(
         return
     series = _load_series(selected_ids, filters.start_date, filters.end_date, repository)
     _render_series_section(series, key_prefix)
+
+
+def render_inflation_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Inflation page: the CPI decile and canonical views, then Gold.
+
+    The page owns the ``inflation`` domain. Two emphasis sections make the SCI
+    CPI structure explicit -- the ten expenditure deciles (ten catalog indicators
+    that share one unit and one base year, so a plain comparison is honest and
+    needs no normalization) and the canonical chain-linked national/urban/rural
+    series -- and the generic domain composition below them keeps the World
+    Bank/IMF and every other inflation series reachable. Nothing is interpolated,
+    normalized or resampled: Gold rows are drawn exactly as stored.
+    """
+    st.title(t("page.inflation"))
+    if repository is None:
+        catalog = cached_list_indicators(domains=(INFLATION_DOMAIN,))
+    else:
+        catalog = repository.list_indicators(domains=[INFLATION_DOMAIN])
+    if catalog.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    filters = render_filters(catalog, "inflation", list(INFLATION_DEFAULT_INDICATORS))
+    _render_cpi_decile_section(catalog, filters, repository)
+    _render_cpi_canonical_section(catalog, filters, repository)
+    st.subheader(t("section.inflation_all_indicators"))
+    render_domain_body(
+        (INFLATION_DOMAIN,),
+        "inflation",
+        list(INFLATION_DEFAULT_INDICATORS),
+        repository=repository,
+        catalog=catalog,
+        filters=filters,
+    )
+
+
+def cpi_decile_ids(catalog: pd.DataFrame) -> list[str]:
+    """The catalog's SCI expenditure-decile CPI ids, in registry order.
+
+    The ids come from the connector registry (Task 13's metadata-driven rule),
+    so the view never hardcodes the ten decile ids.
+    """
+    return _registered_ids(catalog, SCI_DECILE_INDICATORS)
+
+
+def cpi_canonical_ids(catalog: pd.DataFrame) -> list[str]:
+    """The catalog's canonical chain-linked CPI ids, in registry order."""
+    return _registered_ids(catalog, SCI_CANONICAL_CPI_INDICATORS)
+
+
+def _registered_ids(catalog: pd.DataFrame, registered: tuple[str, ...]) -> list[str]:
+    """Registry ids that have a row in ``catalog``, in registry order (empty-safe)."""
+    if catalog.empty or "indicator_id" not in catalog.columns:
+        return []
+    present = set(catalog["indicator_id"].astype(str))
+    return [indicator_id for indicator_id in registered if indicator_id in present]
+
+
+def _render_cpi_decile_section(
+    catalog: pd.DataFrame,
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> None:
+    """Render the ten expenditure-decile CPI series as one comparison.
+
+    The deciles share a unit (an index) and a base year, so a plain comparison is
+    honest and no normalization is applied. The comparison is drawn through the
+    Task 15 small-multiples mode -- one unit-safe panel per decile -- rather than
+    through the generic multi-indicator chart, which would force ten unrelated
+    facets onto the page's main selection.
+    """
+    st.subheader(t("section.cpi_deciles"))
+    decile_ids = cpi_decile_ids(catalog)
+    if not decile_ids:
+        st.info(t("empty.no_cpi_deciles"))
+        return
+    selected = st.multiselect(
+        t("filter.cpi_deciles"),
+        options=decile_ids,
+        default=decile_ids,
+        format_func=indicator_label,
+        key="inflation_deciles",
+    )
+    if not selected:
+        st.info(t("empty.select_indicators"))
+        return
+    series = _load_series(list(selected), filters.start_date, filters.end_date, repository)
+    if series.empty:
+        st.info(t("empty.no_observations"))
+        return
+    st.caption(t("warn.cpi_deciles_shared_base"))
+    scaled = build_scaled_time_series_chart(series, mode=CHART_MODE_SMALL_MULTIPLES)
+    if scaled.notice:
+        st.info(scaled.notice)
+    st.plotly_chart(scaled.figure, use_container_width=True)
+
+
+def _render_cpi_canonical_section(
+    catalog: pd.DataFrame,
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> None:
+    """Render the canonical chain-linked national/urban/rural CPI comparison.
+
+    The canonical series are the chain-linked Gold output (the inactive
+    ``B<year>`` segments stay off the dashboard), drawn through
+    :func:`build_time_series_chart` so each keeps its own panel and axis.
+    """
+    st.subheader(t("section.cpi_canonical"))
+    canonical_ids = cpi_canonical_ids(catalog)
+    if not canonical_ids:
+        st.info(t("empty.no_cpi_canonical"))
+        return
+    series = _load_series(canonical_ids, filters.start_date, filters.end_date, repository)
+    if series.empty:
+        st.info(t("empty.no_observations"))
+        return
+    st.plotly_chart(build_time_series_chart(series), use_container_width=True)
 
 
 def render_market_page(repository: DashboardRepository | None = None) -> None:

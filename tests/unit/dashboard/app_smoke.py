@@ -25,6 +25,7 @@ from src.connectors.hbsir_parser import (
     GINI_INDICATOR,
     POVERTY_INDICATOR,
 )
+from src.connectors.sci_scraper import SCI_CANONICAL_INDICATORS, SCI_INDICATOR_REGISTRY
 from src.utils.periods import annual_period_end
 from src.utils.persian import iranian_year_end
 
@@ -417,6 +418,87 @@ def trade_energy_series() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+#: SCI CPI fixture: the ten household-expenditure deciles plus the three
+#: canonical chain-linked series, all domain `inflation`. The ids come from the
+#: connector registry, exactly as the Inflation page discovers them, so the
+#: fixture cannot drift from the page's metadata-driven source.
+SCI_DECILE_IDS = tuple(SCI_INDICATOR_REGISTRY["cpi_decile"].member_ids)
+SCI_CANONICAL_IDS = tuple(SCI_CANONICAL_INDICATORS)
+SCI_CPI_IDS = (*SCI_DECILE_IDS, *SCI_CANONICAL_IDS)
+SCI_CPI_TIMESTAMPS = (
+    pd.Timestamp("2024-01-31", tz="UTC"),
+    pd.Timestamp("2024-02-29", tz="UTC"),
+    pd.Timestamp("2024-03-31", tz="UTC"),
+)
+SCI_CPI_NAMES = {
+    **{
+        indicator: f"CPI by household expenditure decile {indicator.rsplit('D', 1)[-1]}, base 1400=2021"
+        for indicator in SCI_DECILE_IDS
+    },
+    **{indicator: SCI_CANONICAL_INDICATORS[indicator].name for indicator in SCI_CANONICAL_IDS},
+}
+#: One index level per (indicator, month). The deciles fan out by one point each
+#: so a comparison is visibly a comparison, not ten identical lines.
+SCI_CPI_VALUES = {
+    **{
+        indicator: (100.0 + rank, 101.0 + rank, 102.0 + rank)
+        for rank, indicator in enumerate(SCI_DECILE_IDS, start=1)
+    },
+    "SCI.CPI.NATIONAL": (200.0, 205.0, 210.0),
+    "SCI.CPI.URBAN": (210.0, 215.0, 220.0),
+    "SCI.CPI.RURAL": (190.0, 194.0, 198.0),
+}
+
+
+def inflation_catalog() -> pd.DataFrame:
+    """Catalog rows for the SCI decile and canonical chain-linked CPI series.
+
+    The canonical series carry base-year changes; the deciles do not. Every row
+    is domain `inflation`, so the Inflation page owns them through the same
+    domain query as the World Bank headline CPI.
+    """
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": indicator,
+                "name": SCI_CPI_NAMES[indicator],
+                "description": None,
+                "unit": "index",
+                "frequency": "monthly",
+                "domain": "inflation",
+                "source_name": "sci",
+                "source_url": None,
+                "availability_start": SCI_CPI_TIMESTAMPS[0],
+                "availability_end": SCI_CPI_TIMESTAMPS[-1],
+                "has_base_year_changes": indicator in SCI_CANONICAL_IDS,
+                "base_years": "[2016, 2021]" if indicator in SCI_CANONICAL_IDS else None,
+                "is_active": True,
+            }
+            for indicator in SCI_CPI_IDS
+        ]
+    )
+
+
+def inflation_series() -> pd.DataFrame:
+    """Gold-shaped SCI CPI rows: the ten deciles plus the three canonicals."""
+    return pd.DataFrame(
+        [
+            _gold_row(
+                indicator,
+                SCI_CPI_NAMES[indicator],
+                timestamp,
+                value,
+                "index",
+                "monthly",
+                "inflation",
+                "sci",
+            )
+            for indicator in SCI_CPI_IDS
+            for timestamp, value in zip(SCI_CPI_TIMESTAMPS, SCI_CPI_VALUES[indicator], strict=True)
+        ]
+    )
+
+
 #: TSETMC fixture: trading sessions for the market domain. The Thursday/Friday
 #: weekend and a one-day holiday (2026-09-08) are **absent**, exactly as the
 #: source reports them -- the platform never fills a session, so the page must
@@ -660,11 +742,13 @@ class FakeDashboardRepository:
         self.catalog = _append_rows(self.catalog, market_catalog())
         self.catalog = _append_rows(self.catalog, labor_catalog())
         self.catalog = _append_rows(self.catalog, trade_energy_catalog())
+        self.catalog = _append_rows(self.catalog, inflation_catalog())
         self.series = _append_rows(self.series, welfare_series())
         self.series = _append_rows(self.series, market_series())
         self.series = _append_rows(self.series, inflation_derived_series())
         self.series = _append_rows(self.series, labor_series())
         self.series = _append_rows(self.series, trade_energy_series())
+        self.series = _append_rows(self.series, inflation_series())
         # The `fx` domain needs Gold rows too: the FX & Gold page defaults to
         # selecting `USD_FREE`, and without observations it renders its empty
         # state, so the shared chart-mode control never registers.
