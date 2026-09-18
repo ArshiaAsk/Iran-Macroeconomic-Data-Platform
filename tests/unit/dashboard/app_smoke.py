@@ -16,6 +16,7 @@ from dashboard.queries import (
     cached_list_derived_ids,
     cached_list_indicators,
     cached_load_series,
+    cached_series_inventory,
     cached_source_freshness,
 )
 from dashboard.repository import SERIES_KIND_BASE, SERIES_KIND_DERIVED, DashboardRepository
@@ -816,6 +817,11 @@ class FakeDashboardRepository:
     def available_domains(self) -> pd.DataFrame:
         return self.catalog.groupby("domain").size().reset_index(name="indicator_count")
 
+    def series_inventory(self) -> pd.DataFrame:
+        """Distinct Gold series classified by catalog presence and derivedness."""
+        columns = ["indicator_id", "derived_from", "series_kind", "has_catalog_metadata"]
+        return self.series[columns].drop_duplicates("indicator_id").reset_index(drop=True)
+
 
 @pytest.fixture()
 def fake_streamlit_connection(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -826,6 +832,7 @@ def fake_streamlit_connection(monkeypatch: pytest.MonkeyPatch) -> None:
         cached_list_derived_ids,
         cached_list_indicators,
         cached_load_series,
+        cached_series_inventory,
         cached_source_freshness,
     ):
         cached_query.clear()

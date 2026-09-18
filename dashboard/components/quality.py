@@ -27,12 +27,14 @@ Conventions:
 - Normalized keys: ``daily`` -> ``YYYY-MM-DD`` (Tehran day), ``weekly`` ->
   ``YYYY-Www`` (ISO week), ``monthly`` -> ``YYYY-MM``, ``quarterly`` ->
   ``YYYY-Qn``, ``annual`` -> ``YYYY``.
-- ``daily`` has two calendar rules. Snapshot sources (TGJU) publish every day, so
-  every Tehran day in the range is expected. Trading sources (TSETMC) print only
-  on exchange sessions, so their expectation is the documented session rate
-  applied to the range length and is reported as an *estimate* with no enumerable
-  keys: a session-by-session calendar needs a holiday database, which this phase
-  deliberately does not add.
+- ``daily`` has two rules. Snapshot sources (TGJU) publish every day, so every
+  Tehran day in the range is expected. Trading sources (TSETMC) print only on
+  exchange sessions, so their expectation is an *empirical session rate* applied
+  to the range length and is reported as an estimate with no enumerable keys.
+  That rule is deliberately **not** a trading calendar: it carries no session
+  dates, encodes no weekday rule and knows no holidays, so it must never be
+  presented as a session list -- a real calendar would need a holiday database
+  this phase does not add.
 """
 
 import zoneinfo
@@ -45,6 +47,7 @@ import pandas as pd
 import streamlit as st
 
 from dashboard.formatting import TEHRAN_TIMEZONE
+from dashboard.i18n import t
 from dashboard.labels import FREQUENCY_LABELS
 
 __all__ = [
@@ -54,7 +57,7 @@ __all__ = [
     "MISSING_PERIOD_WARNING_RATIO",
     "PERIODS_PER_YEAR",
     "SUPPORTED_FREQUENCIES",
-    "TRADING_CALENDAR_SOURCES",
+    "TRADING_SESSION_SOURCES",
     "TRADING_SESSIONS_PER_YEAR",
     "ExpectedPeriods",
     "calendar_for_source",
@@ -71,7 +74,12 @@ CALENDAR_CALENDAR: Final[FrequencyCalendar] = "calendar"
 """Every calendar day of the range is an expected observation."""
 
 CALENDAR_TRADING: Final[FrequencyCalendar] = "trading"
-"""Only exchange sessions are expected observations (estimated, never enumerated)."""
+"""Session-rate rule: trading sources are expected only on exchange sessions.
+
+An empirical estimate (see :data:`TRADING_SESSIONS_PER_YEAR`), not a trading
+calendar: no session dates are known, so the expectation is a count with no
+enumerable period keys.
+"""
 
 SUPPORTED_FREQUENCIES: Final[frozenset[str]] = frozenset(FREQUENCY_LABELS)
 """Frequencies the expectation primitive understands.
@@ -107,14 +115,17 @@ The Phase 6 live run stored 4,285 sessions across 2008-12-04 .. 2026-09-15
 that recorded observation rather than from an assumed round constant, and the
 expectation it produces is still reported as an estimate: an exact session list
 would need a holiday calendar this phase deliberately does not add.
+
+The rate is date-agnostic -- it cannot say *which* days were sessions -- so it
+feeds a count only and never a period-key list.
 """
 
-TRADING_CALENDAR_SOURCES: Final[frozenset[str]] = frozenset({"tsetmc"})
+TRADING_SESSION_SOURCES: Final[frozenset[str]] = frozenset({"tsetmc"})
 """``source_name`` slugs whose daily series follow exchange sessions.
 
 Keyed by catalog provenance (which derived rows inherit), never by indicator id:
 every other daily source in the catalog is a calendar-day snapshot. TSETMC has no
-usable holiday calendar, so a session rate replaces a session list.
+usable holiday calendar, so an estimated session rate replaces a session list.
 """
 
 MISSING_PERIOD_WARNING_RATIO: Final[float] = 0.05
@@ -122,7 +133,9 @@ MISSING_PERIOD_WARNING_RATIO: Final[float] = 0.05
 
 A single missing month in a year is 8.3% and a missing quarter is 25%, while the
 trading-session estimate for a TSETMC span leaves a residual well under 1%; 5%
-therefore separates estimation noise from a real gap.
+therefore separates estimation noise from a real gap. The gate exists precisely
+because the session rate is an estimate: ungated, its residual would still raise
+the missing-period warning for every TSETMC series.
 """
 
 _TEHRAN: Final[zoneinfo.ZoneInfo] = zoneinfo.ZoneInfo(TEHRAN_TIMEZONE)
@@ -136,7 +149,8 @@ class ExpectedPeriods:
     view can compare observed timestamps against expectation without reconstructing
     a calendar. When the rule is an estimate (trading sessions) the keys are empty
     and :attr:`estimated_count` carries the count instead, so a caller can tell
-    "these are the periods" from "this is an estimate".
+    "these are the periods" from "this is an estimate". An estimated count must
+    never be expanded into periods or read as a session calendar.
     """
 
     frequency: str
@@ -255,7 +269,7 @@ def calendar_for_source(source_name: str | None) -> FrequencyCalendar:
         >>> calendar_for_source(None)
         'calendar'
     """
-    if source_name is not None and source_name in TRADING_CALENDAR_SOURCES:
+    if source_name is not None and source_name in TRADING_SESSION_SOURCES:
         return CALENDAR_TRADING
     return CALENDAR_CALENDAR
 
@@ -354,7 +368,14 @@ def summarize_quality(
     start_date: datetime,
     end_date: datetime,
 ) -> pd.DataFrame:
-    """Summarize coverage, gaps, and chain-linking quality without filling data."""
+    """Summarize coverage, gaps, and chain-linking quality without filling data.
+
+    One row per indicator, always including ``expected_observations`` and
+    ``missing_periods`` (``NaN`` when the frequency has no expectation).
+    ``expected_is_estimated`` marks the rows whose expectation is a session-rate
+    estimate rather than enumerated calendar periods -- the expectation counts
+    something real, but the individual sessions are not known.
+    """
     records: list[dict[str, object]] = []
     for indicator_id, frame in series.groupby("indicator_id", sort=False):
         frequency = str(frame["frequency"].iloc[0]) if not frame.empty else "unknown"
@@ -401,13 +422,10 @@ def _has_material_gap(quality: pd.DataFrame) -> bool:
 def render_quality_summary(quality: pd.DataFrame) -> None:
     """Display quality diagnostics, including zero-row and sparse-history cases."""
     if quality.empty:
-        st.info("No Gold observations match the current filters.")
+        st.info(t("empty.no_quality_rows"))
         return
     st.dataframe(quality, use_container_width=True, hide_index=True)
     if (quality["rows_returned"] == 1).any():
-        st.warning(
-            "One or more selected series contains only one observation. "
-            "TGJU is a snapshot source; history accumulates through scheduled daily collection."
-        )
+        st.warning(t("warn.single_observation"))
     if _has_material_gap(quality):
-        st.warning("The selected date range contains missing periods. No values were filled.")
+        st.warning(t("warn.missing_periods"))

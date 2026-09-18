@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from dashboard.components.exports import serialize_csv
+from dashboard.components.quality import summarize_quality
 from dashboard.repository import SERIES_KIND_BASE, SERIES_KIND_DERIVED, DashboardRepository
 from src.database.schema import (
     BronzeRaw,
@@ -262,6 +263,45 @@ def test_load_series_keeps_direct_catalog_provenance_for_derived_series(session:
     assert frame["name"].unique().tolist() == ["Derived own name"]
     assert frame["source_name"].unique().tolist() == ["dashboard_derived"]
     assert frame["has_catalog_metadata"].all()
+
+
+def test_load_series_inherits_tsetmc_provenance_for_a_derived_series(session: Session) -> None:
+    """The TSETMC parent source reaches its derived row, driving the session rule."""
+    parent_id = unique_id("TSETMC.TEDPIX")
+    derived_id = f"{parent_id}.RET1D"
+    bronze = make_bronze(session)
+    seed_catalog(
+        session,
+        parent_id,
+        name="Tehran Stock Exchange total index (TEDPIX)",
+        domain="market",
+        frequency="daily",
+        source_name="tsetmc",
+        source_url="http://cdn.tsetmc.com/api",
+    )
+    seed_gold_series(session, parent_id, bronze, domain="market", frequency="daily")
+    seed_gold_series(
+        session,
+        derived_id,
+        bronze,
+        domain="market",
+        frequency="daily",
+        metadata={"derived_from": parent_id, "method": "daily_return"},
+    )
+
+    frame = DashboardRepository(session).load_series([derived_id])
+    row = frame.iloc[0]
+    assert row["series_kind"] == SERIES_KIND_DERIVED
+    assert row["derived_from"] == parent_id
+    assert row["source_name"] == "tsetmc"
+    assert bool(row["has_catalog_metadata"]) is False
+
+    quality = summarize_quality(
+        frame,
+        frame["timestamp"].min().to_pydatetime(),
+        frame["timestamp"].max().to_pydatetime(),
+    )
+    assert bool(quality.loc[0, "expected_is_estimated"]) is True
 
 
 def test_load_series_flags_derived_series_with_unresolvable_parent(session: Session) -> None:

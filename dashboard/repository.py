@@ -23,6 +23,14 @@ _CATALOG_RESOLVED_COLUMNS = ("name", "source_name", "source_url")
 #: Extra frame columns produced by :meth:`DashboardRepository.load_series`.
 SERIES_CLASSIFICATION_COLUMNS = ("series_kind", "derived_from", "has_catalog_metadata")
 
+#: Columns produced by :meth:`DashboardRepository.series_inventory`.
+SERIES_INVENTORY_COLUMNS = (
+    "indicator_id",
+    "derived_from",
+    "series_kind",
+    "has_catalog_metadata",
+)
+
 
 def _derived_from(record_metadata: object) -> str | None:
     """Return the parent indicator id recorded in Gold metadata, else ``None``.
@@ -42,10 +50,19 @@ def _derived_from(record_metadata: object) -> str | None:
     """
     if not isinstance(record_metadata, Mapping):
         return None
-    parent = record_metadata.get("derived_from")
-    if not isinstance(parent, str):
+    return _parent_id(record_metadata.get("derived_from"))
+
+
+def _parent_id(value: object) -> str | None:
+    """Return a usable parent indicator id from a raw ``derived_from`` value.
+
+    Used both for the JSONB mapping (via :func:`_derived_from`) and for the
+    already-extracted ``->> 'derived_from'`` text column of ``series_inventory``;
+    a missing, non-string or blank value is not a usable parent reference.
+    """
+    if not isinstance(value, str):
         return None
-    return parent.strip() or None
+    return value.strip() or None
 
 
 class DashboardRepository:
@@ -242,6 +259,40 @@ class DashboardRepository:
         rows = self.session.execute(statement).mappings().all()
         return [str(row["indicator_id"]) for row in rows]
 
+    def series_inventory(self) -> pd.DataFrame:
+        """Classify every distinct Gold indicator id, catalog row or not.
+
+        One row per distinct Gold ``indicator_id`` carrying the same
+        metadata-driven classification as :meth:`load_series` --
+        ``series_kind`` from ``record_metadata["derived_from"]`` and
+        ``has_catalog_metadata`` from whether the id has a catalog row -- so the
+        Overview can count the derived and orphan series that never appear in the
+        catalog (``connector.discover()`` never emits a derived id). Derivedness is
+        never inferred from an id shape.
+        """
+        catalog = aliased(IndicatorCatalog, name="catalog")
+        derived_from = GoldAnalytical.record_metadata["derived_from"].astext
+        statement = (
+            select(
+                GoldAnalytical.indicator_id,
+                derived_from.label("derived_from"),
+                catalog.indicator_id.label("catalog_indicator_id"),
+            )
+            .join(catalog, catalog.indicator_id == GoldAnalytical.indicator_id, isouter=True)
+            .distinct()
+            .order_by(asc(GoldAnalytical.indicator_id))
+        )
+        frame = self._frame(self.session.execute(statement).mappings().all())
+        if frame.empty:
+            return self._empty_inventory()
+        parents = frame["derived_from"].map(_parent_id)
+        frame["derived_from"] = parents
+        frame["series_kind"] = [
+            SERIES_KIND_DERIVED if parent else SERIES_KIND_BASE for parent in parents
+        ]
+        frame["has_catalog_metadata"] = frame["catalog_indicator_id"].notna()
+        return frame.drop(columns="catalog_indicator_id").reset_index(drop=True)
+
     def source_freshness(self) -> pd.DataFrame:
         """Return the latest collection result for each source."""
         ranked = select(
@@ -337,3 +388,7 @@ class DashboardRepository:
                 *SERIES_CLASSIFICATION_COLUMNS,
             ]
         )
+
+    @staticmethod
+    def _empty_inventory() -> pd.DataFrame:
+        return pd.DataFrame(columns=list(SERIES_INVENTORY_COLUMNS))

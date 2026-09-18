@@ -9,19 +9,30 @@ import streamlit as st
 
 from dashboard.components.direction import inject_direction_css
 from dashboard.connection import get_connection
+from dashboard.i18n import t
 from dashboard.navigation import GROUPS, PAGES, PageSpec
 
 
 def _build_page(spec: PageSpec) -> st.Page:
-    """Build one router page from its registry entry."""
-    return st.Page(spec.path, title=spec.title, icon=spec.icon, default=spec.is_default)
+    """Build one router page from its registry entry.
+
+    The nav label comes from the string catalog (``nav.<key>``), so the sidebar
+    and the page's own ``st.title`` (``page.<key>``) share one translated value
+    instead of a hardcoded literal.
+    """
+    return st.Page(
+        spec.path,
+        title=t(f"nav.{spec.key}"),
+        icon=spec.icon,
+        default=spec.is_default,
+    )
 
 
 def build_navigation() -> dict[str, list[st.Page]]:
     """Group the registry's pages for ``st.navigation``, in declared group order."""
-    grouped: dict[str, list[st.Page]] = {group: [] for group in GROUPS}
+    grouped: dict[str, list[st.Page]] = {t(f"group.{key}"): [] for key in GROUPS}
     for spec in PAGES:
-        grouped[spec.group].append(_build_page(spec))
+        grouped[t(f"group.{spec.group}")].append(_build_page(spec))
     return grouped
 
 
@@ -29,15 +40,15 @@ def render_database_status() -> None:
     """Render the database-status banner in the sidebar."""
     connection = get_connection()
     if connection.test_connection():
-        st.success("Database connected")
+        st.success(t("app.db_connected"))
     else:
-        st.error("Database unavailable. Start PostgreSQL with `make db-up` and run migrations.")
+        st.error(t("app.db_unavailable"))
 
 
 def main() -> None:
     """Configure the shell and run the page selected by the router."""
     st.set_page_config(
-        page_title="Iran Macroeconomic Data Platform",
+        page_title=t("app.title"),
         page_icon="📈",
         layout="wide",
         initial_sidebar_state="expanded",

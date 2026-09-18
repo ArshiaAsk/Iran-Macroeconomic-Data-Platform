@@ -108,6 +108,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "metric.sources": "منابع",
         "metric.selected_indicators": "{count} شاخص انتخاب‌شده",
         "metric.market_sessions": "نشست‌های معاملاتی مشاهده‌شده",
+        # Overview series inventory (Task 16): the derived and orphan Gold series
+        # that have no catalog row of their own.
+        "metric.derived_series": "سری‌های مشتق‌شده",
+        "metric.orphan_series": "سری‌های بدون ردیف فهرست",
+        "section.series_inventory": "سری‌های طلایی خارج از فهرست",
         # Filter controls.
         "filter.domain": "حوزه",
         "filter.frequency": "تواتر",
@@ -117,6 +122,22 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "filter.end_date": "تاریخ پایان",
         "filter.include_derived": "نمایش سری‌های مشتق‌شده در صورت وجود",
         "filter.start_after_end": "تاریخ شروع باید پیش از تاریخ پایان یا برابر آن باشد.",
+        # Jalali-aware date selection (Task 18): convenience presets that resolve
+        # to the same UTC Gregorian bounds, plus the echo of what was applied.
+        "filter.jalali_presets": "میانبرهای تاریخ شمسی",
+        "filter.jalali_year": "سال شمسی",
+        "filter.jalali_month": "ماه شمسی",
+        "filter.jalali_day": "روز شمسی (نمونه: ۱۴۰۵/۰۶/۱۸)",
+        "filter.jalali_none": "بدون میانبر",
+        "filter.jalali_day_invalid": "روز شمسی نامعتبر است؛ قالب درست به‌صورت ۱۴۰۵/۰۶/۱۸ است.",
+        "filter.preset_active": (
+            "میانبر شمسی فعال است؛ کرانه‌های تاریخ از همان میانبر محاسبه می‌شود و "
+            "تاریخ‌های میلادی زیر غیرفعال‌اند."
+        ),
+        "filter.applied_range": (
+            "بازه اعمال‌شده: {jalali_start} تا {jalali_end} — "
+            "کرانه‌های میلادی (UTC): {start} تا {end}"
+        ),
         # CPI decile selector on the Inflation page (Task 13).
         "filter.cpi_deciles": "دهک‌های هزینه",
         # Chart labels and legends.
@@ -175,6 +196,9 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.records_collected": "رکوردهای گردآوری‌شده",
         "table.error_message": "پیام خطا",
         "table.indicator_count": "تعداد شاخص",
+        # Overview freshness (Task 16): the staleness verdict against the
+        # source's expected collection cadence (dashboard.labels).
+        "table.staleness": "وضعیت تازگی",
         # HBSIR survey-year metadata panel.
         "table.survey_year": "سال آمارگیری",
         "table.survey_year_end": "پایان سال آمارگیری (شمسی)",
@@ -193,6 +217,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "export.download_html": "دریافت HTML",
         "export.download_png": "دریافت PNG",
         "export.download_svg": "دریافت SVG",
+        "export.image_failed": "ساخت تصویر {format} ناموفق بود: {error}",
         # Empty states.
         "empty.no_indicators_for_page": "هنوز شاخص فعالی برای این صفحه وجود ندارد.",
         "empty.select_indicators": "برای دیدن مشاهدات لایه طلایی، یک یا چند شاخص را انتخاب کنید.",
@@ -273,6 +298,8 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         ),
         # Shared value placeholders.
         "value.unknown": "نامشخص",
+        "value.fresh": "به‌روز",
+        "value.stale": "کهنه",
     }
 )
 

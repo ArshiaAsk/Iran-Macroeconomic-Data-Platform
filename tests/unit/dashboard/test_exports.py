@@ -20,6 +20,7 @@ from dashboard.components.exports import (
     serialize_figure_html,
     serialize_figure_image,
 )
+from dashboard.i18n import t
 
 MISSING_CHROMIUM_MESSAGE = (
     "No Chromium executable found. Install Chrome, run `poetry run plotly_get_chrome`, "
@@ -179,11 +180,14 @@ def test_render_chart_downloads_defers_image_serialization(
 
     assert renderer.calls == []
     downloads = {entry["label"]: entry for entry in fake_st.download_buttons}
-    assert set(downloads) == {"Download HTML"}
-    assert downloads["Download HTML"]["file_name"] == "iran-macro-test-chart.html"
-    assert downloads["Download HTML"]["mime"] == "text/html"
-    assert b"plotly" in downloads["Download HTML"]["data"]
-    assert [button["label"] for button in fake_st.buttons] == ["Download PNG", "Download SVG"]
+    assert set(downloads) == {t("export.download_html")}
+    assert downloads[t("export.download_html")]["file_name"] == "iran-macro-test-chart.html"
+    assert downloads[t("export.download_html")]["mime"] == "text/html"
+    assert b"plotly" in downloads[t("export.download_html")]["data"]
+    assert [button["label"] for button in fake_st.buttons] == [
+        t("export.download_png"),
+        t("export.download_svg"),
+    ]
     assert [button["disabled"] for button in fake_st.buttons] == [False, False]
     assert fake_st.captions == []
 
@@ -200,13 +204,17 @@ def test_render_chart_downloads_renders_images_on_explicit_request(
 
     assert renderer.calls == [("png",), ("svg",)]
     downloads = {entry["label"]: entry for entry in fake_st.download_buttons}
-    assert set(downloads) == {"Download HTML", "Download PNG", "Download SVG"}
-    assert downloads["Download PNG"]["data"] == b"png"
-    assert downloads["Download PNG"]["file_name"] == "iran-macro-test-chart.png"
-    assert downloads["Download PNG"]["mime"] == "image/png"
-    assert downloads["Download SVG"]["data"] == b"svg"
-    assert downloads["Download SVG"]["file_name"] == "iran-macro-test-chart.svg"
-    assert downloads["Download SVG"]["mime"] == "image/svg+xml"
+    assert set(downloads) == {
+        t("export.download_html"),
+        t("export.download_png"),
+        t("export.download_svg"),
+    }
+    assert downloads[t("export.download_png")]["data"] == b"png"
+    assert downloads[t("export.download_png")]["file_name"] == "iran-macro-test-chart.png"
+    assert downloads[t("export.download_png")]["mime"] == "image/png"
+    assert downloads[t("export.download_svg")]["data"] == b"svg"
+    assert downloads[t("export.download_svg")]["file_name"] == "iran-macro-test-chart.svg"
+    assert downloads[t("export.download_svg")]["mime"] == "image/svg+xml"
     assert fake_st.errors == []
 
 
@@ -222,7 +230,7 @@ def test_render_chart_downloads_reports_missing_chromium(
 
     assert renderer.calls == []
     assert [button["disabled"] for button in fake_st.buttons] == [True, True]
-    assert {entry["label"] for entry in fake_st.download_buttons} == {"Download HTML"}
+    assert {entry["label"] for entry in fake_st.download_buttons} == {t("export.download_html")}
     assert fake_st.captions == [MISSING_CHROMIUM_MESSAGE]
     assert fake_st.errors == []
 
@@ -237,9 +245,9 @@ def test_render_chart_downloads_surfaces_serialization_failure(
 
     render_chart_downloads(chart_figure(), "iran-macro-test-chart")
 
-    assert "Download PNG failed: chromium crashed" in fake_st.errors[0]
-    assert "Download PNG" not in {entry["label"] for entry in fake_st.download_buttons}
-    assert {entry["label"] for entry in fake_st.download_buttons} == {"Download HTML"}
+    assert fake_st.errors[0] == t("export.image_failed", format="PNG", error="chromium crashed")
+    assert t("export.download_png") not in {entry["label"] for entry in fake_st.download_buttons}
+    assert {entry["label"] for entry in fake_st.download_buttons} == {t("export.download_html")}
 
 
 def test_cached_figure_image_reuses_bytes_for_unchanged_figure(

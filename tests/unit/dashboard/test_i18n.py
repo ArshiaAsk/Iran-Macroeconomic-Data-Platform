@@ -16,7 +16,7 @@ from dashboard.i18n import (
     string_keys,
     t,
 )
-from dashboard.navigation import PAGES
+from dashboard.navigation import GROUPS, PAGES
 
 PERSIAN_RANGE = range(0x0600, 0x0700)
 
@@ -77,6 +77,14 @@ def test_catalog_alignment_with_the_page_registry() -> None:
     for spec in PAGES:
         assert has_string(f"nav.{spec.key}"), spec.key
         assert has_string(f"page.{spec.key}"), spec.key
+        # The sidebar label and the in-page title share one value per page, so
+        # they cannot drift (Task 17).
+        assert t(f"nav.{spec.key}") == t(f"page.{spec.key}"), spec.key
+
+
+def test_catalog_covers_every_sidebar_group() -> None:
+    for group in GROUPS:
+        assert has_string(f"group.{group}"), group
 
 
 def test_single_locale_only() -> None:

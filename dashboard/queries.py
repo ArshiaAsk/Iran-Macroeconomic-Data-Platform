@@ -69,3 +69,15 @@ def cached_available_domains() -> pd.DataFrame:
     """Cache active domain counts."""
     with repository_session() as repository:
         return repository.available_domains()
+
+
+@st.cache_data(show_spinner=False)
+def cached_series_inventory() -> pd.DataFrame:
+    """Cache the Gold series inventory (derived/orphan classification).
+
+    The inventory is the only query that sees Gold series without a catalog row,
+    so it is what lets the Overview count the derived and orphan series that
+    ``connector.discover()`` never registers.
+    """
+    with repository_session() as repository:
+        return repository.series_inventory()

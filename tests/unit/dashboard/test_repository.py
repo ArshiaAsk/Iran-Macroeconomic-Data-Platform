@@ -91,6 +91,43 @@ def load_rows(rows: list[dict[str, Any]], indicator_ids: list[str]) -> pd.DataFr
     return DashboardRepository(FakeSession(rows)).load_series(indicator_ids)
 
 
+def test_series_inventory_classifies_catalog_derived_and_orphan_series() -> None:
+    rows = [
+        {"indicator_id": "level", "derived_from": None, "catalog_indicator_id": "level"},
+        {"indicator_id": "derived", "derived_from": "level", "catalog_indicator_id": None},
+        {"indicator_id": "orphan", "derived_from": None, "catalog_indicator_id": None},
+    ]
+
+    frame = DashboardRepository(FakeSession(rows)).series_inventory()
+
+    assert list(frame.columns) == [
+        "indicator_id",
+        "derived_from",
+        "series_kind",
+        "has_catalog_metadata",
+    ]
+    indexed = frame.set_index("indicator_id")
+    assert indexed.loc["level", "series_kind"] == SERIES_KIND_BASE
+    assert bool(indexed.loc["level", "has_catalog_metadata"]) is True
+    assert indexed.loc["derived", "series_kind"] == SERIES_KIND_DERIVED
+    assert indexed.loc["derived", "derived_from"] == "level"
+    assert bool(indexed.loc["derived", "has_catalog_metadata"]) is False
+    assert indexed.loc["orphan", "series_kind"] == SERIES_KIND_BASE
+    assert bool(indexed.loc["orphan", "has_catalog_metadata"]) is False
+
+
+def test_series_inventory_is_empty_safe() -> None:
+    frame = DashboardRepository(FakeSession([])).series_inventory()
+
+    assert frame.empty
+    assert list(frame.columns) == [
+        "indicator_id",
+        "derived_from",
+        "series_kind",
+        "has_catalog_metadata",
+    ]
+
+
 def test_list_indicators_returns_catalog_frame() -> None:
     rows = [
         {
@@ -188,6 +225,27 @@ def test_load_series_inherits_parent_provenance_for_derived_series() -> None:
     assert row["name"] == "GDP"
     assert row["source_name"] == "world_bank"
     assert row["source_url"] == "https://api.worldbank.test"
+    assert bool(row["has_catalog_metadata"]) is False
+
+
+def test_load_series_inherits_tsetmc_source_for_a_derived_series() -> None:
+    """A derived TSETMC row carries the parent source slug, not a null."""
+    rows = [
+        gold_row(
+            "TSETMC.TEDPIX.RET1D",
+            catalog=False,
+            record_metadata={"derived_from": "TSETMC.TEDPIX", "method": "daily_return"},
+            parent_name="Tehran Stock Exchange total index (TEDPIX)",
+            parent_source_name="tsetmc",
+            parent_source_url="http://cdn.tsetmc.com/api",
+        )
+    ]
+    row = load_rows(rows, ["TSETMC.TEDPIX.RET1D"]).iloc[0]
+
+    assert row["series_kind"] == SERIES_KIND_DERIVED
+    assert row["derived_from"] == "TSETMC.TEDPIX"
+    assert row["source_name"] == "tsetmc"
+    assert row["name"] == "Tehran Stock Exchange total index (TEDPIX)"
     assert bool(row["has_catalog_metadata"]) is False
 
 

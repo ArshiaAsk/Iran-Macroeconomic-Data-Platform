@@ -22,6 +22,7 @@ from dashboard.components.quality import (
     render_quality_summary,
     summarize_quality,
 )
+from dashboard.i18n import t
 from dashboard.labels import FREQUENCY_LABELS
 
 TSETMC_LIVE_START = datetime(2008, 12, 4, tzinfo=UTC)
@@ -66,10 +67,14 @@ def quality_frame() -> pd.DataFrame:
     )
 
 
-def daily_frame(timestamps: pd.DatetimeIndex, source_name: str) -> pd.DataFrame:
+def daily_frame(
+    timestamps: pd.DatetimeIndex,
+    source_name: str,
+    indicator_id: str = "TSETMC.TEDPIX",
+) -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "indicator_id": ["TSETMC.TEDPIX"] * len(timestamps),
+            "indicator_id": [indicator_id] * len(timestamps),
             "name": ["TEDPIX"] * len(timestamps),
             "timestamp": timestamps,
             "value": [1.0] * len(timestamps),
@@ -179,6 +184,30 @@ def test_trading_daily_single_day_still_expects_one_session() -> None:
 
     assert periods.count == 1
     assert periods.is_estimate is True
+
+
+def test_trading_rule_is_an_empirical_rate_not_a_session_calendar() -> None:
+    """The estimate carries no dates, so it cannot tell a session from a holiday."""
+    iranian_weekend = expect_periods(
+        "daily",
+        datetime(2024, 1, 11, tzinfo=UTC),
+        datetime(2024, 1, 12, tzinfo=UTC),
+        source_name="tsetmc",
+    )
+    trading_days = expect_periods(
+        "daily",
+        datetime(2024, 1, 6, tzinfo=UTC),
+        datetime(2024, 1, 7, tzinfo=UTC),
+        source_name="tsetmc",
+    )
+
+    # Thursday 2024-01-11 / Friday 2024-01-12 are not TSE sessions and Saturday
+    # 2024-01-06 / Sunday 2024-01-07 are, yet both two-day ranges get the same
+    # rate-based count: the rule is date-agnostic, not a session list.
+    assert iranian_weekend.period_keys == ()
+    assert trading_days.period_keys == ()
+    assert iranian_weekend.count == round(2 * TRADING_SESSIONS_PER_YEAR / DAYS_PER_YEAR)
+    assert iranian_weekend.count == trading_days.count == 1
 
 
 def test_trading_calendar_can_be_requested_explicitly() -> None:
@@ -440,6 +469,22 @@ def test_summarize_quality_marks_trading_estimates() -> None:
     assert row["expected_observations"] == round(5 * TRADING_SESSIONS_PER_YEAR / DAYS_PER_YEAR)
 
 
+def test_derived_tsetmc_row_with_inherited_source_uses_the_session_estimate() -> None:
+    # The repository fills ``source_name`` for a derived row from its parent
+    # catalog row (``record_metadata['derived_from']``), so a derived TSETMC
+    # series reaches this utility with the trading source slug, not a null.
+    timestamps = pd.date_range("2024-01-06", periods=5, freq="D", tz="UTC")
+    frame = daily_frame(timestamps, "tsetmc", indicator_id="TSETMC.TEDPIX.RET1D")
+    quality = summarize_quality(
+        frame, datetime(2024, 1, 6, tzinfo=UTC), datetime(2024, 1, 10, tzinfo=UTC)
+    )
+
+    row = quality.loc[0]
+    assert row["indicator_id"] == "TSETMC.TEDPIX.RET1D"
+    assert bool(row["expected_is_estimated"]) is True
+    assert row["expected_observations"] == round(5 * TRADING_SESSIONS_PER_YEAR / DAYS_PER_YEAR)
+
+
 def test_tsetmc_like_session_count_does_not_warn(monkeypatch: pytest.MonkeyPatch) -> None:
     sessions = pd.date_range(TSETMC_LIVE_START, TSETMC_LIVE_END, periods=TSETMC_LIVE_SESSIONS)
     quality = summarize_quality(daily_frame(sessions, "tsetmc"), TSETMC_LIVE_START, TSETMC_LIVE_END)
@@ -469,9 +514,7 @@ def test_calendar_daily_gap_for_the_same_rows_is_material_and_warns(
     monkeypatch.setattr(quality_module, "st", recorder)
     render_quality_summary(quality)
 
-    assert recorder.warnings == [
-        "The selected date range contains missing periods. No values were filled."
-    ]
+    assert recorder.warnings == [t("warn.missing_periods")]
 
 
 def test_small_gap_below_the_materiality_threshold_does_not_warn(

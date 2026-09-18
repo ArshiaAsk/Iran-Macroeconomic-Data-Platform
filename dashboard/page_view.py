@@ -1,8 +1,9 @@
 """Composable page-rendering functions used by Streamlit page modules."""
 
+import math
 from collections.abc import Iterable
-from datetime import date, datetime
-from typing import Final
+from datetime import UTC, date, datetime
+from typing import Any, Final
 
 import pandas as pd
 import streamlit as st
@@ -25,14 +26,23 @@ from dashboard.formatting import (
     gregorian_to_jalali,
     jalali_date_label,
     jalali_year_label,
+    tehran_timestamp_label,
 )
 from dashboard.i18n import t
-from dashboard.labels import indicator_label
+from dashboard.labels import (
+    domain_label,
+    indicator_label,
+    source_expected_cadence,
+    source_label,
+)
+from dashboard.navigation import page_for_domain
 from dashboard.queries import (
+    cached_available_domains,
     cached_coverage_summary,
     cached_list_derived_ids,
     cached_list_indicators,
     cached_load_series,
+    cached_series_inventory,
     cached_source_freshness,
 )
 from dashboard.repository import (
@@ -144,7 +154,7 @@ def render_domain_body(
         else:
             catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info("No active indicators are available for this page yet.")
+        st.info(t("empty.no_indicators_for_page"))
         return
     if filters is None:
         filters = render_filters(catalog, key_prefix, default_indicators)
@@ -154,7 +164,7 @@ def render_domain_body(
             derived_series_ids(filters.indicator_ids, repository, exclude=selected_ids)
         )
     if not selected_ids:
-        st.info("Select one or more indicators to view Gold observations.")
+        st.info(t("empty.select_indicators"))
         return
     if filters.start_date > filters.end_date:
         return
@@ -456,10 +466,10 @@ def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> Non
 
 def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     """Render the searchable indicator catalog."""
-    st.title("Data Catalog")
+    st.title(t("page.catalog"))
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.info("The indicator catalog is empty.")
+        st.info(t("empty.catalog_empty"))
         return
     filters = render_filters(catalog, "catalog")
     result = catalog
@@ -471,7 +481,7 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
         result = result[result["source_name"].isin(filters.sources)]
     if filters.indicator_ids:
         result = result[result["indicator_id"].isin(filters.indicator_ids)]
-    st.metric("Matching indicators", len(result))
+    st.metric(t("metric.matching_indicators"), format_number(len(result)))
     display = result.copy()
     for column in ("availability_start", "availability_end"):
         display[column] = display[column].map(_display_timestamp)
@@ -479,52 +489,185 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
 
 
 def render_overview_page(repository: DashboardRepository | None = None) -> None:
-    """Render platform-wide coverage, counts, and freshness."""
-    st.title("Overview")
+    """Render platform-wide counts, per-domain ownership and source freshness.
+
+    The Overview is an all-domain view, so it owns no domain itself: it reports
+    counts and links into the page that owns each domain. The per-domain counts
+    come from a single query (:meth:`DashboardRepository.available_domains`), and
+    the Gold-only derived/orphan series -- which have no catalog row and would
+    therefore be invisible to any catalog-driven view -- come from
+    :meth:`DashboardRepository.series_inventory`. Freshness is the latest
+    ``DataCollectionLog`` row per source, annotated with a staleness verdict
+    against the presentation cadence map in :mod:`dashboard.labels` (the platform
+    does not store an expected frequency, so this is a dashboard convention).
+    """
+    st.title(t("page.overview"))
     catalog = repository.list_indicators() if repository else cached_list_indicators()
+    if catalog.empty:
+        st.warning(t("warn.catalog_empty"))
+        return
     coverage = repository.coverage_summary() if repository else cached_coverage_summary()
     freshness = repository.source_freshness() if repository else cached_source_freshness()
-    if catalog.empty:
-        st.warning(
-            "The indicator catalog is empty. Run an ETL pipeline before using the dashboard."
-        )
-        return
+    domain_counts = repository.available_domains() if repository else cached_available_domains()
+    inventory = repository.series_inventory() if repository else cached_series_inventory()
+
     observation_counts = coverage.get("observation_count")
     if observation_counts is None:
         total_observations = 0
     else:
         total_observations = int(pd.to_numeric(observation_counts, errors="coerce").fillna(0).sum())
     columns = st.columns(4)
-    columns[0].metric("Active indicators", len(catalog))
-    columns[1].metric("Gold observations", total_observations)
-    columns[2].metric("Domains", catalog["domain"].nunique())
-    columns[3].metric("Sources", catalog["source_name"].nunique())
-    st.subheader("Indicators by domain")
-    st.bar_chart(catalog.groupby("domain", observed=True).size())
-    st.subheader("Available coverage")
-    st.dataframe(coverage, use_container_width=True, hide_index=True)
-    st.subheader("Source freshness")
+    columns[0].metric(t("metric.active_indicators"), format_number(len(catalog)))
+    columns[1].metric(t("metric.gold_observations"), format_number(total_observations))
+    columns[2].metric(t("metric.domains"), format_number(catalog["domain"].nunique()))
+    columns[3].metric(t("metric.sources"), format_number(catalog["source_name"].nunique()))
+
+    _render_series_inventory(inventory)
+
+    st.subheader(t("section.indicators_by_domain"))
+    _render_domain_counts(domain_counts)
+
+    st.subheader(t("section.source_freshness"))
     if freshness.empty:
-        st.info("No collection runs have been logged yet.")
+        st.info(t("empty.no_collection_runs"))
     else:
-        st.dataframe(freshness, use_container_width=True, hide_index=True)
-    st.subheader("Key indicators")
-    st.dataframe(
-        catalog[["indicator_id", "name", "domain", "frequency", "unit", "source_name"]],
-        use_container_width=True,
-        hide_index=True,
-    )
+        st.dataframe(
+            freshness_display(freshness),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.subheader(t("section.available_coverage"))
+    st.dataframe(coverage, use_container_width=True, hide_index=True)
+
+
+def _render_series_inventory(inventory: pd.DataFrame) -> None:
+    """Show how many Gold series are derived or have no catalog row at all."""
+    kinds = inventory.get("series_kind")
+    has_catalog = inventory.get("has_catalog_metadata")
+    derived = 0 if kinds is None else int((kinds == SERIES_KIND_DERIVED).sum())
+    orphan = 0 if has_catalog is None else int((~has_catalog.astype(bool)).sum())
+    columns = st.columns(2)
+    columns[0].metric(t("metric.derived_series"), format_number(derived))
+    columns[1].metric(t("metric.orphan_series"), format_number(orphan))
+
+
+def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
+    """Render one ``st.page_link`` per domain into the page that owns it.
+
+    The owner comes from the navigation registry (:func:`page_for_domain`), the
+    single declaration of domain ownership. A domain without an owner is shown as
+    plain text rather than dropped, so an unowned domain stays visible.
+    """
+    if domain_counts.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    for row in domain_counts.itertuples(index=False):
+        domain = str(row.domain)
+        count = row.indicator_count
+        count_text = format_number(count) if isinstance(count, int | float) else format_number(0)
+        label = f"{domain_label(domain)} ({count_text})"
+        owner = page_for_domain(domain)
+        if owner is None:
+            st.markdown(f"- {label}")
+        else:
+            st.page_link(owner.path, label=label)
+
+
+def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd.DataFrame:
+    """Return the per-source freshness table with localized headers and staleness.
+
+    One row per source, exactly the latest ``DataCollectionLog`` run
+    :meth:`DashboardRepository.source_freshness` returns. ``status`` and the
+    error text are data and stay verbatim; the source name is displayed through
+    the label layer, and the collection instant is shown as a Tehran-local Jalali
+    timestamp (storage stays UTC). The staleness verdict compares the last
+    collection against the source's expected collection cadence
+    (:func:`dashboard.labels.source_expected_cadence`); a source without a known
+    cadence is reported as unknown rather than guessed fresh or stale.
+
+    Args:
+        frame: Freshness frame from ``source_freshness()``
+        now: Reference instant for staleness; defaults to the current UTC time
+            and is injectable so the verdict is deterministic under test
+
+    Returns:
+        A display frame with Persian headers, or an empty frame with those
+        headers when there is no collection log
+    """
+    columns = [
+        t("table.source_name"),
+        t("table.collection_timestamp"),
+        t("table.status"),
+        t("table.records_collected"),
+        t("table.error_message"),
+        t("table.staleness"),
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    reference = now if now is not None else datetime.now(UTC)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=UTC)
+    rows: list[dict[str, str]] = []
+    for row in frame.itertuples(index=False):
+        source_name = str(row.source_name)
+        collected = _aware_utc(row.collection_timestamp)
+        rows.append(
+            {
+                columns[0]: source_label(source_name),
+                columns[1]: (
+                    t("value.unknown") if collected is None else tehran_timestamp_label(collected)
+                ),
+                columns[2]: str(row.status),
+                columns[3]: _count_label(row.records_collected),
+                columns[4]: "" if row.error_message is None else str(row.error_message),
+                columns[5]: _staleness_label(source_name, collected, reference),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _staleness_label(source_name: str, collected: datetime | None, now: datetime) -> str:
+    """Verdict for one source: fresh, stale, or unknown when no cadence is known."""
+    cadence = source_expected_cadence(source_name)
+    if cadence is None or collected is None:
+        return t("value.unknown")
+    return t("value.stale") if (now - collected) > cadence else t("value.fresh")
+
+
+def _aware_utc(value: Any) -> datetime | None:
+    """Interpret a stored timestamp as timezone-aware UTC, or ``None`` if absent.
+
+    ``value`` is typed ``Any`` because it arrives as an untyped pandas row
+    attribute: it may be a ``Timestamp``, a ``datetime``, ``NaT`` or ``None``.
+    """
+    if value is None or pd.isna(value):
+        return None
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("UTC")
+    return timestamp.to_pydatetime()
+
+
+def _count_label(value: object) -> str:
+    """Format a record count, showing unknown rather than inventing a zero."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return t("value.unknown")
+    if not math.isfinite(value):
+        return t("value.unknown")
+    return format_number(int(value))
 
 
 def render_fx_gold_page(repository: DashboardRepository | None = None) -> None:
-    """Render the TGJU FX/gold page with snapshot limitations."""
-    st.title("FX & Gold")
-    st.warning(
-        "TGJU provides current-price snapshots, not a historical backfill. "
-        "Daily scheduled collection gradually builds the time series."
-    )
-    render_domain_page(
-        "FX & Gold",
+    """Render the TGJU FX/gold page with snapshot limitations.
+
+    The page title is rendered once here; the body composition is
+    :func:`render_domain_body` rather than :func:`render_domain_page`, so the
+    title cannot appear twice on the same page.
+    """
+    st.title(t("page.fx_gold"))
+    st.warning(t("warn.tgju_snapshot"))
+    render_domain_body(
         ("fx", "gold"),
         "fx_gold",
         repository=repository,
@@ -608,14 +751,14 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
     """Render exact-timestamp correlation diagnostics."""
     from dashboard.components.charts import build_correlation_chart
 
-    st.title("Comparison & Correlation")
+    st.title(t("page.correlation"))
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.info("The indicator catalog is empty.")
+        st.info(t("empty.catalog_empty"))
         return
     filters = render_filters(catalog, "correlation")
     if not filters.indicator_ids:
-        st.info("Select at least two indicators to compare.")
+        st.info(t("empty.select_two_indicators"))
         return
     if filters.start_date > filters.end_date:
         return
@@ -632,17 +775,14 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
             filters.end_date,
         )
     if series.empty:
-        st.info("No observations match the selected indicators and dates.")
+        st.info(t("empty.no_observations"))
         return
     frequencies = set(series["frequency"].astype(str))
     if len(frequencies) > 1:
-        st.warning(
-            "Selected indicators use different frequencies. Correlation uses only exact timestamp matches; "
-            "no values are forward-filled or interpolated."
-        )
+        st.warning(t("warn.mixed_frequencies"))
     bundle = build_correlation_chart(series)
     st.plotly_chart(bundle.figure, use_container_width=True)
-    st.subheader("Exact timestamp join counts")
+    st.subheader(t("section.exact_join_counts"))
     st.dataframe(bundle.join_counts, use_container_width=True)
     render_quality_summary(summarize_quality(series, filters.start_date, filters.end_date))
     render_data_downloads(series, "iran-macro-correlation")
@@ -650,14 +790,14 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
 
 def _render_series_section(series: pd.DataFrame, key_prefix: str) -> None:
     if series.empty:
-        st.info("No Gold observations match the selected indicators and dates.")
+        st.info(t("empty.no_observations"))
         return
     start = series["timestamp"].min().to_pydatetime()
     end = series["timestamp"].max().to_pydatetime()
     quality = summarize_quality(series, start, end)
     scaled = _render_scaled_chart(series, key_prefix)
     render_quality_summary(quality)
-    with st.expander("Observations", expanded=False):
+    with st.expander(t("section.observations"), expanded=False):
         _render_capped_rows(series)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
     render_chart_downloads(scaled.figure, f"iran-macro-{key_prefix}-chart")
@@ -876,7 +1016,7 @@ def derived_series_ids(
 
 def _display_timestamp(value: object) -> str:
     if value is None:
-        return "Unknown"
+        return t("value.unknown")
     if isinstance(value, datetime | date | pd.Timestamp):
         return pd.Timestamp(value).strftime("%Y-%m-%d")
     return str(value)

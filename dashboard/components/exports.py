@@ -15,6 +15,7 @@ import plotly.io as pio
 import streamlit as st
 from kaleido import Kaleido
 
+from dashboard.i18n import t
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -102,7 +103,7 @@ def render_data_downloads(frame: pd.DataFrame, file_prefix: str) -> None:
     columns = st.columns(2)
     with columns[0]:
         st.download_button(
-            "Download CSV",
+            t("export.download_csv"),
             data=serialize_csv(frame),
             file_name=f"{file_prefix}.csv",
             mime="text/csv",
@@ -110,7 +111,7 @@ def render_data_downloads(frame: pd.DataFrame, file_prefix: str) -> None:
         )
     with columns[1]:
         st.download_button(
-            "Download Excel",
+            t("export.download_excel"),
             data=serialize_excel(frame),
             file_name=f"{file_prefix}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -131,7 +132,7 @@ def render_chart_downloads(figure: go.Figure, file_prefix: str) -> None:
     columns = st.columns(3)
     with columns[0]:
         st.download_button(
-            "Download HTML",
+            t("export.download_html"),
             data=serialize_figure_html(figure),
             file_name=f"{file_prefix}.html",
             mime="text/html",
@@ -151,7 +152,7 @@ def _render_image_download(
     capability: ChromiumCapability,
 ) -> None:
     """Render one on-demand image control inside the caller's column."""
-    label = f"Download {image_format.upper()}"
+    label = t(f"export.download_{image_format}")
     key = f"{file_prefix}-{image_format}"
     if not capability.available:
         st.button(label, key=f"{key}-trigger", disabled=True)
@@ -162,7 +163,7 @@ def _render_image_download(
         payload = cached_figure_image(figure.to_json(), image_format)
     except Exception as error:
         logger.exception("Chart image export failed for %s", image_format)
-        st.error(f"{label} failed: {error}")
+        st.error(t("export.image_failed", format=image_format.upper(), error=error))
         return
     st.download_button(
         label,

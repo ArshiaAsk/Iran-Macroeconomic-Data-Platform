@@ -20,6 +20,7 @@ from dashboard.formatting import (
     to_persian_digits,
 )
 from dashboard.i18n import t
+from dashboard.labels import indicator_label
 from dashboard.navigation import PAGES
 from dashboard.page_view import survey_year_frame, survey_year_panel
 from src.connectors.hbsir_parser import (
@@ -120,11 +121,13 @@ def test_welfare_page_keeps_population_and_imf_lur_in_the_generic_composition(
 
     indicators = app.multiselect(key="welfare_indicators")
     # The generic composition defaults to the non-HBSIR members of the domain:
-    # World Bank population and IMF LUR are never excluded from the page.
+    # World Bank population and IMF LUR are never excluded from the page. The
+    # selection keeps the raw ids; the options are their Persian display labels.
     assert set(indicators.value) == set(CONTEXT_INDICATORS)
-    assert set(CONTEXT_INDICATORS).issubset(set(indicators.options))
+    options = set(indicators.options)
+    assert {indicator_label(indicator) for indicator in CONTEXT_INDICATORS} <= options
     # The page owns the whole domain, so HBSIR stays selectable there too.
-    assert set(DEFAULT_INDICATORS).issubset(set(indicators.options))
+    assert {indicator_label(indicator) for indicator in DEFAULT_INDICATORS} <= options
 
 
 def test_welfare_page_owns_the_welfare_domain() -> None:
