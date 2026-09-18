@@ -121,6 +121,20 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "chart.chain_linked": "زنجیره‌شده",
         "chart.original": "مقدار اصلی",
         "chart.pearson_r": "ضریب همبستگی پیرسون",
+        # Chart scaling (Task 15): the facet default plus the two opted-in modes.
+        # Overlay is only safe for a shared unit, so its fallback note says why.
+        "chart.mode": "حالت نمودار",
+        "chart.mode.facets": "پنل جداگانه برای هر شاخص",
+        "chart.mode.overlay": "نمودار هم‌پوشان (واحد مشترک)",
+        "chart.mode.small_multiples": "چندگانه‌های کوچک",
+        "chart.overlay_mixed_units": (
+            "شاخص‌های انتخاب‌شده واحد یکسانی ندارند؛ برای پرهیز از یک محور مشترک "
+            "گمراه‌کننده، هر شاخص در پنل جداگانه خود رسم شده است."
+        ),
+        "chart.small_multiples_capped": (
+            "در حالت چندگانه‌های کوچک تنها {count} سری نخست نمایش داده می‌شود؛ "
+            "برای دیدن سری‌های بیشتر، انتخاب را محدودتر کنید."
+        ),
         # Table and export column headers.
         "table.indicator_id": "شناسه شاخص",
         "table.name": "نام",
@@ -160,6 +174,12 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.period_end": "پایان دوره ذخیره‌شده (میلادی)",
         "table.hbsir_indicators": "سری‌های HBSIR",
         "table.hbsir_observations": "مشاهدات HBSIR",
+        # Observations-table row cap (Task 15): the grid is a bounded preview and
+        # the full selection remains available in the downloads.
+        "table.rows_capped": (
+            "برای خوانایی، تنها {shown} ردیف از {total} ردیف نمایش داده می‌شود. "
+            "برای دیدن ردیف‌های بیشتر بازه زمانی را محدودتر کنید."
+        ),
         # Export controls.
         "export.download_csv": "دریافت CSV",
         "export.download_excel": "دریافت Excel",

@@ -665,6 +665,29 @@ class FakeDashboardRepository:
         self.series = _append_rows(self.series, inflation_derived_series())
         self.series = _append_rows(self.series, labor_series())
         self.series = _append_rows(self.series, trade_energy_series())
+        # The `fx` domain needs Gold rows too: the FX & Gold page defaults to
+        # selecting `USD_FREE`, and without observations it renders its empty
+        # state, so the shared chart-mode control never registers.
+        self.series = _append_rows(
+            self.series,
+            pd.DataFrame(
+                [
+                    _gold_row(
+                        "USD_FREE",
+                        "USD",
+                        timestamp,
+                        value,
+                        "IRR",
+                        "daily",
+                        "fx",
+                        "tgju",
+                    )
+                    for timestamp, value in zip(
+                        INFLATION_TIMESTAMPS, (420_000.0, 423_000.0, 430_000.0), strict=True
+                    )
+                ]
+            ),
+        )
 
     def list_indicators(
         self,

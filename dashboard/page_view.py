@@ -8,13 +8,17 @@ import pandas as pd
 import streamlit as st
 
 from dashboard.components.charts import (
+    CHART_MODES,
     SURVEY_YEAR_COLUMN,
+    ScaledChart,
+    build_scaled_time_series_chart,
     build_survey_year_chart,
     build_time_series_chart,
 )
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
 from dashboard.components.filters import FilterState, render_filters
 from dashboard.components.quality import render_quality_summary, summarize_quality
+from dashboard.components.tables import cap_table_rows
 from dashboard.formatting import (
     format_number,
     gregorian_to_jalali,
@@ -291,12 +295,13 @@ def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> Non
 
     :func:`build_time_series_chart` gives every indicator its own facet with its
     own y-axis, so a daily return or a moving average is never drawn on the index
-    level's axis.
+    level's axis. The observation grid is a bounded preview (Task 15's row cap);
+    the downloads keep every row.
     """
     figure = build_time_series_chart(series)
     st.plotly_chart(figure, use_container_width=True)
     with st.expander(t("section.observations"), expanded=False):
-        st.dataframe(series, use_container_width=True, hide_index=True)
+        _render_capped_rows(series)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
     render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
 
@@ -502,13 +507,58 @@ def _render_series_section(series: pd.DataFrame, key_prefix: str) -> None:
     start = series["timestamp"].min().to_pydatetime()
     end = series["timestamp"].max().to_pydatetime()
     quality = summarize_quality(series, start, end)
-    figure = build_time_series_chart(series)
-    st.plotly_chart(figure, use_container_width=True)
+    scaled = _render_scaled_chart(series, key_prefix)
     render_quality_summary(quality)
     with st.expander("Observations", expanded=False):
-        st.dataframe(series, use_container_width=True, hide_index=True)
+        _render_capped_rows(series)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
-    render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
+    render_chart_downloads(scaled.figure, f"iran-macro-{key_prefix}-chart")
+
+
+def _render_scaled_chart(series: pd.DataFrame, key_prefix: str) -> ScaledChart:
+    """Render the opt-in chart-mode control and the scaled figure.
+
+    The default mode is per-indicator facets, so a page that never touches the
+    control renders exactly as before. Overlay and small multiples are opt-in;
+    the builder falls back to facets (with a visible notice) when an overlay
+    would share an axis across different units, and caps the small-multiples
+    grid at the documented series count.
+    """
+    mode = st.selectbox(
+        t("chart.mode"),
+        CHART_MODES,
+        format_func=_chart_mode_label,
+        key=f"{key_prefix}_chart_mode",
+    )
+    scaled = build_scaled_time_series_chart(series, mode=mode)
+    if scaled.notice:
+        st.info(scaled.notice)
+    st.plotly_chart(scaled.figure, use_container_width=True)
+    return scaled
+
+
+def _chart_mode_label(mode: str) -> str:
+    """Persian label of a chart mode, keyed by the mode slug."""
+    return t(f"chart.mode.{mode}")
+
+
+def _render_capped_rows(series: pd.DataFrame) -> None:
+    """Render the observations grid as a bounded preview with a truncation hint.
+
+    The cap is presentation-only: it never changes a value, a column or the
+    timezone-aware ``timestamp`` column, and the exports and the quality summary
+    still describe the full selection.
+    """
+    capped = cap_table_rows(series)
+    if capped.truncated:
+        st.info(
+            t(
+                "table.rows_capped",
+                shown=format_number(capped.shown_rows),
+                total=format_number(capped.total_rows),
+            )
+        )
+    st.dataframe(capped.frame, use_container_width=True, hide_index=True)
 
 
 def survey_year_frame(series: pd.DataFrame) -> pd.DataFrame:
