@@ -16,9 +16,10 @@ DASHBOARD_ROOT = REPOSITORY_ROOT / "dashboard"
 PLAN_DOMAINS = frozenset(
     {"gdp", "inflation", "trade", "welfare", "energy", "fx", "gold", "labor", "market"}
 )
-# Labor and Market are later tasks: their domains stay deliberately unowned until
-# those pages are registered here. `welfare` is owned by the Welfare & Survey page.
-PENDING_DOMAINS = frozenset({"labor", "market"})
+# Labor is a later task: its domain stays deliberately unowned until that page is
+# registered here. `market` is owned by the Market page (Task 10) and `welfare` by
+# the Welfare & Survey page.
+PENDING_DOMAINS = frozenset({"labor"})
 
 
 def _owner_counts() -> Counter[str]:

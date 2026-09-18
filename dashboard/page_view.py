@@ -22,13 +22,19 @@ from dashboard.formatting import (
     jalali_year_label,
 )
 from dashboard.i18n import t
+from dashboard.labels import indicator_label
 from dashboard.queries import (
     cached_coverage_summary,
+    cached_list_derived_ids,
     cached_list_indicators,
     cached_load_series,
     cached_source_freshness,
 )
-from dashboard.repository import DashboardRepository
+from dashboard.repository import (
+    SERIES_KIND_BASE,
+    SERIES_KIND_DERIVED,
+    DashboardRepository,
+)
 from src.connectors.hbsir_parser import (
     DECILE_INDICATORS,
     DEFAULT_INDICATORS,
@@ -47,6 +53,15 @@ HBSIR_INDICATORS: Final[tuple[str, ...]] = tuple(DEFAULT_INDICATORS)
 #: The Gini and relative-poverty pair. They carry different units (an index and a
 #: percentage), which is why the trend renders one panel per indicator.
 HBSIR_GINI_POVERTY_INDICATORS: Final[tuple[str, ...]] = (GINI_INDICATOR, POVERTY_INDICATOR)
+
+#: The Market page's domain. The level series has a catalog row; the platform's
+#: derived series (``RET1D``/``MA30``/``.ME``) do not, which is why they are
+#: discovered from Gold metadata rather than from the catalog or an id pattern.
+MARKET_DOMAIN: Final[str] = "market"
+
+#: Gold frequency of the ``.ME`` month-end downsample. The split between the
+#: daily derived series and the downsample uses this stored value, never an id.
+MARKET_MONTHLY_FREQUENCY: Final[str] = "monthly"
 
 
 def render_domain_page(
@@ -103,6 +118,192 @@ def render_domain_body(
         return
     series = _load_series(selected_ids, filters.start_date, filters.end_date, repository)
     _render_series_section(series, key_prefix)
+
+
+def render_market_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Market (TSETMC) page: the index level plus its derived Gold series.
+
+    Gold is the only analytical input. The level series comes from the catalog
+    (domain ``market``); the platform-computed series (``RET1D``, ``MA30`` and the
+    ``.ME`` month-end downsample) have no catalog row because
+    ``connector.discover()`` never emits derived ids, so they are discovered from
+    Gold's ``record_metadata["derived_from"]`` through the repository (Task 7) --
+    never from a hardcoded id list and never from parsing an indicator id.
+
+    Nothing is interpolated, forward-filled, resampled or zero-filled: an absent
+    trading session is an absent observation, and the ``.ME`` rows are presented
+    exactly as the ETL stamped them (calendar month end, monthly frequency).
+    """
+    st.title(t("page.market"))
+    _render_market_notes()
+    if repository is None:
+        catalog = cached_list_indicators(domains=(MARKET_DOMAIN,))
+    else:
+        catalog = repository.list_indicators(domains=[MARKET_DOMAIN])
+    if catalog.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    filters = render_filters(catalog, "market", list(catalog["indicator_id"]))
+    if not filters.indicator_ids:
+        st.info(t("empty.select_indicators"))
+        return
+    if filters.start_date > filters.end_date:
+        return
+    series = _load_market_series(filters, repository)
+    if series.empty:
+        st.info(t("empty.no_observations"))
+        return
+    level, daily_derived, month_end = market_series_groups(series)
+    _render_market_level(level)
+    _render_market_derived_panels(daily_derived, "market_derived")
+    _render_market_derived_panels(month_end, "market_month_end")
+
+
+def market_series_groups(
+    series: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Split loaded market Gold rows into level, daily-derived and month-end groups.
+
+    The split is metadata-driven and adds nothing: ``series_kind`` (which the
+    repository derives from ``record_metadata["derived_from"]``) separates the
+    collected level from the platform-computed rows, and the Gold ``frequency``
+    column separates the ``.ME`` month-end downsample from the daily derived
+    series. No indicator id is parsed, no row is filled, and no value is changed.
+
+    Args:
+        series: Gold observations as returned by the repository (or an empty
+            frame, and frames without the classification columns)
+
+    Returns:
+        ``(level, daily_derived, month_end)`` frames, in that order
+    """
+    if series.empty:
+        empty = pd.DataFrame()
+        return empty, empty.copy(), empty.copy()
+    kinds = series.get("series_kind", pd.Series(SERIES_KIND_BASE, index=series.index))
+    frequencies = series.get("frequency", pd.Series("", index=series.index))
+    derived = kinds == SERIES_KIND_DERIVED
+    month_end = frequencies.astype(str) == MARKET_MONTHLY_FREQUENCY
+    return (
+        series[~derived].copy(),
+        series[derived & ~month_end].copy(),
+        series[derived & month_end].copy(),
+    )
+
+
+def _render_market_notes() -> None:
+    """Render the TSETMC caveats: derivedness, absent sessions, warm-up, downsample."""
+    st.warning(t("warn.tsetmc_derived_not_official"))
+    st.info(t("warn.tsetmc_trading_days_absent"))
+    st.info(t("warn.tsetmc_ma30_warmup"))
+    st.info(t("warn.tsetmc_month_end"))
+    st.info(t("warn.tsetmc_deferred_metrics"))
+
+
+def _load_market_series(
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> pd.DataFrame:
+    """Load the selected market levels plus every derived series Gold records."""
+    parent_ids = list(filters.indicator_ids)
+    derived_ids = _list_derived_ids(parent_ids, repository)
+    return _load_series(
+        [*parent_ids, *derived_ids], filters.start_date, filters.end_date, repository
+    )
+
+
+def _list_derived_ids(
+    parent_ids: list[str],
+    repository: DashboardRepository | None,
+) -> list[str]:
+    """Discover the derived Gold ids of the given parents from Gold metadata."""
+    if not parent_ids:
+        return []
+    if repository is None:
+        return cached_list_derived_ids(tuple(parent_ids))
+    return repository.list_derived_ids(parent_ids)
+
+
+def _render_market_level(level: pd.DataFrame) -> None:
+    """Render the daily index level with the session expectation it defines."""
+    st.subheader(t("section.market_level"))
+    if level.empty:
+        st.info(t("empty.no_observations"))
+        return
+    st.metric(t("metric.market_sessions"), format_number(len(level)))
+    _render_market_figure_and_rows(level, "market_level")
+    # The trading-session expectation describes the collection itself, so it is
+    # computed on the level series only. A derived series legitimately starts
+    # later (first-session return, moving-average warm-up, month-end downsample),
+    # so comparing its row count against a session estimate would report a
+    # construction artifact as missing data -- exactly what MA30 must not show.
+    render_quality_summary(
+        summarize_quality(
+            level,
+            level["timestamp"].min().to_pydatetime(),
+            level["timestamp"].max().to_pydatetime(),
+        )
+    )
+
+
+def _render_market_derived_panels(series: pd.DataFrame, key_prefix: str) -> None:
+    """Render one labelled panel per platform-computed market series.
+
+    The panel title comes from the presentation label layer and always names the
+    parent series *and* the derivation, so a daily return, a moving average or a
+    month-end downsample is never presented as the index level. Each series gets
+    its own chart, and therefore its own y-axis, so a rate never shares an axis
+    with a level.
+    """
+    for order, (_, rows) in enumerate(series.groupby("indicator_id", sort=False)):
+        st.subheader(market_series_label(rows))
+        _render_market_figure_and_rows(rows, f"{key_prefix}_{order}")
+
+
+def market_series_label(series: pd.DataFrame) -> str:
+    """Persian panel label of one loaded series, resolved by the label layer.
+
+    Derivedness and the parent id come from the Gold row's ``derived_from``
+    column (metadata-written), never from parsing the id: the id is only used to
+    pick a suffix fragment for a row that is already known to be derived.
+
+    Args:
+        series: Rows of a single indicator (only the first row is read)
+
+    Returns:
+        The parent display name plus the derivation, or the level's own label
+    """
+    if series.empty:
+        return ""
+    row = series.iloc[0]
+    return indicator_label(
+        str(row["indicator_id"]),
+        _optional_text(row, "name"),
+        _optional_text(row, "derived_from"),
+    )
+
+
+def _optional_text(row: pd.Series, column: str) -> str | None:
+    """Value of a row's column as text, or ``None`` when absent/null."""
+    value = row.get(column)
+    if value is None or not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> None:
+    """Chart one facet per indicator, then its observation table and downloads.
+
+    :func:`build_time_series_chart` gives every indicator its own facet with its
+    own y-axis, so a daily return or a moving average is never drawn on the index
+    level's axis.
+    """
+    figure = build_time_series_chart(series)
+    st.plotly_chart(figure, use_container_width=True)
+    with st.expander(t("section.observations"), expanded=False):
+        st.dataframe(series, use_container_width=True, hide_index=True)
+    render_data_downloads(series, f"iran-macro-{key_prefix}")
+    render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
 
 
 def render_catalog_page(repository: DashboardRepository | None = None) -> None:

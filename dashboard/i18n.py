@@ -66,6 +66,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "nav.trade_energy": "تجارت و انرژی",
         "nav.welfare": "رفاه و آمارگیری خانوار",
         "nav.fx_gold": "ارز و طلا",
+        "nav.market": "بازار سرمایه",
         # In-page titles (same keys as nav.*, kept separate so they cannot drift
         # from the routing label without a failing test).
         "page.overview": "مرور کلی",
@@ -76,6 +77,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "page.trade_energy": "تجارت و انرژی",
         "page.welfare": "رفاه و آمارگیری خانوار",
         "page.fx_gold": "ارز و طلا",
+        "page.market": "بازار سرمایه",
         # Subheaders and expanders.
         "section.indicators_by_domain": "شاخص‌ها به تفکیک حوزه",
         "section.available_coverage": "پوشش موجود",
@@ -88,6 +90,9 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.hbsir_deciles": "سهم درآمدی دهک‌ها",
         "section.hbsir_survey_years": "سال‌های آمارگیری موجود",
         "section.welfare_other_indicators": "سایر شاخص‌های حوزه رفاه",
+        # Market (TSETMC) page: the daily level panel. Every derived panel is
+        # titled through dashboard.labels (parent name + derivation), not here.
+        "section.market_level": "شاخص کل بورس تهران (سطح روزانه)",
         # Metric blocks.
         "metric.matching_indicators": "شاخص‌های منطبق",
         "metric.active_indicators": "شاخص‌های فعال",
@@ -95,6 +100,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "metric.domains": "حوزه‌ها",
         "metric.sources": "منابع",
         "metric.selected_indicators": "{count} شاخص انتخاب‌شده",
+        "metric.market_sessions": "نشست‌های معاملاتی مشاهده‌شده",
         # Filter controls.
         "filter.domain": "حوزه",
         "filter.frequency": "تواتر",
@@ -191,6 +197,29 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "warn.hbsir_relative_poverty": (
             "نرخ فقر این صفحه **نسبی** است: سهم وزنی خانوارهای زیر «k × میانه وزنی درآمد "
             "(k = {k})». این معیار خط فقر رسمی کالری‌پایه ایران نیست."
+        ),
+        # Market (TSETMC) caveats: the level is collected, the derived series
+        # are computed in-platform, sessions are absent rather than zero, MA30
+        # needs a full window and ``.ME`` is a month-end downsample.
+        "warn.tsetmc_derived_not_official": (
+            "سری‌های RET1D، MA30 و .ME توسط همین سامانه محاسبه شده‌اند و سری‌های "
+            "رسمی بورس تهران نیستند؛ تنها شاخص کل، داده گردآوری‌شده است."
+        ),
+        "warn.tsetmc_trading_days_absent": (
+            "روزهایی که بورس تهران معامله ندارد هیچ مشاهده‌ای تولید نمی‌کنند. این روزها "
+            "غایب‌اند و به صفر تبدیل نشده‌اند؛ هیچ مقداری درون‌یابی، جای‌گذاری یا جلو‌بری نشده است."
+        ),
+        "warn.tsetmc_ma30_warmup": (
+            "سری MA30 برای ۲۹ نشست نخست هیچ مقداری ندارد، چون میانگین متحرک به پنجره کامل "
+            "نیاز دارد. این دوره گرم‌شدن ساخته‌شده است و کمبود داده به شمار نمی‌رود."
+        ),
+        "warn.tsetmc_month_end": (
+            "سری .ME نمونه‌برداری پایان‌ماه از مشاهدات روزانه است: آخرین نشست هر ماه "
+            "میلادی با برچسب پایان همان ماه. این سری یک ماهانه پیوسته نیست و روز معامله را نشان نمی‌دهد."
+        ),
+        "warn.tsetmc_deferred_metrics": (
+            "ارزش معاملات، نسبت قیمت به درآمد (P/E) و ارزش بازار در این سامانه موجود نیستند: "
+            "بسته finpy-tse سری تاریخی قابل‌اتکایی برای آن‌ها ارائه نمی‌دهد و گذشته از تصویر امروز بازسازی نمی‌شود."
         ),
         "warn.hbsir_computed_values": (
             "دوازده سری HBSIR از ریزمی‌کروداده آمارگیری بودجه خانوار محاسبه شده‌اند و ارقام "

@@ -10,8 +10,8 @@ Owned domains mirror the Phase 7.1 plan: the all-domain views (Overview,
 Comparison & Correlation, Data Catalog) own no domain, and every other page owns
 exactly the domains it renders. ``economy`` is a dead domain and is never
 claimed. The Welfare & Survey page owns ``welfare`` (split out of the old
-Trade/Welfare/Energy page); the Labor and Market pages land in later tasks, so
-``labor`` and ``market`` stay unowned until they are registered here.
+Trade/Welfare/Energy page) and the Market page owns ``market``; the Labor page
+lands in a later task, so ``labor`` stays unowned until it is registered here.
 """
 
 from dataclasses import dataclass
@@ -100,6 +100,14 @@ PAGES: Final[tuple[PageSpec, ...]] = (
         icon="💱",
         group="Domains",
         domains=("fx", "gold"),
+    ),
+    PageSpec(
+        key="market",
+        path="pages/9_Market.py",
+        title="Market",
+        icon="📉",
+        group="Domains",
+        domains=("market",),
     ),
 )
 """Dashboard pages in sidebar order, grouped by :data:`GROUPS`."""

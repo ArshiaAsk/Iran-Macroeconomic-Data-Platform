@@ -13,11 +13,12 @@ import dashboard.connection as dashboard_connection
 from dashboard.queries import (
     cached_available_domains,
     cached_coverage_summary,
+    cached_list_derived_ids,
     cached_list_indicators,
     cached_load_series,
     cached_source_freshness,
 )
-from dashboard.repository import DashboardRepository
+from dashboard.repository import SERIES_KIND_BASE, SERIES_KIND_DERIVED, DashboardRepository
 from src.connectors.hbsir_parser import (
     DECILE_INDICATORS,
     DEFAULT_INDICATORS,
@@ -67,16 +68,19 @@ def _availability_start(year: int) -> pd.Timestamp:
     return pd.Timestamp(annual_period_end(year))
 
 
-def _with_welfare(frame: pd.DataFrame, extra: pd.DataFrame) -> pd.DataFrame:
-    """Append the welfare fixture rows, keeping the base frame's column dtypes.
+def _append_rows(frame: pd.DataFrame, extra: pd.DataFrame) -> pd.DataFrame:
+    """Append fixture rows, keeping the base frame's columns and dtypes.
 
-    Casting first avoids pandas' all-NA concat ``FutureWarning``: the optional
-    columns (``original_value``, ``chain_linking_confidence``, ``record_metadata``)
-    are entirely null in the welfare rows, so pandas would otherwise exclude them
-    from dtype determination.
+    The extra frame is reindexed to the base columns (a fixture that omits an
+    optional column gets a null one) and cast first, which avoids pandas' all-NA
+    concat ``FutureWarning``: columns such as ``original_value``,
+    ``chain_linking_confidence`` and ``record_metadata`` are entirely null in the
+    appended rows, so pandas would otherwise exclude them from dtype
+    determination.
     """
     dtypes = frame.dtypes.astype(str).to_dict()
-    return pd.concat([frame, extra.astype(dtypes)], ignore_index=True)
+    aligned = extra.reindex(columns=frame.columns)
+    return pd.concat([frame, aligned.astype(dtypes)], ignore_index=True)
 
 
 def welfare_catalog() -> pd.DataFrame:
@@ -121,31 +125,24 @@ def welfare_catalog() -> pd.DataFrame:
 
 
 def welfare_series() -> pd.DataFrame:
-    """Gold-shaped `welfare` rows: two HBSIR survey years plus annual context."""
-    rows: list[dict[str, object]] = [
-        {
-            "indicator_id": indicator,
-            "name": HBSIR_NAMES[indicator],
-            "timestamp": period_end,
-            "value": HBSIR_VALUES[indicator],
-            "original_value": None,
-            "is_chain_linked": False,
-            "chain_linking_confidence": None,
-            "unit": "index (0-1)" if indicator == GINI_INDICATOR else "percent",
-            "frequency": "annual",
-            "domain": "welfare",
-            "source_name": "hbsir",
-            "source_url": None,
-            "record_metadata": None,
-        }
-        for period_end in SURVEY_TIMESTAMPS
-        for indicator in DEFAULT_INDICATORS
-    ]
-    rows += [
-        {
+    """Gold-shaped `welfare` rows: two HBSIR survey years plus annual context.
+
+    Every row has a catalog row, so the repository's classification columns read
+    ``base`` / ``derived_from = None`` / ``has_catalog_metadata = True``.
+    """
+
+    def welfare_row(
+        indicator_id: str,
+        name: str,
+        timestamp: pd.Timestamp,
+        value: float,
+        unit: str,
+        source: str,
+    ) -> dict[str, object]:
+        return {
             "indicator_id": indicator_id,
             "name": name,
-            "timestamp": POPULATION_TIMESTAMP,
+            "timestamp": timestamp,
             "value": value,
             "original_value": None,
             "is_chain_linked": False,
@@ -156,8 +153,184 @@ def welfare_series() -> pd.DataFrame:
             "source_name": source,
             "source_url": None,
             "record_metadata": None,
+            "series_kind": SERIES_KIND_BASE,
+            "derived_from": None,
+            "has_catalog_metadata": True,
         }
+
+    rows: list[dict[str, object]] = [
+        welfare_row(
+            indicator,
+            HBSIR_NAMES[indicator],
+            period_end,
+            HBSIR_VALUES[indicator],
+            "index (0-1)" if indicator == GINI_INDICATOR else "percent",
+            "hbsir",
+        )
+        for period_end in SURVEY_TIMESTAMPS
+        for indicator in DEFAULT_INDICATORS
+    ]
+    rows += [
+        welfare_row(indicator_id, name, POPULATION_TIMESTAMP, value, unit, source)
         for indicator_id, name, value, unit, source, _ in WELFARE_CONTEXT_ROWS
+    ]
+    return pd.DataFrame(rows)
+
+
+#: TSETMC fixture: trading sessions for the market domain. The Thursday/Friday
+#: weekend and a one-day holiday (2026-09-08) are **absent**, exactly as the
+#: source reports them -- the platform never fills a session, so the page must
+#: never show a zero for one. The session density stays at or above the
+#: calibrated session rate, so the level raises no missing-period warning.
+MARKET_SESSIONS = (
+    pd.Timestamp("2026-08-29", tz="UTC"),
+    pd.Timestamp("2026-08-30", tz="UTC"),
+    pd.Timestamp("2026-08-31", tz="UTC"),
+    pd.Timestamp("2026-09-01", tz="UTC"),
+    pd.Timestamp("2026-09-02", tz="UTC"),
+    pd.Timestamp("2026-09-05", tz="UTC"),
+    pd.Timestamp("2026-09-06", tz="UTC"),
+    pd.Timestamp("2026-09-07", tz="UTC"),
+    pd.Timestamp("2026-09-09", tz="UTC"),
+    pd.Timestamp("2026-09-12", tz="UTC"),
+    pd.Timestamp("2026-09-13", tz="UTC"),
+)
+#: Dates the source never reported: the Iranian weekend and the holiday above.
+MARKET_ABSENT_DATES = (
+    pd.Timestamp("2026-09-03", tz="UTC"),
+    pd.Timestamp("2026-09-04", tz="UTC"),
+    pd.Timestamp("2026-09-08", tz="UTC"),
+    pd.Timestamp("2026-09-10", tz="UTC"),
+    pd.Timestamp("2026-09-11", tz="UTC"),
+)
+MARKET_LEVEL_VALUES = (
+    7_050_000.0,
+    7_090_000.0,
+    7_120_000.0,
+    7_100_000.0,
+    7_150_000.0,
+    7_090_000.0,
+    7_240_000.0,
+    7_310_000.0,
+    7_280_000.0,
+    7_350_000.0,
+    7_330_000.0,
+)
+#: ``RET1D`` (percent): one observation fewer than the level, because the first
+#: session has no previous close to compare against.
+MARKET_RET1D_VALUES = (
+    0.5674,
+    0.4231,
+    -0.2809,
+    0.7042,
+    -0.8392,
+    2.1157,
+    0.9669,
+    -0.4104,
+    0.9615,
+    -0.2721,
+)
+#: ``MA30`` (index points) over a shortened warm-up: the real series starts 29
+#: sessions after the level, which the fixture compresses to three so the smoke
+#: test stays small (the production span is asserted in ``test_quality``).
+MARKET_MA30_VALUES = (
+    7_094_000.0,
+    7_104_000.0,
+    7_112_000.0,
+    7_130_000.0,
+    7_158_000.0,
+    7_184_000.0,
+    7_208_000.0,
+    7_226_000.0,
+)
+#: ``.ME``: the month-end downsample, stamped at the calendar month end (monthly
+#: frequency), not at the last session it was taken from.
+MARKET_MONTH_ENDS = (pd.Timestamp("2026-08-31", tz="UTC"), pd.Timestamp("2026-09-30", tz="UTC"))
+MARKET_ME_VALUES = (7_120_000.0, 7_330_000.0)
+MARKET_INDICATOR = "TSETMC.TEDPIX"
+MARKET_RET1D_ID = f"{MARKET_INDICATOR}.RET1D"
+MARKET_MA30_ID = f"{MARKET_INDICATOR}.MA30"
+MARKET_ME_ID = f"{MARKET_INDICATOR}.ME"
+MARKET_NAME = "Tehran Stock Exchange total index (TEDPIX)"
+MARKET_UNIT = "index points"
+MARKET_SOURCE_URL = "http://cdn.tsetmc.com/api"
+MARKET_MA30_START = MARKET_SESSIONS[3]
+MARKET_DERIVED_IDS = (MARKET_RET1D_ID, MARKET_MA30_ID, MARKET_ME_ID)
+
+
+def _market_row(
+    indicator_id: str,
+    timestamp: pd.Timestamp,
+    value: float,
+    frequency: str,
+    derived_from: str | None,
+    unit: str = MARKET_UNIT,
+) -> dict[str, object]:
+    """One Gold-shaped market row, with the parent provenance a derived row gets."""
+    return {
+        "indicator_id": indicator_id,
+        "name": MARKET_NAME,
+        "timestamp": timestamp,
+        "value": value,
+        "original_value": None,
+        "is_chain_linked": False,
+        "chain_linking_confidence": None,
+        "unit": unit,
+        "frequency": frequency,
+        "domain": "market",
+        "source_name": "tsetmc",
+        "source_url": MARKET_SOURCE_URL,
+        "record_metadata": {"derived_from": derived_from} if derived_from else None,
+        "series_kind": SERIES_KIND_DERIVED if derived_from else SERIES_KIND_BASE,
+        "derived_from": derived_from,
+        "has_catalog_metadata": derived_from is None,
+    }
+
+
+def market_catalog() -> pd.DataFrame:
+    """Catalog rows for the `market` domain: the collected level series only.
+
+    The derived series deliberately have no catalog row -- ``discover()`` never
+    emits a derived id -- which is why the page finds them in Gold metadata.
+    """
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": MARKET_INDICATOR,
+                "name": MARKET_NAME,
+                "description": None,
+                "unit": MARKET_UNIT,
+                "frequency": "daily",
+                "domain": "market",
+                "source_name": "tsetmc",
+                "source_url": MARKET_SOURCE_URL,
+                "availability_start": MARKET_SESSIONS[0],
+                "availability_end": MARKET_SESSIONS[-1],
+                "has_base_year_changes": False,
+                "base_years": None,
+                "is_active": True,
+            }
+        ]
+    )
+
+
+def market_series() -> pd.DataFrame:
+    """Gold-shaped `market` rows: the daily level plus its three derived series."""
+    rows = [
+        _market_row(MARKET_INDICATOR, timestamp, value, "daily", None)
+        for timestamp, value in zip(MARKET_SESSIONS, MARKET_LEVEL_VALUES, strict=True)
+    ]
+    rows += [
+        _market_row(MARKET_RET1D_ID, timestamp, value, "daily", MARKET_INDICATOR, unit="%")
+        for timestamp, value in zip(MARKET_SESSIONS[1:], MARKET_RET1D_VALUES, strict=True)
+    ]
+    rows += [
+        _market_row(MARKET_MA30_ID, timestamp, value, "daily", MARKET_INDICATOR)
+        for timestamp, value in zip(MARKET_SESSIONS[3:], MARKET_MA30_VALUES, strict=True)
+    ]
+    rows += [
+        _market_row(MARKET_ME_ID, timestamp, value, "monthly", MARKET_INDICATOR)
+        for timestamp, value in zip(MARKET_MONTH_ENDS, MARKET_ME_VALUES, strict=True)
     ]
     return pd.DataFrame(rows)
 
@@ -206,6 +379,12 @@ class FakeDashboardRepository:
                 "source_name": ["world_bank"] * 6,
                 "source_url": [None] * 6,
                 "record_metadata": [None] * 6,
+                # Repository classification columns (Task 7): the fake carries
+                # them so a page can split level and derived rows exactly as it
+                # does against the real LEFT-JOINed query.
+                "series_kind": [SERIES_KIND_BASE] * 6,
+                "derived_from": [None] * 6,
+                "has_catalog_metadata": [True] * 6,
             }
         )
         self.coverage = pd.DataFrame(
@@ -235,10 +414,14 @@ class FakeDashboardRepository:
             }
         )
         # The `welfare` domain (HBSIR's twelve survey series plus World Bank
-        # population and IMF LUR) is appended so the Welfare & Survey page renders
-        # real rows; the frames above are left untouched for the other pages.
-        self.catalog = _with_welfare(self.catalog, welfare_catalog())
-        self.series = _with_welfare(self.series, welfare_series())
+        # population and IMF LUR) and the `market` domain (TSETMC's level plus its
+        # three derived series) are appended so the Welfare & Survey and Market
+        # pages render real rows; the frames above are left untouched for the
+        # other pages.
+        self.catalog = _append_rows(self.catalog, welfare_catalog())
+        self.catalog = _append_rows(self.catalog, market_catalog())
+        self.series = _append_rows(self.series, welfare_series())
+        self.series = _append_rows(self.series, market_series())
 
     def list_indicators(
         self,
@@ -262,6 +445,14 @@ class FakeDashboardRepository:
         result = self.series[self.series["indicator_id"].isin(indicator_ids)]
         return result.reset_index(drop=True)
 
+    def list_derived_ids(self, parent_ids: list[str]) -> list[str]:
+        """Derived ids whose ``record_metadata['derived_from']`` is a given parent."""
+        if not parent_ids:
+            return []
+        parents = self.series["derived_from"]
+        matched = self.series[parents.isin(parent_ids)]
+        return sorted(str(indicator) for indicator in matched["indicator_id"].unique())
+
     def coverage_summary(self, indicator_ids: list[str] | None = None) -> pd.DataFrame:
         if indicator_ids:
             return self.coverage[self.coverage["indicator_id"].isin(indicator_ids)].reset_index(
@@ -282,6 +473,7 @@ def fake_streamlit_connection(monkeypatch: pytest.MonkeyPatch) -> None:
     for cached_query in (
         cached_available_domains,
         cached_coverage_summary,
+        cached_list_derived_ids,
         cached_list_indicators,
         cached_load_series,
         cached_source_freshness,
