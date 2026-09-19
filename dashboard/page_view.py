@@ -1,22 +1,138 @@
 """Composable page-rendering functions used by Streamlit page modules."""
 
-from collections.abc import Iterable
-from datetime import date, datetime
+import math
+from collections.abc import Hashable, Iterable, Mapping
+from datetime import UTC, datetime
+from typing import Any, Final
 
 import pandas as pd
 import streamlit as st
 
-from dashboard.components.charts import build_time_series_chart
+from dashboard.components.charts import (
+    CHART_MODE_SMALL_MULTIPLES,
+    CHART_MODES,
+    SURVEY_YEAR_COLUMN,
+    ScaledChart,
+    build_chain_linking_chart,
+    build_scaled_time_series_chart,
+    build_survey_year_chart,
+    build_time_series_chart,
+)
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
-from dashboard.components.filters import render_filters
+from dashboard.components.filters import FilterState, render_filters
 from dashboard.components.quality import render_quality_summary, summarize_quality
+from dashboard.components.tables import cap_table_rows, localize_table_frame
+from dashboard.formatting import (
+    format_number,
+    gregorian_to_jalali,
+    jalali_date_label,
+    jalali_year_label,
+    tehran_timestamp_label,
+    to_ascii_digits,
+    to_persian_digits,
+)
+from dashboard.i18n import t
+from dashboard.labels import (
+    DERIVED_SUFFIX_LABELS,
+    derived_label,
+    domain_label,
+    indicator_label,
+    source_expected_cadence,
+    source_label,
+)
+from dashboard.navigation import page_for_domain
 from dashboard.queries import (
+    cached_available_domains,
     cached_coverage_summary,
+    cached_list_derived_ids,
     cached_list_indicators,
     cached_load_series,
+    cached_series_inventory,
     cached_source_freshness,
 )
-from dashboard.repository import DashboardRepository
+from dashboard.repository import (
+    SERIES_KIND_BASE,
+    SERIES_KIND_DERIVED,
+    DashboardRepository,
+)
+from src.connectors.hbsir_parser import (
+    DECILE_INDICATORS,
+    DEFAULT_INDICATORS,
+    DEFAULT_POVERTY_LINE_K,
+    GINI_INDICATOR,
+    POVERTY_INDICATOR,
+)
+from src.connectors.sci_scraper import SCI_CANONICAL_INDICATORS, SCI_INDICATOR_REGISTRY
+from src.utils.persian import iranian_year_end
+
+#: HBSIR indicator ids the Welfare & Survey page emphasises. They come from the
+#: connector's authoritative registry (``src/connectors/hbsir_parser.py``) rather
+#: than a list invented in the dashboard: ``DEFAULT_INDICATORS`` is exactly Gini,
+#: relative poverty and the ten income-decile shares.
+HBSIR_INDICATORS: Final[tuple[str, ...]] = tuple(DEFAULT_INDICATORS)
+
+#: The Gini and relative-poverty pair. They carry different units (an index and a
+#: percentage), which is why the trend renders one panel per indicator.
+HBSIR_GINI_POVERTY_INDICATORS: Final[tuple[str, ...]] = (GINI_INDICATOR, POVERTY_INDICATOR)
+
+#: The Market page's domain. The level series has a catalog row; the platform's
+#: derived series (``RET1D``/``MA30``/``.ME``) do not, which is why they are
+#: discovered from Gold metadata rather than from the catalog or an id pattern.
+MARKET_DOMAIN: Final[str] = "market"
+
+#: Gold frequency of the ``.ME`` month-end downsample. The split between the
+#: daily derived series and the downsample uses this stored value, never an id.
+MARKET_MONTHLY_FREQUENCY: Final[str] = "monthly"
+
+#: The Labor page's domain. SCI publishes the labour-force unemployment rate for
+#: one quarter per release, so the domain is legitimately a single-observation
+#: series and the page renders it without implying a trend.
+LABOR_DOMAIN: Final[str] = "labor"
+
+#: The SCI publication key whose members are the ten household-expenditure-decile
+#: CPI series. The ids come from the connector's authoritative registry
+#: (``src/connectors/sci_scraper.py``) rather than a list invented in the
+#: dashboard, so a registry change is reflected without a page edit.
+SCI_DECILE_PUBLICATION: Final[str] = "cpi_decile"
+
+#: The ten expenditure-decile CPI ids (``SCI.CPI.DECILE.B2021.D1`` … ``D10``), in
+#: the registry's order. They are ten separate catalog indicators with an
+#: identical unit and a shared base year, which is why the Inflation page groups
+#: them into one comparison instead of presenting ten unrelated series.
+SCI_DECILE_INDICATORS: Final[tuple[str, ...]] = tuple(
+    SCI_INDICATOR_REGISTRY[SCI_DECILE_PUBLICATION].member_ids
+)
+
+#: The canonical chain-linked CPI ids (national, urban, rural), in the registry's
+#: order. The canonical ids -- not the inactive ``B<year>`` segments -- are what
+#: Gold publishes and the catalog marks active.
+SCI_CANONICAL_CPI_INDICATORS: Final[tuple[str, ...]] = tuple(SCI_CANONICAL_INDICATORS)
+
+#: Default selection of the Inflation page's generic composition: the World Bank
+#: headline CPI, exactly as before the decile view landed. The SCI decile and
+#: canonical series have their own dedicated sections, so they are not selected
+#: here by default.
+INFLATION_DEFAULT_INDICATORS: Final[tuple[str, ...]] = ("FP.CPI.TOTL.ZG",)
+
+#: The Inflation page's domain. Both the World Bank/IMF headline CPIs and the SCI
+#: canonical and decile CPI series are catalog domain ``inflation``.
+INFLATION_DOMAIN: Final[str] = "inflation"
+
+#: Session-state keys of the catalog page's filter and search widgets. The
+#: clear-filters button resets exactly these; the inactive-segment toggle is a view
+#: control, not a filter, so it is deliberately not in the list.
+CATALOG_FILTER_STATE_KEYS: Final[tuple[str, ...]] = (
+    "catalog_domains",
+    "catalog_frequencies",
+    "catalog_sources",
+    "catalog_indicators",
+    "catalog_start",
+    "catalog_end",
+    "catalog_jalali_year",
+    "catalog_jalali_month",
+    "catalog_jalali_day",
+    "catalog_search",
+)
 
 
 def render_domain_page(
@@ -28,38 +144,494 @@ def render_domain_page(
 ) -> None:
     """Render a domain-specific Gold exploration page."""
     st.title(title)
+    render_domain_body(
+        domains,
+        key_prefix,
+        default_indicators,
+        repository=repository,
+    )
+
+
+def render_domain_body(
+    domains: Iterable[str],
+    key_prefix: str,
+    default_indicators: list[str] | None = None,
+    repository: DashboardRepository | None = None,
+    catalog: pd.DataFrame | None = None,
+    filters: FilterState | None = None,
+) -> None:
+    """Render the generic domain composition: filters, selection and Gold series.
+
+    Kept separate from :func:`render_domain_page` so a page that owns a whole
+    domain can show its own emphasis sections around the same composition without
+    drawing a second page title (see :func:`render_welfare_page`). ``catalog`` and
+    ``filters`` are passed in when the caller has already rendered them, so the
+    domain is never queried or filtered twice.
+    """
     domain_list = list(domains)
-    if repository is None:
-        catalog = cached_list_indicators(domains=tuple(domain_list))
-    else:
-        catalog = repository.list_indicators(domains=domain_list)
+    if catalog is None:
+        if repository is None:
+            catalog = cached_list_indicators(domains=tuple(domain_list))
+        else:
+            catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info("No active indicators are available for this page yet.")
+        st.info(t("empty.no_indicators_for_page"))
         return
-    filters = render_filters(catalog, key_prefix, default_indicators)
+    if filters is None:
+        filters = render_filters(catalog, key_prefix, default_indicators)
     selected_ids = list(filters.indicator_ids)
-    if st.checkbox("Include derived series when available", key=f"{key_prefix}_derived"):
-        selected_ids.extend(_derived_ids(catalog, filters.indicator_ids))
+    if st.checkbox(t("filter.include_derived"), key=f"{key_prefix}_derived"):
+        selected_ids.extend(
+            derived_series_ids(filters.indicator_ids, repository, exclude=selected_ids)
+        )
     if not selected_ids:
-        st.info("Select one or more indicators to view Gold observations.")
+        st.info(t("empty.select_indicators"))
         return
     if filters.start_date > filters.end_date:
         return
-    if repository is None:
-        series = cached_load_series(tuple(selected_ids), filters.start_date, filters.end_date)
-    else:
-        series = repository.load_series(selected_ids, filters.start_date, filters.end_date)
+    series = _load_series(selected_ids, filters.start_date, filters.end_date, repository)
     _render_series_section(series, key_prefix)
 
 
-def render_catalog_page(repository: DashboardRepository | None = None) -> None:
-    """Render the searchable indicator catalog."""
-    st.title("Data Catalog")
-    catalog = repository.list_indicators() if repository else cached_list_indicators()
+def render_inflation_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Inflation page: the CPI decile and canonical views, then Gold.
+
+    The page owns the ``inflation`` domain. Two emphasis sections make the SCI
+    CPI structure explicit -- the ten expenditure deciles (ten catalog indicators
+    that share one unit and one base year, so a plain comparison is honest and
+    needs no normalization) and the canonical chain-linked national/urban/rural
+    series -- and the generic domain composition below them keeps the World
+    Bank/IMF and every other inflation series reachable. Nothing is interpolated,
+    normalized or resampled: Gold rows are drawn exactly as stored.
+    """
+    st.title(t("page.inflation"))
+    if repository is None:
+        catalog = cached_list_indicators(domains=(INFLATION_DOMAIN,))
+    else:
+        catalog = repository.list_indicators(domains=[INFLATION_DOMAIN])
     if catalog.empty:
-        st.info("The indicator catalog is empty.")
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    filters = render_filters(catalog, "inflation", list(INFLATION_DEFAULT_INDICATORS))
+    _render_cpi_decile_section(catalog, filters, repository)
+    _render_cpi_canonical_section(catalog, filters, repository)
+    _render_chain_linking_section(catalog, filters, repository)
+    st.subheader(t("section.inflation_all_indicators"))
+    render_domain_body(
+        (INFLATION_DOMAIN,),
+        "inflation",
+        list(INFLATION_DEFAULT_INDICATORS),
+        repository=repository,
+        catalog=catalog,
+        filters=filters,
+    )
+
+
+def cpi_decile_ids(catalog: pd.DataFrame) -> list[str]:
+    """The catalog's SCI expenditure-decile CPI ids, in registry order.
+
+    The ids come from the connector registry (Task 13's metadata-driven rule),
+    so the view never hardcodes the ten decile ids.
+    """
+    return _registered_ids(catalog, SCI_DECILE_INDICATORS)
+
+
+def cpi_canonical_ids(catalog: pd.DataFrame) -> list[str]:
+    """The catalog's canonical chain-linked CPI ids, in registry order."""
+    return _registered_ids(catalog, SCI_CANONICAL_CPI_INDICATORS)
+
+
+def _registered_ids(catalog: pd.DataFrame, registered: tuple[str, ...]) -> list[str]:
+    """Registry ids that have a row in ``catalog``, in registry order (empty-safe)."""
+    if catalog.empty or "indicator_id" not in catalog.columns:
+        return []
+    present = set(catalog["indicator_id"].astype(str))
+    return [indicator_id for indicator_id in registered if indicator_id in present]
+
+
+def _render_cpi_decile_section(
+    catalog: pd.DataFrame,
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> None:
+    """Render the ten expenditure-decile CPI series as one comparison.
+
+    The deciles share a unit (an index) and a base year, so a plain comparison is
+    honest and no normalization is applied. The comparison is drawn through the
+    Task 15 small-multiples mode -- one unit-safe panel per decile -- rather than
+    through the generic multi-indicator chart, which would force ten unrelated
+    facets onto the page's main selection.
+    """
+    st.subheader(t("section.cpi_deciles"))
+    decile_ids = cpi_decile_ids(catalog)
+    if not decile_ids:
+        st.info(t("empty.no_cpi_deciles"))
+        return
+    selected = st.multiselect(
+        t("filter.cpi_deciles"),
+        options=decile_ids,
+        default=decile_ids,
+        format_func=indicator_label,
+        key="inflation_deciles",
+    )
+    if not selected:
+        st.info(t("empty.select_indicators"))
+        return
+    series = _load_series(list(selected), filters.start_date, filters.end_date, repository)
+    if series.empty:
+        st.info(t("empty.no_observations"))
+        return
+    st.caption(t("warn.cpi_deciles_shared_base"))
+    scaled = build_scaled_time_series_chart(series, mode=CHART_MODE_SMALL_MULTIPLES)
+    if scaled.notice:
+        st.info(scaled.notice)
+    st.plotly_chart(scaled.figure, use_container_width=True)
+
+
+def _render_cpi_canonical_section(
+    catalog: pd.DataFrame,
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> None:
+    """Render the canonical chain-linked national/urban/rural CPI comparison.
+
+    The canonical series are the chain-linked Gold output (the inactive
+    ``B<year>`` segments stay off the dashboard), drawn through
+    :func:`build_time_series_chart` so each keeps its own panel and axis.
+    """
+    st.subheader(t("section.cpi_canonical"))
+    canonical_ids = cpi_canonical_ids(catalog)
+    if not canonical_ids:
+        st.info(t("empty.no_cpi_canonical"))
+        return
+    series = _load_series(canonical_ids, filters.start_date, filters.end_date, repository)
+    if series.empty:
+        st.info(t("empty.no_observations"))
+        return
+    st.plotly_chart(build_time_series_chart(series), use_container_width=True)
+
+
+def chain_linked_catalog_ids(catalog: pd.DataFrame) -> list[str]:
+    """Catalog ids whose stored base-year flag marks them as chain-linked.
+
+    The flag is the catalog's own ``has_base_year_changes`` column, read as
+    stored: the dashboard never re-derives whether a series was chain-linked.
+    """
+    if catalog.empty or "has_base_year_changes" not in catalog.columns:
+        return []
+    flagged = catalog["has_base_year_changes"].fillna(False).astype(bool)
+    return [str(indicator) for indicator in catalog.loc[flagged, "indicator_id"]]
+
+
+def chain_linking_provenance(catalog: pd.DataFrame) -> pd.DataFrame:
+    """Per chain-linked indicator: display name, base-year badge, years and segments.
+
+    The badge is the catalog's stored ``has_base_year_changes`` flag, the nominal
+    base years are the catalog's stored ``base_years`` value, and the segment
+    ancestry comes from the connector registry
+    (:data:`SCI_CANONICAL_INDICATORS`) rather than from a dashboard id list, so a
+    registry change is reflected without a page edit. Nothing is recomputed.
+    """
+    columns = [
+        t("table.name"),
+        t("table.has_base_year_changes"),
+        t("table.base_years"),
+        t("table.base_year_segments"),
+    ]
+    rows: list[dict[str, str]] = []
+    for row in catalog.to_dict("records"):
+        indicator_id = str(row["indicator_id"])
+        canonical = SCI_CANONICAL_INDICATORS.get(indicator_id)
+        segments = (
+            "، ".join(indicator_label(segment) for segment in canonical.segment_ids)
+            if canonical is not None
+            else ""
+        )
+        rows.append(
+            {
+                columns[0]: indicator_label(indicator_id, _catalog_name(row)),
+                columns[1]: _flag_label(row.get("has_base_year_changes")),
+                columns[2]: _base_years_text(row.get("base_years")),
+                columns[3]: segments,
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _flag_label(value: object) -> str:
+    """Display a stored boolean flag as the Persian yes/no, never inventing a yes."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return t("value.no")
+    return t("value.yes") if bool(value) else t("value.no")
+
+
+def _base_years_text(value: object) -> str:
+    """Display a stored ``base_years`` value, or the unknown placeholder when absent."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return t("value.unknown")
+    if isinstance(value, list | tuple):
+        return "، ".join(to_persian_digits(str(year)) for year in value)
+    return str(value)
+
+
+def _render_chain_linking_section(
+    catalog: pd.DataFrame,
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> None:
+    """Surface the stored chain-linking provenance and the original-vs-linked panel.
+
+    Everything shown is read from Gold as stored: the chart draws
+    ``original_value`` against ``value`` for rows with ``is_chain_linked`` set,
+    the provenance table shows the catalog's base-year flag and years plus the
+    registry's segment ancestry, and the observations grid carries
+    ``chain_linking_confidence`` and ``record_metadata`` unchanged. No value is
+    recomputed, interpolated or normalized.
+    """
+    st.subheader(t("section.chain_linking"))
+    st.caption(t("warn.chain_linking_stored"))
+    chain_ids = chain_linked_catalog_ids(catalog)
+    if not chain_ids:
+        st.info(t("empty.no_chain_linked"))
+        return
+    flagged = catalog[catalog["indicator_id"].isin(chain_ids)]
+    st.dataframe(chain_linking_provenance(flagged), use_container_width=True, hide_index=True)
+    st.caption(t("warn.chain_linking_overlap"))
+    series = _load_series(chain_ids, filters.start_date, filters.end_date, repository)
+    if series.empty:
+        st.info(t("empty.no_chain_linked_observations"))
+        return
+    figure = build_chain_linking_chart(series)
+    if not figure.data:
+        st.info(t("empty.no_chain_linked_observations"))
+        return
+    st.plotly_chart(figure, use_container_width=True)
+    with st.expander(t("section.observations"), expanded=False):
+        _render_capped_rows(series)
+
+
+def render_market_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Market (TSETMC) page: the index level plus its derived Gold series.
+
+    Gold is the only analytical input. The level series comes from the catalog
+    (domain ``market``); the platform-computed series (``RET1D``, ``MA30`` and the
+    ``.ME`` month-end downsample) have no catalog row because
+    ``connector.discover()`` never emits derived ids, so they are discovered from
+    Gold's ``record_metadata["derived_from"]`` through the repository (Task 7) --
+    never from a hardcoded id list and never from parsing an indicator id.
+
+    Nothing is interpolated, forward-filled, resampled or zero-filled: an absent
+    trading session is an absent observation, and the ``.ME`` rows are presented
+    exactly as the ETL stamped them (calendar month end, monthly frequency).
+    """
+    st.title(t("page.market"))
+    _render_market_notes()
+    if repository is None:
+        catalog = cached_list_indicators(domains=(MARKET_DOMAIN,))
+    else:
+        catalog = repository.list_indicators(domains=[MARKET_DOMAIN])
+    if catalog.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    filters = render_filters(catalog, "market", list(catalog["indicator_id"]))
+    if not filters.indicator_ids:
+        st.info(t("empty.select_indicators"))
+        return
+    if filters.start_date > filters.end_date:
+        return
+    series = _load_market_series(filters, repository)
+    if series.empty:
+        st.info(t("empty.no_observations"))
+        return
+    level, daily_derived, month_end = market_series_groups(series)
+    _render_market_level(level)
+    _render_market_derived_panels(daily_derived, "market_derived")
+    _render_market_derived_panels(month_end, "market_month_end")
+
+
+def market_series_groups(
+    series: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Split loaded market Gold rows into level, daily-derived and month-end groups.
+
+    The split is metadata-driven and adds nothing: ``series_kind`` (which the
+    repository derives from ``record_metadata["derived_from"]``) separates the
+    collected level from the platform-computed rows, and the Gold ``frequency``
+    column separates the ``.ME`` month-end downsample from the daily derived
+    series. No indicator id is parsed, no row is filled, and no value is changed.
+
+    Args:
+        series: Gold observations as returned by the repository (or an empty
+            frame, and frames without the classification columns)
+
+    Returns:
+        ``(level, daily_derived, month_end)`` frames, in that order
+    """
+    if series.empty:
+        empty = pd.DataFrame()
+        return empty, empty.copy(), empty.copy()
+    kinds = series.get("series_kind", pd.Series(SERIES_KIND_BASE, index=series.index))
+    frequencies = series.get("frequency", pd.Series("", index=series.index))
+    derived = kinds == SERIES_KIND_DERIVED
+    month_end = frequencies.astype(str) == MARKET_MONTHLY_FREQUENCY
+    return (
+        series[~derived].copy(),
+        series[derived & ~month_end].copy(),
+        series[derived & month_end].copy(),
+    )
+
+
+def _render_market_notes() -> None:
+    """Render the TSETMC caveats: derivedness, absent sessions, warm-up, downsample."""
+    st.warning(t("warn.tsetmc_derived_not_official"))
+    st.info(t("warn.tsetmc_trading_days_absent"))
+    st.info(t("warn.tsetmc_ma30_warmup"))
+    st.info(t("warn.tsetmc_month_end"))
+    st.info(t("warn.tsetmc_deferred_metrics"))
+
+
+def _load_market_series(
+    filters: FilterState,
+    repository: DashboardRepository | None,
+) -> pd.DataFrame:
+    """Load the selected market levels plus every derived series Gold records."""
+    parent_ids = list(filters.indicator_ids)
+    derived_ids = derived_series_ids(parent_ids, repository, exclude=parent_ids)
+    return _load_series(
+        [*parent_ids, *derived_ids], filters.start_date, filters.end_date, repository
+    )
+
+
+def _render_market_level(level: pd.DataFrame) -> None:
+    """Render the daily index level with the session expectation it defines."""
+    st.subheader(t("section.market_level"))
+    if level.empty:
+        st.info(t("empty.no_observations"))
+        return
+    st.metric(t("metric.market_sessions"), format_number(len(level)))
+    _render_market_figure_and_rows(level, "market_level")
+    # The trading-session expectation describes the collection itself, so it is
+    # computed on the level series only. A derived series legitimately starts
+    # later (first-session return, moving-average warm-up, month-end downsample),
+    # so comparing its row count against a session estimate would report a
+    # construction artifact as missing data -- exactly what MA30 must not show.
+    render_quality_summary(
+        summarize_quality(
+            level,
+            level["timestamp"].min().to_pydatetime(),
+            level["timestamp"].max().to_pydatetime(),
+        )
+    )
+
+
+def _render_market_derived_panels(series: pd.DataFrame, key_prefix: str) -> None:
+    """Render one labelled panel per platform-computed market series.
+
+    The panel title comes from the presentation label layer and always names the
+    parent series *and* the derivation, so a daily return, a moving average or a
+    month-end downsample is never presented as the index level. Each series gets
+    its own chart, and therefore its own y-axis, so a rate never shares an axis
+    with a level.
+    """
+    for order, (_, rows) in enumerate(series.groupby("indicator_id", sort=False)):
+        st.subheader(market_series_label(rows))
+        _render_market_figure_and_rows(rows, f"{key_prefix}_{order}")
+
+
+def market_series_label(series: pd.DataFrame) -> str:
+    """Persian panel label of one loaded series, resolved by the label layer.
+
+    Derivedness and the parent id come from the Gold row's ``derived_from``
+    column (metadata-written), never from parsing the id: the id is only used to
+    pick a suffix fragment for a row that is already known to be derived.
+
+    Args:
+        series: Rows of a single indicator (only the first row is read)
+
+    Returns:
+        The parent display name plus the derivation, or the level's own label
+    """
+    if series.empty:
+        return ""
+    row = series.iloc[0]
+    return indicator_label(
+        str(row["indicator_id"]),
+        _optional_text(row, "name"),
+        _optional_text(row, "derived_from"),
+    )
+
+
+def _optional_text(row: pd.Series, column: str) -> str | None:
+    """Value of a row's column as text, or ``None`` when absent/null."""
+    value = row.get(column)
+    if value is None or not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> None:
+    """Chart one facet per indicator, then its observation table and downloads.
+
+    :func:`build_time_series_chart` gives every indicator its own facet with its
+    own y-axis, so a daily return or a moving average is never drawn on the index
+    level's axis. The observation grid is a bounded preview (Task 15's row cap);
+    the downloads keep every row.
+    """
+    figure = build_time_series_chart(series)
+    st.plotly_chart(figure, use_container_width=True)
+    with st.expander(t("section.observations"), expanded=False):
+        _render_capped_rows(series)
+    render_data_downloads(series, f"iran-macro-{key_prefix}")
+    render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
+
+
+def render_catalog_page(repository: DashboardRepository | None = None) -> None:
+    """Render the searchable indicator catalog.
+
+    The inactive-segment toggle re-queries with ``active_only=False`` so the four
+    seeded SCI base-year segments are inspectable; search matches the catalog's
+    own values (id, name, unit, source, domain) *and* the Persian display labels
+    from :mod:`dashboard.labels`, because a Persian needle lives in the label
+    layer rather than in the catalog. The SQL ``search`` path is exercised for
+    catalog columns and unioned with the label-layer match, so neither path can
+    hide a row the other would find.
+    """
+    st.title(t("page.catalog"))
+    include_inactive = st.checkbox(
+        t("filter.include_inactive_segments"),
+        key="catalog_include_inactive",
+    )
+    active_only = not include_inactive
+    catalog = _catalog_frame(repository, active_only=active_only)
+    if catalog.empty:
+        st.info(t("empty.catalog_empty"))
         return
     filters = render_filters(catalog, "catalog")
+    st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
+    needle = st.text_input(t("filter.search"), key="catalog_search")
+    result = _apply_catalog_filters(catalog, filters)
+    if needle.strip():
+        result = _apply_catalog_search(result, catalog, needle, repository, active_only)
+    st.metric(t("metric.matching_indicators"), format_number(len(result)))
+    if needle.strip() and result.empty:
+        st.info(t("empty.search_no_match"))
+    st.dataframe(localize_table_frame(result), use_container_width=True, hide_index=True)
+
+
+def _catalog_frame(
+    repository: DashboardRepository | None,
+    *,
+    active_only: bool,
+    search: str | None = None,
+) -> pd.DataFrame:
+    """Fetch the catalog through the repository seam (or its cached wrapper)."""
+    if repository is None:
+        return cached_list_indicators(search=search, active_only=active_only)
+    return repository.list_indicators(search=search, active_only=active_only)
+
+
+def _apply_catalog_filters(catalog: pd.DataFrame, filters: FilterState) -> pd.DataFrame:
+    """Apply the shared filter state to the catalog frame (empty-safe)."""
     result = catalog
     if filters.domains:
         result = result[result["domain"].isin(filters.domains)]
@@ -69,63 +641,361 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
         result = result[result["source_name"].isin(filters.sources)]
     if filters.indicator_ids:
         result = result[result["indicator_id"].isin(filters.indicator_ids)]
-    st.metric("Matching indicators", len(result))
-    display = result.copy()
-    for column in ("availability_start", "availability_end"):
-        display[column] = display[column].map(_display_timestamp)
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    return result
+
+
+def _apply_catalog_search(
+    result: pd.DataFrame,
+    catalog: pd.DataFrame,
+    needle: str,
+    repository: DashboardRepository | None,
+    active_only: bool,
+) -> pd.DataFrame:
+    """Restrict ``result`` to the union of SQL and label-layer search matches."""
+    matched = _indicator_id_set(search_catalog(catalog, needle))
+    matched |= _indicator_id_set(_catalog_frame(repository, active_only=active_only, search=needle))
+    if not matched:
+        return result.iloc[0:0]
+    return result[result["indicator_id"].isin(matched)]
+
+
+def _indicator_id_set(frame: pd.DataFrame) -> set[str]:
+    """Indicator ids of a frame as a set, empty when the column is absent."""
+    if frame.empty or "indicator_id" not in frame.columns:
+        return set()
+    return {str(indicator) for indicator in frame["indicator_id"]}
+
+
+def normalise_search_needle(text: str) -> str:
+    """Normalize a search needle for matching, never rewriting stored data.
+
+    Persian/Arabic-Indic digits become ASCII (so ``۱۴۰۰`` finds ``1400``), Arabic
+    yeh/kaf fold to their Persian forms (so a keyboard variant still matches a
+    Persian label), and the result is case-folded for ASCII catalog values. Only
+    the needle is rewritten; stored values are compared as-is.
+
+    Examples:
+        >>> normalise_search_needle("۱۴۰۰")
+        '1400'
+        >>> normalise_search_needle("  Inflation  ")
+        'inflation'
+    """
+    normalized = to_ascii_digits(text.strip())
+    normalized = normalized.replace("ي", "ی").replace("ك", "ک")
+    return normalized.casefold()
+
+
+def search_catalog(frame: pd.DataFrame, needle: str) -> pd.DataFrame:
+    """Catalog rows matching ``needle`` across catalog values and display labels.
+
+    The match covers the indicator id, the Persian display name, the catalog
+    (English) name, the unit, the source and the domain -- each in both its stored
+    slug and its Persian label form -- plus a known derived-series suffix label.
+    An empty needle returns the frame unchanged.
+    """
+    normalized = normalise_search_needle(needle)
+    if not normalized or frame.empty:
+        return frame
+    matched = [
+        any(normalized in candidate for candidate in _search_terms(row))
+        for row in frame.to_dict("records")
+    ]
+    return frame[matched]
+
+
+def _search_terms(row: Mapping[Hashable, Any]) -> tuple[str, ...]:
+    """Case-folded searchable strings of one catalog row (labels included)."""
+    indicator_id = str(row.get("indicator_id", ""))
+    catalog_name = _catalog_name(row)
+    source_name = str(row.get("source_name") or "")
+    domain = str(row.get("domain") or "")
+    terms = [
+        indicator_id,
+        catalog_name or "",
+        indicator_label(indicator_id, catalog_name),
+        str(row.get("unit") or ""),
+        source_name,
+        source_label(source_name),
+        domain,
+        domain_label(domain),
+    ]
+    suffix = indicator_id.rsplit(".", 1)[-1]
+    if suffix in DERIVED_SUFFIX_LABELS:
+        terms.append(derived_label(suffix))
+    return tuple(term.casefold() for term in terms if term)
+
+
+def _catalog_name(row: Mapping[Hashable, Any]) -> str | None:
+    """A catalog row's ``name`` as stripped text, or ``None`` when absent."""
+    value = row.get("name")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _clear_catalog_filters() -> None:
+    """Reset the catalog page's filter and search widgets (button callback)."""
+    for key in CATALOG_FILTER_STATE_KEYS:
+        st.session_state.pop(key, None)
 
 
 def render_overview_page(repository: DashboardRepository | None = None) -> None:
-    """Render platform-wide coverage, counts, and freshness."""
-    st.title("Overview")
+    """Render platform-wide counts, per-domain ownership and source freshness.
+
+    The Overview is an all-domain view, so it owns no domain itself: it reports
+    counts and links into the page that owns each domain. The per-domain counts
+    come from a single query (:meth:`DashboardRepository.available_domains`), and
+    the Gold-only derived/orphan series -- which have no catalog row and would
+    therefore be invisible to any catalog-driven view -- come from
+    :meth:`DashboardRepository.series_inventory`. Freshness is the latest
+    ``DataCollectionLog`` row per source, annotated with a staleness verdict
+    against the presentation cadence map in :mod:`dashboard.labels` (the platform
+    does not store an expected frequency, so this is a dashboard convention).
+    """
+    st.title(t("page.overview"))
+    st.warning(t("warn.forecasts_indistinguishable"))
     catalog = repository.list_indicators() if repository else cached_list_indicators()
+    if catalog.empty:
+        st.warning(t("warn.catalog_empty"))
+        return
     coverage = repository.coverage_summary() if repository else cached_coverage_summary()
     freshness = repository.source_freshness() if repository else cached_source_freshness()
-    if catalog.empty:
-        st.warning(
-            "The indicator catalog is empty. Run an ETL pipeline before using the dashboard."
-        )
-        return
+    domain_counts = repository.available_domains() if repository else cached_available_domains()
+    inventory = repository.series_inventory() if repository else cached_series_inventory()
+
     observation_counts = coverage.get("observation_count")
     if observation_counts is None:
         total_observations = 0
     else:
         total_observations = int(pd.to_numeric(observation_counts, errors="coerce").fillna(0).sum())
     columns = st.columns(4)
-    columns[0].metric("Active indicators", len(catalog))
-    columns[1].metric("Gold observations", total_observations)
-    columns[2].metric("Domains", catalog["domain"].nunique())
-    columns[3].metric("Sources", catalog["source_name"].nunique())
-    st.subheader("Indicators by domain")
-    st.bar_chart(catalog.groupby("domain", observed=True).size())
-    st.subheader("Available coverage")
-    st.dataframe(coverage, use_container_width=True, hide_index=True)
-    st.subheader("Source freshness")
+    columns[0].metric(t("metric.active_indicators"), format_number(len(catalog)))
+    columns[1].metric(t("metric.gold_observations"), format_number(total_observations))
+    columns[2].metric(t("metric.domains"), format_number(catalog["domain"].nunique()))
+    columns[3].metric(t("metric.sources"), format_number(catalog["source_name"].nunique()))
+
+    _render_series_inventory(inventory)
+
+    st.subheader(t("section.indicators_by_domain"))
+    _render_domain_counts(domain_counts)
+
+    st.subheader(t("section.source_freshness"))
     if freshness.empty:
-        st.info("No collection runs have been logged yet.")
+        st.info(t("empty.no_collection_runs"))
     else:
-        st.dataframe(freshness, use_container_width=True, hide_index=True)
-    st.subheader("Key indicators")
-    st.dataframe(
-        catalog[["indicator_id", "name", "domain", "frequency", "unit", "source_name"]],
-        use_container_width=True,
-        hide_index=True,
-    )
+        st.dataframe(
+            freshness_display(freshness),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.subheader(t("section.available_coverage"))
+    st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
+
+
+def _render_series_inventory(inventory: pd.DataFrame) -> None:
+    """Show how many Gold series are derived or have no catalog row at all."""
+    kinds = inventory.get("series_kind")
+    has_catalog = inventory.get("has_catalog_metadata")
+    derived = 0 if kinds is None else int((kinds == SERIES_KIND_DERIVED).sum())
+    orphan = 0 if has_catalog is None else int((~has_catalog.astype(bool)).sum())
+    columns = st.columns(2)
+    columns[0].metric(t("metric.derived_series"), format_number(derived))
+    columns[1].metric(t("metric.orphan_series"), format_number(orphan))
+
+
+def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
+    """Render one ``st.page_link`` per domain into the page that owns it.
+
+    The owner comes from the navigation registry (:func:`page_for_domain`), the
+    single declaration of domain ownership. A domain without an owner is shown as
+    plain text rather than dropped, so an unowned domain stays visible.
+    """
+    if domain_counts.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    for row in domain_counts.itertuples(index=False):
+        domain = str(row.domain)
+        count = row.indicator_count
+        count_text = format_number(count) if isinstance(count, int | float) else format_number(0)
+        label = f"{domain_label(domain)} ({count_text})"
+        owner = page_for_domain(domain)
+        if owner is None:
+            st.markdown(f"- {label}")
+        else:
+            st.page_link(owner.path, label=label)
+
+
+def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd.DataFrame:
+    """Return the per-source freshness table with localized headers and staleness.
+
+    One row per source, exactly the latest ``DataCollectionLog`` run
+    :meth:`DashboardRepository.source_freshness` returns. ``status`` and the
+    error text are data and stay verbatim; the source name is displayed through
+    the label layer, and the collection instant is shown as a Tehran-local Jalali
+    timestamp (storage stays UTC). The staleness verdict compares the last
+    collection against the source's expected collection cadence
+    (:func:`dashboard.labels.source_expected_cadence`); a source without a known
+    cadence is reported as unknown rather than guessed fresh or stale.
+
+    Args:
+        frame: Freshness frame from ``source_freshness()``
+        now: Reference instant for staleness; defaults to the current UTC time
+            and is injectable so the verdict is deterministic under test
+
+    Returns:
+        A display frame with Persian headers, or an empty frame with those
+        headers when there is no collection log
+    """
+    columns = [
+        t("table.source_name"),
+        t("table.collection_timestamp"),
+        t("table.status"),
+        t("table.records_collected"),
+        t("table.error_message"),
+        t("table.staleness"),
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    reference = now if now is not None else datetime.now(UTC)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=UTC)
+    rows: list[dict[str, str]] = []
+    for row in frame.itertuples(index=False):
+        source_name = str(row.source_name)
+        collected = _aware_utc(row.collection_timestamp)
+        rows.append(
+            {
+                columns[0]: source_label(source_name),
+                columns[1]: (
+                    t("value.unknown") if collected is None else tehran_timestamp_label(collected)
+                ),
+                columns[2]: str(row.status),
+                columns[3]: _count_label(row.records_collected),
+                columns[4]: "" if row.error_message is None else str(row.error_message),
+                columns[5]: _staleness_label(source_name, collected, reference),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _staleness_label(source_name: str, collected: datetime | None, now: datetime) -> str:
+    """Verdict for one source: fresh, stale, or unknown when no cadence is known."""
+    cadence = source_expected_cadence(source_name)
+    if cadence is None or collected is None:
+        return t("value.unknown")
+    return t("value.stale") if (now - collected) > cadence else t("value.fresh")
+
+
+def _aware_utc(value: Any) -> datetime | None:
+    """Interpret a stored timestamp as timezone-aware UTC, or ``None`` if absent.
+
+    ``value`` is typed ``Any`` because it arrives as an untyped pandas row
+    attribute: it may be a ``Timestamp``, a ``datetime``, ``NaT`` or ``None``.
+    """
+    if value is None or pd.isna(value):
+        return None
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("UTC")
+    return timestamp.to_pydatetime()
+
+
+def _count_label(value: object) -> str:
+    """Format a record count, showing unknown rather than inventing a zero."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return t("value.unknown")
+    if not math.isfinite(value):
+        return t("value.unknown")
+    return format_number(int(value))
 
 
 def render_fx_gold_page(repository: DashboardRepository | None = None) -> None:
-    """Render the TGJU FX/gold page with snapshot limitations."""
-    st.title("FX & Gold")
-    st.warning(
-        "TGJU provides current-price snapshots, not a historical backfill. "
-        "Daily scheduled collection gradually builds the time series."
-    )
-    render_domain_page(
-        "FX & Gold",
+    """Render the TGJU FX/gold page with snapshot limitations.
+
+    The page title is rendered once here; the body composition is
+    :func:`render_domain_body` rather than :func:`render_domain_page`, so the
+    title cannot appear twice on the same page.
+    """
+    st.title(t("page.fx_gold"))
+    st.warning(t("warn.tgju_snapshot"))
+    render_domain_body(
         ("fx", "gold"),
         "fx_gold",
         repository=repository,
+    )
+
+
+def render_welfare_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Welfare & Survey page, owner of the whole ``welfare`` domain.
+
+    HBSIR's Gini, relative-poverty and income-decile series get dedicated sections
+    on a Jalali survey-year axis (the survey year is the Jalali year containing the
+    stored period end, so no Silver read is needed), plus the survey-year metadata
+    panel. The remaining ``welfare`` members -- World Bank population and IMF
+    ``LUR`` -- render through the generic domain composition, so the page owns
+    everything the catalog assigns to the domain.
+    """
+    st.title(t("page.welfare"))
+    st.warning(_relative_poverty_note())
+    st.info(t("warn.hbsir_computed_values"))
+    domain_list = ["welfare"]
+    if repository is None:
+        catalog = cached_list_indicators(domains=tuple(domain_list))
+    else:
+        catalog = repository.list_indicators(domains=domain_list)
+    if catalog.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    hbsir_ids = [
+        indicator for indicator in catalog["indicator_id"] if indicator in HBSIR_INDICATORS
+    ]
+    context_ids = [
+        indicator for indicator in catalog["indicator_id"] if indicator not in HBSIR_INDICATORS
+    ]
+    filters = render_filters(catalog, "welfare", context_ids)
+    series = _load_series(hbsir_ids, filters.start_date, filters.end_date, repository)
+    _render_hbsir_sections(series)
+    st.subheader(t("section.welfare_other_indicators"))
+    render_domain_body(
+        domain_list,
+        "welfare",
+        context_ids,
+        repository=repository,
+        catalog=catalog,
+        filters=filters,
+    )
+
+
+def render_labor_page(repository: DashboardRepository | None = None) -> None:
+    """Render the Labor page, owner of the whole ``labor`` domain.
+
+    SCI publishes the labour-force unemployment rate for one quarter per release,
+    so the domain is legitimately sparse (the catalog observes a single spring
+    1405 quarter). The composition therefore reads the whole domain from the
+    catalog, defaults the selection to it, and renders through the shared Gold
+    path: nothing is interpolated, extrapolated or zero-filled, and a lone
+    quarter is presented as one marker with its quality row rather than an
+    implied trend. The unemployment series carries no derived Gold rows today, so
+    the "Include derived series" control is inert until the ETL publishes one --
+    exactly as it behaves for every other domain without derived rows.
+    """
+    st.title(t("page.labor"))
+    st.info(t("warn.labor_publication"))
+    domain_list = [LABOR_DOMAIN]
+    if repository is None:
+        catalog = cached_list_indicators(domains=tuple(domain_list))
+    else:
+        catalog = repository.list_indicators(domains=domain_list)
+    if catalog.empty:
+        st.info(t("empty.no_indicators_for_page"))
+        return
+    render_domain_body(
+        domain_list,
+        "labor",
+        list(catalog["indicator_id"]),
+        repository=repository,
+        catalog=catalog,
     )
 
 
@@ -133,14 +1003,14 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
     """Render exact-timestamp correlation diagnostics."""
     from dashboard.components.charts import build_correlation_chart
 
-    st.title("Comparison & Correlation")
+    st.title(t("page.correlation"))
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.info("The indicator catalog is empty.")
+        st.info(t("empty.catalog_empty"))
         return
     filters = render_filters(catalog, "correlation")
     if not filters.indicator_ids:
-        st.info("Select at least two indicators to compare.")
+        st.info(t("empty.select_two_indicators"))
         return
     if filters.start_date > filters.end_date:
         return
@@ -157,54 +1027,257 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
             filters.end_date,
         )
     if series.empty:
-        st.info("No observations match the selected indicators and dates.")
+        st.info(t("empty.no_observations"))
         return
     frequencies = set(series["frequency"].astype(str))
     if len(frequencies) > 1:
-        st.warning(
-            "Selected indicators use different frequencies. Correlation uses only exact timestamp matches; "
-            "no values are forward-filled or interpolated."
-        )
+        st.warning(t("warn.mixed_frequencies"))
     bundle = build_correlation_chart(series)
+    if bundle.suppressed_pairs:
+        st.warning(
+            t(
+                "warn.correlation_low_overlap",
+                count=format_number(len(bundle.suppressed_pairs)),
+                minimum=format_number(bundle.min_overlap),
+            )
+        )
+    st.caption(t("warn.correlation_exact_join"))
     st.plotly_chart(bundle.figure, use_container_width=True)
-    st.subheader("Exact timestamp join counts")
-    st.dataframe(bundle.join_counts, use_container_width=True)
+    st.subheader(t("section.exact_join_counts"))
+    matrix_column, summary_column = st.columns(2)
+    with matrix_column:
+        st.dataframe(bundle.join_counts, use_container_width=True)
+    with summary_column:
+        st.dataframe(
+            localize_table_frame(bundle.overlap_summary),
+            use_container_width=True,
+            hide_index=True,
+        )
     render_quality_summary(summarize_quality(series, filters.start_date, filters.end_date))
     render_data_downloads(series, "iran-macro-correlation")
 
 
 def _render_series_section(series: pd.DataFrame, key_prefix: str) -> None:
     if series.empty:
-        st.info("No Gold observations match the selected indicators and dates.")
+        st.info(t("empty.no_observations"))
         return
     start = series["timestamp"].min().to_pydatetime()
     end = series["timestamp"].max().to_pydatetime()
     quality = summarize_quality(series, start, end)
-    figure = build_time_series_chart(series)
-    st.plotly_chart(figure, use_container_width=True)
+    scaled = _render_scaled_chart(series, key_prefix)
     render_quality_summary(quality)
-    with st.expander("Observations", expanded=False):
-        st.dataframe(series, use_container_width=True, hide_index=True)
+    with st.expander(t("section.observations"), expanded=False):
+        _render_capped_rows(series)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
-    render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
+    render_chart_downloads(scaled.figure, f"iran-macro-{key_prefix}-chart")
 
 
-def _derived_ids(catalog: pd.DataFrame, selected_ids: list[str]) -> list[str]:
-    available = set(catalog["indicator_id"])
-    derived: list[str] = []
-    for indicator_id in selected_ids:
-        candidates = (
-            f"WB.{indicator_id}.YOY",
-            f"TGJU.{indicator_id}.RET1D",
-            f"TGJU.{indicator_id}.MA30",
+def _render_scaled_chart(series: pd.DataFrame, key_prefix: str) -> ScaledChart:
+    """Render the opt-in chart-mode control and the scaled figure.
+
+    The default mode is per-indicator facets, so a page that never touches the
+    control renders exactly as before. Overlay and small multiples are opt-in;
+    the builder falls back to facets (with a visible notice) when an overlay
+    would share an axis across different units, and caps the small-multiples
+    grid at the documented series count.
+    """
+    mode = st.selectbox(
+        t("chart.mode"),
+        CHART_MODES,
+        format_func=_chart_mode_label,
+        key=f"{key_prefix}_chart_mode",
+    )
+    scaled = build_scaled_time_series_chart(series, mode=mode)
+    if scaled.notice:
+        st.info(scaled.notice)
+    st.plotly_chart(scaled.figure, use_container_width=True)
+    return scaled
+
+
+def _chart_mode_label(mode: str) -> str:
+    """Persian label of a chart mode, keyed by the mode slug."""
+    return t(f"chart.mode.{mode}")
+
+
+def _render_capped_rows(series: pd.DataFrame) -> None:
+    """Render the observations grid as a bounded preview with a truncation hint.
+
+    The cap is presentation-only: it never changes a value, a column or the
+    timezone-aware ``timestamp`` column, and the exports and the quality summary
+    still describe the full selection.
+    """
+    capped = cap_table_rows(series)
+    if capped.truncated:
+        st.info(
+            t(
+                "table.rows_capped",
+                shown=format_number(capped.shown_rows),
+                total=format_number(capped.total_rows),
+            )
         )
-        derived.extend(candidate for candidate in candidates if candidate in available)
-    return derived
+    st.dataframe(localize_table_frame(capped.frame), use_container_width=True, hide_index=True)
 
 
-def _display_timestamp(value: object) -> str:
-    if value is None:
-        return "Unknown"
-    if isinstance(value, datetime | date | pd.Timestamp):
-        return pd.Timestamp(value).strftime("%Y-%m-%d")
-    return str(value)
+def survey_year_frame(series: pd.DataFrame) -> pd.DataFrame:
+    """Add the Jalali survey-year label of each stored period end.
+
+    HBSIR publishes one observation per survey year, stamped at the **true**
+    Gregorian Iranian year end (Esfand 29 in a common year, Esfand 30 in a leap
+    year). The survey year is therefore the Jalali year *containing that stored
+    period end*: period ends are stored at UTC midnight, so under the Tehran
+    display policy the Jalali day is stable and the label round-trips exactly at
+    the 29/30 boundary without reading Silver for the year stored there.
+
+    Args:
+        series: Gold observations carrying a ``timestamp`` column
+
+    Returns:
+        A copy ordered by timestamp, with the ``survey_year`` label column added
+    """
+    frame = series.copy()
+    if "timestamp" not in frame.columns:
+        frame[SURVEY_YEAR_COLUMN] = pd.Series(dtype="object")
+        return frame.reset_index(drop=True)
+    frame[SURVEY_YEAR_COLUMN] = [
+        jalali_year_label(timestamp) for timestamp in pd.to_datetime(frame["timestamp"], utc=True)
+    ]
+    return frame.sort_values("timestamp").reset_index(drop=True)
+
+
+def survey_year_panel(series: pd.DataFrame) -> pd.DataFrame:
+    """Summarise HBSIR coverage per Jalali survey year, in survey order.
+
+    One row per survey year: its Jalali label, the year's canonical leap-aware
+    Esfand 29/30 end, the Gregorian period end Gold actually stores (the
+    auditable value), and how many HBSIR series and observations that year
+    contributes.
+    """
+    columns = _survey_year_panel_columns()
+    frame = survey_year_frame(series)
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    rows: list[dict[str, object]] = []
+    for label, group in frame.groupby(SURVEY_YEAR_COLUMN, sort=False):
+        period_end = group["timestamp"].max().to_pydatetime()
+        jalali_year = gregorian_to_jalali(period_end).year
+        rows.append(
+            {
+                columns[0]: label,
+                columns[1]: jalali_date_label(iranian_year_end(jalali_year)),
+                columns[2]: period_end.date().isoformat(),
+                columns[3]: int(group["indicator_id"].nunique()),
+                columns[4]: len(group),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _survey_year_panel_columns() -> list[str]:
+    """Column headers of :func:`survey_year_panel`, in display order."""
+    return [
+        t("table.survey_year"),
+        t("table.survey_year_end"),
+        t("table.period_end"),
+        t("table.hbsir_indicators"),
+        t("table.hbsir_observations"),
+    ]
+
+
+def _relative_poverty_note() -> str:
+    """The relative-poverty note, with the pipeline's own multiplier in place.
+
+    The multiplier is ``hbsir_parser.DEFAULT_POVERTY_LINE_K`` -- the value the ETL
+    applies -- so the note cannot drift from the computed measure. The measure is
+    explicitly *not* the official Iranian (calorie-based) poverty line.
+    """
+    return t(
+        "warn.hbsir_relative_poverty",
+        k=format_number(DEFAULT_POVERTY_LINE_K, digit_mode="fa"),
+    )
+
+
+def _render_hbsir_sections(series: pd.DataFrame) -> None:
+    """Render the HBSIR emphasis sections: trend, decile shares, survey years."""
+    trend = _hbsir_subset(series, HBSIR_GINI_POVERTY_INDICATORS)
+    st.subheader(t("section.hbsir_gini_poverty"))
+    if trend.empty:
+        st.info(t("empty.no_hbsir_observations"))
+    else:
+        st.plotly_chart(
+            build_survey_year_chart(survey_year_frame(trend)),
+            use_container_width=True,
+        )
+
+    deciles = _hbsir_subset(series, tuple(DECILE_INDICATORS))
+    st.subheader(t("section.hbsir_deciles"))
+    if deciles.empty:
+        st.info(t("empty.no_hbsir_observations"))
+    else:
+        st.plotly_chart(
+            build_survey_year_chart(survey_year_frame(deciles), facet_indicators=False),
+            use_container_width=True,
+        )
+
+    st.subheader(t("section.hbsir_survey_years"))
+    panel = survey_year_panel(_hbsir_subset(series, HBSIR_INDICATORS))
+    if panel.empty:
+        st.info(t("empty.no_hbsir_observations"))
+    else:
+        st.dataframe(panel, use_container_width=True, hide_index=True)
+
+
+def _hbsir_subset(series: pd.DataFrame, indicator_ids: tuple[str, ...]) -> pd.DataFrame:
+    """Rows of a loaded frame restricted to the given ids (empty-safe)."""
+    if series.empty or "indicator_id" not in series.columns:
+        return pd.DataFrame()
+    return series[series["indicator_id"].isin(indicator_ids)]
+
+
+def _load_series(
+    indicator_ids: list[str],
+    start_date: datetime,
+    end_date: datetime,
+    repository: DashboardRepository | None,
+) -> pd.DataFrame:
+    """Load Gold observations for an id selection through the repository seam."""
+    if not indicator_ids:
+        return pd.DataFrame()
+    if repository is None:
+        return cached_load_series(tuple(indicator_ids), start_date, end_date)
+    return repository.load_series(list(indicator_ids), start_date, end_date)
+
+
+def derived_series_ids(
+    parent_ids: Iterable[str],
+    repository: DashboardRepository | None,
+    *,
+    exclude: Iterable[str] = (),
+) -> list[str]:
+    """Discover the derived Gold ids of ``parent_ids`` from Gold metadata.
+
+    Derivedness is read from the ETL-written ``record_metadata["derived_from"]``
+    through the repository (or its cached query seam), so the discovery is
+    independent of indicator-id prefixes and suffixes, of the suffix map and of
+    the catalog: a derived series without a catalog row is still returned, and a
+    new derivation strategy becomes visible without a dashboard change. Ids in
+    ``exclude`` -- normally the caller's current selection -- are never returned,
+    so a derived series cannot be appended twice.
+
+    Args:
+        parent_ids: Selected parent indicator ids (duplicates are ignored)
+        repository: Repository seam, or ``None`` for the cached query wrapper
+        exclude: Ids already selected, dropped from the result
+
+    Returns:
+        Derived Gold ids, in the repository's order, without duplicates
+    """
+    parents = list(dict.fromkeys(parent_ids))
+    if not parents:
+        return []
+    discovered = (
+        cached_list_derived_ids(tuple(parents))
+        if repository is None
+        else repository.list_derived_ids(parents)
+    )
+    excluded = set(exclude)
+    return [indicator_id for indicator_id in discovered if indicator_id not in excluded]

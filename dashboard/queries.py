@@ -46,6 +46,18 @@ def cached_coverage_summary(indicator_ids: tuple[str, ...] | None = None) -> pd.
 
 
 @st.cache_data(show_spinner=False)
+def cached_list_derived_ids(parent_ids: tuple[str, ...]) -> list[str]:
+    """Cache derived-series discovery by parent set.
+
+    Derived Gold series have no catalog row, so they are discovered from
+    ``record_metadata["derived_from"]`` rather than from a catalog query, a
+    hardcoded id list or an id pattern.
+    """
+    with repository_session() as repository:
+        return repository.list_derived_ids(list(parent_ids))
+
+
+@st.cache_data(show_spinner=False)
 def cached_source_freshness() -> pd.DataFrame:
     """Cache the latest collection result for each source."""
     with repository_session() as repository:
@@ -57,3 +69,15 @@ def cached_available_domains() -> pd.DataFrame:
     """Cache active domain counts."""
     with repository_session() as repository:
         return repository.available_domains()
+
+
+@st.cache_data(show_spinner=False)
+def cached_series_inventory() -> pd.DataFrame:
+    """Cache the Gold series inventory (derived/orphan classification).
+
+    The inventory is the only query that sees Gold series without a catalog row,
+    so it is what lets the Overview count the derived and orphan series that
+    ``connector.discover()`` never registers.
+    """
+    with repository_session() as repository:
+        return repository.series_inventory()

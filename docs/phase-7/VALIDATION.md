@@ -2,6 +2,10 @@
 
 **Status:** ✅ DASHBOARD VALIDATED — September 11, 2026
 
+> **Superseded by [Phase 7.1's validation record](../phase-7.1/VALIDATION.md)**
+> for the current test counts and page set. The Phase 7 validation below is the
+> historical record; stale counts are corrected inline with **Correction** notes.
+
 This report records the commands and outcomes used to validate the Phase 7
 dashboard implementation. The dashboard-specific, static, integration, and launch
 validations pass. The project-wide unit command also exposed a pre-existing,
@@ -61,7 +65,12 @@ poetry run mypy src dashboard
 poetry run pytest tests/unit/dashboard -v --no-cov
 ```
 
-✅ **Result:** **24 passed**.
+✅ **Result:** **24 passed** (Phase 7).
+
+> **Correction (Phase 7.1):** the same directory now holds **324 passing tests**
+> across 13 files, including Persian/RTL, Jalali round-trip, derived-series,
+> navigation and scaling tests. See
+> [Phase 7.1 VALIDATION.md](../phase-7.1/VALIDATION.md#level-2-dashboard-unit-tests).
 
 Coverage includes:
 
@@ -71,7 +80,7 @@ Coverage includes:
 - Chart construction
 - Exports
 - Quality calculations
-- Offline `AppTest` smoke tests for all seven pages
+- Offline `AppTest` smoke tests for all seven Phase 7 pages
 
 ## Level 4: Static Chart Export Validation
 
@@ -112,13 +121,24 @@ The integration tests seed real catalog, Bronze, Silver, Gold, and
 collection-log rows in PostgreSQL, execute the dashboard repository queries, and
 roll back the transaction.
 
+> **Correction (Phase 7.1):** the dashboard repository integration file has since
+> grown. As of the Phase 7.1 validation run it is 1 failing (a stale English
+> export-header assertion superseded by Persian headers) out of the file's
+> cases; see
+> [Phase 7.1 VALIDATION.md](../phase-7.1/VALIDATION.md#level-3-integration--pipeline-tests).
+
 ## Level 7: Full Integration Regression
 
 ```bash
 poetry run pytest tests/integration/ -m integration -v --cov-fail-under=0
 ```
 
-✅ **Result:** **46 passed, 2 skipped**.
+✅ **Result (Phase 7):** **46 passed, 2 skipped**.
+
+> **Correction (Phase 7.1):** the integration suite now collects **133** tests;
+> the Phase 7.1 run observed **128 passed, 4 skipped, 1 failed** (the stale
+> dashboard export assertion above). See
+> [Phase 7.1 VALIDATION.md](../phase-7.1/VALIDATION.md#level-3-integration--pipeline-tests).
 
 The two skipped tests are live external-source tests gated behind
 `RUN_LIVE_API_TESTS=1`; they are intentionally not run in the normal validation
@@ -133,9 +153,14 @@ and new dashboard repository integration tests.
 make test
 ```
 
-⚠️ **Result:** **348 passed, 10 failed**; coverage was 84.50%.
+⚠️ **Result (Phase 7):** **348 passed, 10 failed**; coverage was 84.50%.
 
-All 10 failures are in `tests/unit/etl/test_gold.py` daily derived-metric tests:
+> **Correction (Phase 7.1):** this pre-existing Gold ETL test issue has since
+> been **resolved**. `tests/unit/etl/test_gold.py` now passes (62 passed), and
+> the full unit suite is **1,141 passed, 3 skipped at 89.22% coverage**. See
+> [Phase 7.1 VALIDATION.md](../phase-7.1/VALIDATION.md#level-1-static--style).
+
+The 10 Phase 7 failures were in `tests/unit/etl/test_gold.py` daily derived-metric tests:
 
 ```text
 test_silver_to_gold_daily_strategy_derives_ret1d

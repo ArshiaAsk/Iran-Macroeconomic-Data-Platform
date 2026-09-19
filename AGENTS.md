@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phases 1–7 complete. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 8 (production readiness) is next
+* **Lifecycle Stage:** Active implementation — Phases 1–7 complete, and the Phase 7.1 dashboard refresh is implemented (Tasks 1–25). Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. Phase 7.1 rebuilt the dashboard presentation: a `st.navigation` router + page registry, full Persian/RTL localization with a Jalali display policy, Market/Labor/Welfare pages, derived-series exposure with parent provenance, chain-linking transparency, correlation guardrails and catalog search (see `docs/phase-7.1/README.md`). The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 7.1 Tasks 27–28 (extended test suite + analyst acceptance pass) and the cache-TTL item are deferred. Phase 8 (production readiness) is next
 
 ## Tech Stack
 
@@ -98,7 +98,7 @@ iran-macro-platform/
 │   ├── database/            # Schema, connection, hypertable setup
 │   └── utils/               # Validation, logging, config, retry, period helpers ✓
 ├── alembic/                 # Migration environment and versions
-├── dashboard/               # Streamlit app — Phase 7
+├── dashboard/               # Streamlit app — Persian/RTL router (Phase 7.1) ✓
 ├── airflow/                 # DAG definitions — Phase 3
 ├── tests/
 │   ├── unit/                # Unit tests for all modules
@@ -112,7 +112,9 @@ iran-macro-platform/
 │   ├── phase-3/             # TGJU scraper reports
 │   ├── phase-4/             # IMF/EIA reports + OPEC gate record ✓
 │   ├── phase-5/             # SCI reports + CBI gate record ✓
-│   └── phase-6/             # TSETMC/HBSIR reports + scope-narrowing record ✓
+│   ├── phase-6/             # TSETMC/HBSIR reports + scope-narrowing record ✓
+│   ├── phase-7/             # Dashboard runbook (historical) ✓
+│   └── phase-7.1/           # Dashboard refresh runbook + validation ✓
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
@@ -370,6 +372,43 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 - **Monthly Jobs:** API sources (World Bank, IMF) check for new releases
 - **Backfill:** Separate DAGs for historical data collection
 
+### Dashboard (Phase 7.1)
+
+The Streamlit dashboard is Persian/RTL and is built on a strict layering. Keep
+it that way when adding a page or a feature:
+
+- **Router + registry, not implicit `pages/` discovery.** `dashboard/app.py` is
+  the only entrypoint and calls `st.navigation`; `dashboard/navigation.py`
+  declares the information architecture as data (`PageSpec` rows: `key`, `path`,
+  `icon`, `group`, `domains`, `is_default`). Nav labels and in-page titles both
+  resolve from the string catalog (`nav.<key>` / `page.<key>`). Domain ownership
+  is declared once in `PAGES` and read by `page_for_domain()`; a new page must
+  claim exactly the domains it renders. Page modules are thin delegates that call
+  a `render_*` function in `dashboard/page_view.py` and must not call
+  `st.set_page_config`.
+- **Three presentation modules own the display layer:**
+  - `dashboard/i18n.py` — every Persian UI-chrome string, keyed; `t()` raises on
+    a missing key. One locale, no runtime switcher.
+  - `dashboard/labels.py` — indicator/domain/source/frequency display names, the
+    derived-suffix map, and the expected collection cadence map.
+  - `dashboard/formatting.py` — Persian digits/separators, Jalali dates and
+    periods, and the Tehran day-bounds constructors.
+  No user-visible literal may live outside `i18n.py`, and no name map outside
+  `labels.py`.
+- **Display policy: `Asia/Tehran`, storage unchanged.** Timestamps are stored
+  timezone-aware **UTC** and Gregorian. `Asia/Tehran` is applied only when a
+  value is rendered or when a selected day is interpreted; `tehran_day_bounds` /
+  `jalali_day_bounds` are the only bounds constructors. Period ends (UTC
+  midnight) are stable; daily snapshot sources are not. The grid stays LTR.
+- **Gold is the only analytical input.** The repository reads `gold_analytical`
+  (LEFT JOIN `indicator_catalog`, with a second join on
+  `record_metadata ->> 'derived_from'` for parent provenance). Derivedness is
+  read from metadata, never from an id. Nothing is interpolated, forward-filled,
+  resampled or normalized; chain-linking values are displayed as stored.
+- **Absolute boundary:** dashboard work changes nothing under `src/`, `alembic/`
+  or `airflow/`. If a dashboard feature seems to need an ETL change (e.g. IMF
+  forecast labeling), it is a new phase, not a dashboard change.
+
 ## Code Patterns
 
 ### Naming Conventions
@@ -562,7 +601,16 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | `alembic/versions/20260817_1456_initial_schema.py` | Initial migration (all 4 schemas + hypertable) |
 | `alembic/versions/20260819_1236_silver_unique_constraint.py` | `uq_silver_indicator_timestamp` (Silver idempotency) |
 | `src/chain_linking/splice.py` | Chain-linking algorithm (break detection, splice, confidence) |
-| `dashboard/app.py` | Streamlit entry point - *to be implemented (Phase 7)* |
+| `dashboard/app.py` | Streamlit entrypoint: shell + `st.navigation` router |
+| `dashboard/navigation.py` | Page registry (`PageSpec`, `PAGES`, `page_for_domain`) — the IA/ownership declaration |
+| `dashboard/i18n.py` | Persian UI string catalog + `t()` |
+| `dashboard/labels.py` | Indicator/domain/source display names, derived-suffix map, cadence map |
+| `dashboard/formatting.py` | Persian digits/separators, Jalali + `Asia/Tehran` display formatters |
+| `dashboard/page_view.py` | Page composition (filters, Gold load, sections) |
+| `dashboard/components/direction.py` | Scoped RTL CSS + Plotly typography template |
+| `dashboard/repository.py` | Read-only SQL (LEFT JOIN catalog + parent provenance) |
+| `docs/phase-7.1/README.md` | Dashboard refresh runbook (Persian page guide, Jalali policy, deferred scope) |
+| `docs/phase-7.1/VALIDATION.md` | Phase 7.1 validation record + accepted deviations/gaps |
 | `docs/phase-2/data_dictionary.md` | Indicator catalog with coverage observed from a real run |
 
 ## Important Constraints
@@ -605,6 +653,9 @@ For **web scrapers** (TGJU, CBI, SCI), the connector pattern differs from APIs:
 | Phase 4 validation + OPEC gate decision | `docs/phase-4/VALIDATION.md` |
 | Phase 5 SCI validation + CBI gate decision | `docs/phase-5/VALIDATION.md` |
 | Phase 6 TSETMC/HBSIR validation + scope record | `docs/phase-6/VALIDATION.md` |
+| Dashboard runbook (Persian pages, Jalali policy, deferred scope) | `docs/phase-7.1/README.md` |
+| Dashboard refresh implementation notes | `docs/phase-7.1/IMPLEMENTATION.md` |
+| Dashboard refresh validation + accepted deviations | `docs/phase-7.1/VALIDATION.md` |
 | Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents

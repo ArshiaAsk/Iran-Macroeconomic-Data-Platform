@@ -1,0 +1,12 @@
+# Theme baseline for the local-only dashboard.
+#
+# RTL direction and the Persian-capable font stack are installed by CSS from
+# dashboard/components/direction.py, not here: Streamlit's theme options only pick
+# a generic font family, and the offline rule (no CDN, no webfont, no vendored
+# font file) means the OS fallback stack is applied from that one owner module.
+
+[theme]
+base = "light"
+primaryColor = "#1f6feb"
+font = "sans serif"
+baseFontSize = 16
