@@ -93,11 +93,15 @@ def direction_css() -> str:
 def inject_direction_css() -> None:
     """Inject the scoped stylesheet into the running app.
 
+    The rules are wrapped in a ``<style>`` element: ``st.markdown`` renders a bare
+    CSS string as visible page text, so without the wrapper the stylesheet source
+    leaks into the DOM instead of styling it.
+
     Called once per script run by the entrypoint. It is intentionally not guarded
     by ``st.session_state``: Streamlit drops elements that a run does not re-emit,
     so a guard would remove the stylesheet on the next rerun.
     """
-    st.markdown(direction_css(), unsafe_allow_html=True)
+    st.markdown(f"<style>{direction_css()}</style>", unsafe_allow_html=True)
 
 
 def plotly_template() -> go.layout.Template:

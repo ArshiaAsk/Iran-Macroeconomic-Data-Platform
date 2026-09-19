@@ -93,5 +93,17 @@ def test_injection_helper_runs_inside_a_streamlit_app() -> None:
     assert "direction: rtl" in app.markdown[0].value
 
 
+def test_injection_helper_wraps_the_stylesheet_in_a_style_element() -> None:
+    """Regression: bare CSS passed to st.markdown renders as visible text."""
+    app = AppTest.from_string(INJECTION_SCRIPT)
+    app.run()
+
+    injected = app.markdown[0].value
+    assert injected.startswith("<style>")
+    assert injected.endswith("</style>")
+    # The whole stylesheet must sit inside the element, not beside it.
+    assert injected == f"<style>{direction_css()}</style>"
+
+
 def test_injection_helper_is_importable_without_a_streamlit_run() -> None:
     assert callable(inject_direction_css)
