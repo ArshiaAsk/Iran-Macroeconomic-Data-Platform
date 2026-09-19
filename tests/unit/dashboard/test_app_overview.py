@@ -11,10 +11,16 @@ from datetime import UTC, datetime
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
+from dashboard.formatting import format_number
 from dashboard.i18n import t
 from dashboard.labels import source_label
 from dashboard.page_view import freshness_display
-from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT
+from dashboard.repository import SERIES_KIND_BASE
+from tests.unit.dashboard.app_smoke import (
+    ORPHAN_INDICATOR,
+    REPOSITORY_ROOT,
+    FakeDashboardRepository,
+)
 
 
 def _overview_app() -> AppTest:
@@ -62,6 +68,38 @@ def test_overview_staleness_verdict_is_rendered(fake_streamlit_connection) -> No
         frame.value for frame in app.dataframe if t("table.staleness") in frame.value.columns
     )
     assert freshness[t("table.staleness")].tolist() == [t("value.stale")]
+
+
+def test_overview_states_that_forecasts_are_indistinguishable(
+    fake_streamlit_connection,
+) -> None:
+    """IMF forecast labeling is deferred, so the disclaimer must stay visible."""
+    app = _overview_app()
+
+    assert t("warn.forecasts_indistinguishable") in [warning.value for warning in app.warning]
+
+
+def test_fake_orphan_series_has_no_catalog_row_or_parent() -> None:
+    """The Gold-only orphan fixture is a genuine orphan, never attributed."""
+    inventory = FakeDashboardRepository().series_inventory()
+    orphan = inventory[inventory["indicator_id"] == ORPHAN_INDICATOR]
+
+    assert len(orphan) == 1
+    assert bool(orphan.iloc[0]["has_catalog_metadata"]) is False
+    assert orphan.iloc[0]["series_kind"] == SERIES_KIND_BASE
+    assert pd.isna(orphan.iloc[0]["derived_from"])
+
+
+def test_overview_reports_the_gold_only_orphan_series(fake_streamlit_connection) -> None:
+    app = _overview_app()
+    repository = FakeDashboardRepository()
+    inventory = repository.series_inventory()
+    expected_orphans = int((~inventory["has_catalog_metadata"].astype(bool)).sum())
+
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics[t("metric.orphan_series")] == format_number(expected_orphans)
+    # The orphan has no catalog row, so no catalog-driven page can select it.
+    assert ORPHAN_INDICATOR not in set(repository.list_indicators()["indicator_id"])
 
 
 def _freshness_frame() -> pd.DataFrame:

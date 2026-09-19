@@ -18,6 +18,7 @@ from dashboard.components.charts import (
     build_time_series_chart,
     shared_series_unit,
 )
+from dashboard.formatting import jalali_date_label
 from dashboard.i18n import t
 from dashboard.labels import indicator_label
 from dashboard.navigation import PAGES
@@ -31,6 +32,8 @@ from dashboard.page_view import (
 )
 from src.connectors.sci_scraper import SCI_CANONICAL_INDICATORS, SCI_INDICATOR_REGISTRY
 from tests.unit.dashboard.app_smoke import (
+    IMF_FORECAST_TIMESTAMP,
+    IMF_INDICATOR,
     SCI_CANONICAL_IDS,
     SCI_CPI_IDS,
     SCI_DECILE_IDS,
@@ -66,6 +69,29 @@ def test_gdp_page_renders(fake_streamlit_connection) -> None:
     app.run()
 
     assert not app.exception
+
+
+def test_future_dated_imf_row_renders_like_any_other_observation(
+    fake_streamlit_connection,
+) -> None:
+    """A future-dated WEO row is stored and rendered without special handling.
+
+    Forecast labeling is deferred, so the platform treats a forecast row exactly
+    like any other observation; this pins that a future-dated row survives the
+    Gold load and appears in the observations grid unchanged.
+    """
+    app = app_test("3_GDP_Economy.py")
+    app.run()
+    app.multiselect(key="gdp_economy_indicators").set_value([IMF_INDICATOR])
+    app.run()
+
+    assert not app.exception
+    grid = next(
+        frame.value for frame in app.dataframe if t("table.timestamp") in frame.value.columns
+    )
+    assert IMF_INDICATOR in set(grid[t("table.indicator_id")])
+    # The stored future period end is rendered as its Jalali date, no filtering.
+    assert jalali_date_label(IMF_FORECAST_TIMESTAMP) in set(grid[t("table.timestamp")])
 
 
 def test_inflation_page_renders_the_cpi_decile_and_canonical_sections(

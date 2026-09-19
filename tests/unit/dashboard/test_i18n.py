@@ -5,6 +5,8 @@ resolves, that a miss fails loudly instead of degrading to English, and that it
 stays aligned with the navigation registry that keys the page namespace.
 """
 
+import ast
+
 import pytest
 
 from dashboard.i18n import (
@@ -17,6 +19,7 @@ from dashboard.i18n import (
     t,
 )
 from dashboard.navigation import GROUPS, PAGES
+from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT
 
 PERSIAN_RANGE = range(0x0600, 0x0700)
 
@@ -98,3 +101,39 @@ def test_string_keys_are_sorted_and_complete() -> None:
 
     assert keys == tuple(sorted(STRING_CATALOG))
     assert len(keys) == len(set(keys))
+
+
+def _literal_t_keys() -> set[str]:
+    """Every literal key passed to ``t("...")`` anywhere under ``dashboard/``.
+
+    Only string constants are collected; a key built dynamically (for example
+    ``t(f"chart.mode.{mode}")``) cannot be resolved statically and is covered by
+    the tests that exercise the call site instead.
+    """
+    keys: set[str] = set()
+    for path in (REPOSITORY_ROOT / "dashboard").rglob("*.py"):
+        tree = ast.parse(path.read_text("utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "t"
+                and node.args
+            ):
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    keys.add(first.value)
+    return keys
+
+
+def test_every_literal_t_call_site_has_a_matching_key() -> None:
+    """A literal ``t("…")`` call in the dashboard must resolve in the catalog.
+
+    This is the inverse of the catalog-coverage tests: an unknown key would raise
+    at runtime, so it is caught here instead.
+    """
+    missing = sorted(key for key in _literal_t_keys() if not has_string(key))
+
+    assert missing == []
+    # The scan is not vacuous: the dashboard calls t() with many literal keys.
+    assert len(_literal_t_keys()) > 0

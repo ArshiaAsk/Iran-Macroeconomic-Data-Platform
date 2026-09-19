@@ -1,9 +1,12 @@
 """Router coverage for the dashboard entrypoint.
 
-Per-page smoke tests keep targeting page files directly: Wave 0 showed that
-``switch_page`` executes the page without re-running the entrypoint, so migrating
-them would add churn without covering the router. This is the router's single
-automatable coverage point.
+Per-page smoke tests now drive the router entrypoint through
+``app_smoke.app_test`` (``AppTest.from_file(app).switch_page(...).run()``), which
+is the path a real session takes. Wave 0 showed that ``switch_page`` executes the
+page directly without re-running ``st.navigation``, so this test is still the
+router's single automatable coverage point: an entrypoint run asserting the
+default page. The direct-file fallback (``app_test(..., use_router=False)``)
+remains available for pages that must be rendered standalone.
 """
 
 from streamlit.testing.v1 import AppTest

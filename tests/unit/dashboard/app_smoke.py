@@ -693,9 +693,136 @@ def market_series() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def app_test(page_filename: str) -> AppTest:
-    """Create an AppTest for a dashboard page using an absolute path."""
-    return AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "pages" / page_filename)
+#: IMF fixture: a World Economic Outlook series whose payload legitimately
+#: carries future-dated forecast rows. The platform does not label forecasts in
+#: this release (the labeling item needs an ETL change and is deferred), so the
+#: future-dated row exists only to prove two things: a future-dated Gold row
+#: renders like any other observation, and the Overview's indistinguishability
+#: disclaimer is shown. No forecast-specific behaviour is asserted.
+IMF_INDICATOR = "NGDP_RPCH"
+IMF_NAME = "Real GDP growth"
+IMF_UNIT = "Annual percent change"
+IMF_TIMESTAMPS = (
+    pd.Timestamp(annual_period_end(2021)),
+    pd.Timestamp(annual_period_end(2022)),
+    pd.Timestamp(annual_period_end(2027)),  # future-dated WEO forecast
+)
+IMF_VALUES = (2.5, 3.0, 2.1)
+#: The single future-dated row, isolated so a test can assert it renders and is
+#: never filtered out.
+IMF_FORECAST_TIMESTAMP = IMF_TIMESTAMPS[-1]
+
+
+def imf_forecast_catalog() -> pd.DataFrame:
+    """Catalog row for the IMF WEO growth series (domain ``gdp``)."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": IMF_INDICATOR,
+                "name": IMF_NAME,
+                "description": None,
+                "unit": IMF_UNIT,
+                "frequency": "annual",
+                "domain": "gdp",
+                "source_name": "imf",
+                "source_url": None,
+                "availability_start": IMF_TIMESTAMPS[0],
+                "availability_end": IMF_TIMESTAMPS[-1],
+                "has_base_year_changes": False,
+                "base_years": None,
+                "is_active": True,
+            }
+        ]
+    )
+
+
+def imf_forecast_series() -> pd.DataFrame:
+    """Gold-shaped IMF rows including one future-dated forecast observation."""
+    return pd.DataFrame(
+        [
+            _gold_row(
+                IMF_INDICATOR,
+                IMF_NAME,
+                timestamp,
+                value,
+                IMF_UNIT,
+                "annual",
+                "gdp",
+                "imf",
+            )
+            for timestamp, value in zip(IMF_TIMESTAMPS, IMF_VALUES, strict=True)
+        ]
+    )
+
+
+#: A Gold series with no catalog row and no resolvable parent: a genuine orphan.
+#: It must be reported by the inventory and never dropped, and its provenance
+#: stays ``NULL`` by design (no source is guessed). It is not reachable from any
+#: catalog-driven page, so it only exercises the Overview inventory.
+ORPHAN_INDICATOR = "ORPHAN.GOLD.ONLY"
+ORPHAN_TIMESTAMPS = (
+    pd.Timestamp(annual_period_end(2020)),
+    pd.Timestamp(annual_period_end(2021)),
+)
+
+
+def orphan_series() -> pd.DataFrame:
+    """Gold-shaped orphan rows: no catalog row, no parent, no provenance."""
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": ORPHAN_INDICATOR,
+                "name": None,
+                "timestamp": timestamp,
+                "value": float(index),
+                "original_value": None,
+                "is_chain_linked": False,
+                "chain_linking_confidence": None,
+                "unit": "index",
+                "frequency": "annual",
+                "domain": "inflation",
+                "source_name": None,
+                "source_url": None,
+                "record_metadata": None,
+                "series_kind": SERIES_KIND_BASE,
+                "derived_from": None,
+                "has_catalog_metadata": False,
+            }
+            for index, timestamp in enumerate(ORPHAN_TIMESTAMPS, start=1)
+        ]
+    )
+
+
+def app_test(page_filename: str, *, use_router: bool = True) -> AppTest:
+    """Create an AppTest for a dashboard page.
+
+    By default the page is exercised through the router entrypoint
+    (``AppTest.from_file(app).switch_page("pages/<name>").run()``), which is the
+    path a real session takes: ``app.py`` renders the registry's default page and
+    then the requested page is switched in. The Wave-0 spike
+    (``docs/phase-7.1/wave-0-spike.md``) showed that ``switch_page`` resolves the
+    page by filename and executes it directly, so this does not re-run
+    ``st.navigation`` per page -- but it does keep the smoke harness on the same
+    entrypoint and page paths the app actually serves.
+
+    ``use_router=False`` keeps the Wave-0 fallback: the page file is loaded
+    directly as the main script. Use it when a page must be rendered without the
+    router (for example to prove a page is standalone-runnable).
+
+    Args:
+        page_filename: Page file name under ``dashboard/pages/`` (e.g.
+            ``"2_Inflation.py"``)
+        use_router: Route through ``dashboard/app.py`` and ``switch_page`` (default)
+            rather than loading the page file directly
+
+    Returns:
+        An :class:`AppTest` with the requested page already run once.
+    """
+    if not use_router:
+        return AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "pages" / page_filename)
+    app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
+    app.run()
+    return app.switch_page(f"pages/{page_filename}").run()
 
 
 class FakeDashboardRepository:
@@ -780,12 +907,15 @@ class FakeDashboardRepository:
         self.catalog = _append_rows(self.catalog, trade_energy_catalog())
         self.catalog = _append_rows(self.catalog, inflation_catalog())
         self.catalog = _append_rows(self.catalog, inactive_segment_catalog())
+        self.catalog = _append_rows(self.catalog, imf_forecast_catalog())
         self.series = _append_rows(self.series, welfare_series())
         self.series = _append_rows(self.series, market_series())
         self.series = _append_rows(self.series, inflation_derived_series())
         self.series = _append_rows(self.series, labor_series())
         self.series = _append_rows(self.series, trade_energy_series())
         self.series = _append_rows(self.series, inflation_series())
+        self.series = _append_rows(self.series, imf_forecast_series())
+        self.series = _append_rows(self.series, orphan_series())
         # The `fx` domain needs Gold rows too: the FX & Gold page defaults to
         # selecting `USD_FREE`, and without observations it renders its empty
         # state, so the shared chart-mode control never registers.

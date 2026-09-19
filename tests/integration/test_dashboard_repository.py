@@ -5,11 +5,15 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+import pandas as pd
 import pytest
 from sqlalchemy.orm import Session
 
 from dashboard.components.exports import serialize_csv
 from dashboard.components.quality import summarize_quality
+from dashboard.i18n import t
+from dashboard.labels import source_label
+from dashboard.page_view import freshness_display
 from dashboard.repository import SERIES_KIND_BASE, SERIES_KIND_DERIVED, DashboardRepository
 from src.database.schema import (
     BronzeRaw,
@@ -191,7 +195,9 @@ def test_selected_export_contains_exact_database_rows(session: Session) -> None:
     content = serialize_csv(series).decode("utf-8")
 
     assert content.count("\n") == len(series) + 1
-    assert "chain_linking_confidence" in content
+    # The chain-linking confidence column survives the export; its header is the
+    # localized one (Task 21), so the raw English column name is not expected.
+    assert t("table.chain_linking_confidence") in content
 
 
 def test_load_series_returns_catalog_backed_row_unchanged(session: Session) -> None:
@@ -442,3 +448,94 @@ def test_load_series_ordering_and_coverage_summary_are_unchanged(session: Sessio
     # Coverage stays catalog-driven: it describes the catalogued indicator, so a
     # derived id without a catalog row is not part of this contract.
     assert derived_id not in indexed.index
+
+
+def test_series_inventory_reports_the_orphan_and_classifies_every_gold_series(
+    session: Session,
+) -> None:
+    """The inventory flags a catalog-less Gold series instead of dropping it."""
+    orphan_id = unique_id("TEST_ORPHAN_INVENTORY")
+    cataloged_id = unique_id("TEST_CATALOGED_INVENTORY")
+    derived_id = f"{cataloged_id}.YOY"
+    bronze = make_bronze(session)
+    seed_catalog(session, cataloged_id, name="Cataloged parent")
+    seed_gold_series(session, cataloged_id, bronze, years=(2020,))
+    seed_gold_series(
+        session,
+        derived_id,
+        bronze,
+        years=(2020,),
+        metadata={"derived_from": cataloged_id},
+    )
+    # A genuine orphan: Gold rows, no catalog row, no parent.
+    seed_gold_series(session, orphan_id, bronze, years=(2020,))
+
+    inventory = DashboardRepository(session).series_inventory().set_index("indicator_id")
+
+    assert {cataloged_id, derived_id, orphan_id} <= set(inventory.index)
+    assert bool(inventory.loc[cataloged_id, "has_catalog_metadata"]) is True
+    assert inventory.loc[cataloged_id, "series_kind"] == SERIES_KIND_BASE
+    assert bool(inventory.loc[derived_id, "has_catalog_metadata"]) is False
+    assert inventory.loc[derived_id, "series_kind"] == SERIES_KIND_DERIVED
+    assert inventory.loc[derived_id, "derived_from"] == cataloged_id
+    # The orphan is reported with null provenance, never given a guessed source.
+    assert bool(inventory.loc[orphan_id, "has_catalog_metadata"]) is False
+    assert inventory.loc[orphan_id, "series_kind"] == SERIES_KIND_BASE
+    assert pd.isna(inventory.loc[orphan_id, "derived_from"])
+
+
+def test_source_freshness_returns_the_latest_run_and_staleness_compares_cadence(
+    session: Session,
+) -> None:
+    """Freshness picks the newest run per source; staleness compares its cadence."""
+    # Far-future timestamps so the seeded run is unambiguously the latest for the
+    # source regardless of any real collection log already in the database.
+    older = datetime(2098, 1, 1, tzinfo=UTC)
+    newest = datetime(2099, 1, 1, tzinfo=UTC)
+    session.add_all(
+        [
+            DataCollectionLog(
+                source_name="tgju",
+                collection_timestamp=older,
+                status="success",
+                records_collected=1,
+            ),
+            DataCollectionLog(
+                source_name="tgju",
+                collection_timestamp=newest,
+                status="success",
+                records_collected=2,
+            ),
+        ]
+    )
+    unknown_source = unique_id("TEST_UNKNOWN_SOURCE")
+    session.add(
+        DataCollectionLog(
+            source_name=unknown_source,
+            collection_timestamp=newest,
+            status="success",
+            records_collected=3,
+        )
+    )
+    session.flush()
+
+    freshness = DashboardRepository(session).source_freshness()
+    latest = freshness[freshness["source_name"] == "tgju"]
+
+    # Exactly one row per source, and it is the newest run.
+    assert latest["collection_timestamp"].tolist() == [newest]
+    assert int(latest["records_collected"].iloc[0]) == 2
+
+    seeded = freshness[freshness["source_name"].isin(["tgju", unknown_source])]
+    stale = freshness_display(seeded, now=datetime(2099, 1, 5, tzinfo=UTC))
+    verdicts = dict(zip(stale[t("table.source_name")], stale[t("table.staleness")], strict=True))
+    # `tgju` is a daily source: four days old is stale.
+    assert verdicts[source_label("tgju")] == t("value.stale")
+    # An unknown source has no expected cadence, so no staleness claim is made.
+    assert verdicts[unknown_source] == t("value.unknown")
+
+    fresh = freshness_display(seeded, now=datetime(2099, 1, 1, tzinfo=UTC))
+    fresh_verdicts = dict(
+        zip(fresh[t("table.source_name")], fresh[t("table.staleness")], strict=True)
+    )
+    assert fresh_verdicts[source_label("tgju")] == t("value.fresh")
