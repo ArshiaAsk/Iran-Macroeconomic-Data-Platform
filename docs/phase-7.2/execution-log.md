@@ -193,4 +193,4 @@ were never staged or committed (Task 7 owns them).
   `make check` does not invoke it (non-default target). `.gitignore` confirmed
   working (`git status` shows no untracked files under `after-global-look/`).
 - **Deviations:** none.
-- **Commit hash:** `630e339`
+- **Commit hash:** `396706e`
