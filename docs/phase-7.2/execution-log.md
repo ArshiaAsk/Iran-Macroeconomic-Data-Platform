@@ -169,3 +169,28 @@ were never staged or committed (Task 7 owns them).
   recorded 60 px; recorded as note).
 - **Deviations:** none.
 - **Commit hash:** `163cb3b`
+
+## Task 10 — (A) ADD the dev-only screenshot script (moved from Wave H; AM-24)
+
+- **Files:** `scripts/dashboard_screenshots.py` (new), `Makefile` (new
+  `dashboard-screenshots` target), `.gitignore` (new entry for the default
+  output directory), plan checkboxes.
+- **Build:** a Playwright script (`capture(base_url, out_dir)`) that launches
+  Chromium at 1440×900, navigates to the app, and clicks through all ten pages
+  in registry order using the sidebar nav links (labels resolved via
+  `t(f"nav.{spec.key}")`, no URL guessing). `wait_ready()` waits for
+  `stApp` + `stMainBlockContainer` and suppresses transient spinner/skeleton
+  detach timeouts. Each page is screenshotted to `{out_dir}/{key}.png`. Default
+  output: `docs/phase-7.2/wave-a-assets/after-global-look/` (gitignored). The
+  Makefile target `dashboard-screenshots` is non-default and **not** part of
+  `make check`. Fixed Playwright `TimeoutError` handling: the script imports
+  `TimeoutError as PlaywrightTimeoutError` from `playwright.sync_api` and uses
+  `contextlib.suppress(PlaywrightTimeoutError)` (Playwright's `TimeoutError`
+  does not inherit Python's builtin `TimeoutError`).
+- **Verify:** `poetry run ruff format`/`ruff check` on the script → **clean**.
+  `poetry run mypy scripts/dashboard_screenshots.py` → **0 errors**. Script run
+  against the live app → **10 PNGs written** (63–91 KB each, 1440×900).
+  `make check` does not invoke it (non-default target). `.gitignore` confirmed
+  working (`git status` shows no untracked files under `after-global-look/`).
+- **Deviations:** none.
+- **Commit hash:** `630e339`

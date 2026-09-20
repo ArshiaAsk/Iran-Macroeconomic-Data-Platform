@@ -670,9 +670,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Task 9.
 - **Acceptance:**
-  - [ ] Script runs locally and produces ten images, or records why Chromium is unavailable.
-  - [ ] `make check` does not invoke it.
-  - [ ] Captures at 1440×900 so its output is comparable with the Task 1 baseline.
+  - [x] Script runs locally and produces ten images, or records why Chromium is unavailable.
+  - [x] `make check` does not invoke it.
+  - [x] Captures at 1440×900 so its output is comparable with the Task 1 baseline.
 - **Verify:** `poetry run python scripts/dashboard_screenshots.py` (manual, optional).
 
 ### 11. (A) ADD the relative-time formatter

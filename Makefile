@@ -1,4 +1,4 @@
-.PHONY: help format lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean dashboard airflow-init airflow-up airflow-down airflow-status airflow-logs
+.PHONY: help format lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean dashboard dashboard-screenshots airflow-init airflow-up airflow-down airflow-status airflow-logs
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -31,6 +31,9 @@ test-integration: ## Run integration tests (requires Docker)
 
 dashboard: ## Launch the local Streamlit dashboard
 	poetry run streamlit run dashboard/app.py
+
+dashboard-screenshots: ## Capture 1440x900 screenshots of all dashboard pages (requires app running; not part of make check)
+	poetry run python scripts/dashboard_screenshots.py
 
 test-all: ## Run unit + integration tests (requires Docker)
 	poetry run pytest
