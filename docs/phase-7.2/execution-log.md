@@ -24,7 +24,7 @@ Decisions for Wave A/B live in
 - **Deviations:** none to production. Drift recorded in the plan's Material-icon
   claim (bare names do **not** validate; the shortcode does) and corrected in
   Task 3's commit.
-- **Commit hash:** _recorded in the Task 2 entry below (see next commit)._
+- **Commit hash:** `35ce5f6`
 
 ## Task 2 — (0) VERIFY shell DOM, static serving, toolbar mode, brand fallbacks
 

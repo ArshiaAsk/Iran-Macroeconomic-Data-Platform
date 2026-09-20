@@ -100,9 +100,131 @@ The Task 1 baseline had **zero** pre-existing errors, so the AM-21 gate is
 
 ---
 
-## 4. Results — Task 2 (appended in commit 2)
+## 4. Results — Task 2 (shell DOM, static serving, toolbar, brand)
 
-_Pending._
+Probe app config (`/tmp/phase72-probe/.streamlit/config.toml`):
+
+```toml
+[server]
+enableStaticServing = true
+
+[theme]
+base = "light"
+font = "Vazirmatn, Tahoma, sans-serif"
+
+[[theme.fontFaces]]
+family = "Vazirmatn"
+url = "app/static/Vazirmatn.ttf"
+weight = "100 900"
+```
+
+### 4.1 Static serving + font
+
+| item | result | evidence | status |
+|---|---|---|---|
+| Correct URL `/app/static/Vazirmatn.ttf` | **200**, `font/ttf`, **241 328 B** (byte-identical to the file) | `curl -w "%{http_code} %{content_type} %{size_download}"` | VERIFIED |
+| Wrong URL `/app/dashboard/static/Vazirmatn.ttf` | **200** but `text/html` **10 951 B** — the SPA index shell, **not** the font. Fails **silently** (no 404) | `curl` | VERIFIED |
+| `/static/Vazirmatn.ttf` | 200 `text/html` — also the SPA fallback, not the font | `curl` | VERIFIED |
+| `[[theme.fontFaces]]` loads | `document.fonts` entry `Vazirmatn`, status **`loaded`**, weight `100 900`; `document.fonts.check('16px Vazirmatn')` → **true** | browser `document.fonts` | VERIFIED |
+| Rendered family | app root computed `font-family: Vazirmatn, Tahoma, sans-serif, "Source Sans", sans-serif`; Persian text renders in Vazirmatn | computed style + screenshot `wave-0-assets/badge-segmented.png` | VERIFIED |
+
+**Conclusion:** `enableStaticServing=true` + a `static/` dir beside the
+entrypoint serves `static/<file>` at **`app/static/<file>`**. The URL is the
+`app/static/…` form and it resolves. The wrong `app/dashboard/static/…` path
+returns the app shell with HTTP 200, so a typo there would **not** be caught by a
+status check — verify by content type/size, not status.
+
+### 4.2 `client.toolbarMode` matrix (real app, custom `[theme]`)
+
+`STREAMLIT_CLIENT_TOOLBAR_MODE` override confirmed with `streamlit config show`
+(`toolbarMode = "viewer"` / `"minimal"`).
+
+| mode | Deploy button | kebab (main menu) | viewer options (Print, Record screen) | developer options (Rerun, Clear cache) | theme toggle |
+|---|---|---|---|---|---|
+| `auto` | visible | visible | visible | visible | **absent** |
+| `viewer` | **absent** | visible | visible | **hidden** | **absent** |
+| `minimal` | **absent** | **absent (menu hidden)** | **hidden** | hidden | absent |
+
+Screenshots: `wave-0-assets/header-{auto,viewer,minimal}.png`.
+
+**Theme toggle is already hidden by the custom theme.** Control test: an
+otherwise identical app **without** a `[theme]` section exposes
+`stMainMenuItem-theme-System`, `…-theme-Light`, `…-theme-Dark` (all visible) when
+the main menu is opened. With the custom `[theme]` (base = light) those elements
+are **absent from the DOM**. So D14's requirement is met by the locked theme
+alone; **no `toolbarMode` change is needed to hide the theme toggle.**
+
+**Recommendation (per D14 addendum):** set `client.toolbarMode = "viewer"`.
+It hides the native **Deploy** button and the developer options (Rerun / Clear
+cache) while keeping the kebab and the viewer options (Print, Record screen) —
+nothing the analyst needs is removed, so no limitation is accepted. `minimal` is
+**not** recommended because it also removes Print/Record screen. `auto` remains
+acceptable (local-only app) if the Deploy button is tolerated.
+
+### 4.3 Sidebar DOM hooks (Streamlit 1.61.1)
+
+Sidebar tree: `stSidebar → stSidebarContent → { stSidebarHeader
+(stLogoSpacer, collapse button), stSidebarNav (stSidebarNavItems → group divs →
+stNavSectionHeader + `li`), stSidebarUserContent }`.
+
+| element | stable hook | verdict |
+|---|---|---|
+| sidebar container | `[data-testid="stSidebar"]` | STABLE |
+| sidebar content (flex parent) | `[data-testid="stSidebarContent"]` | STABLE |
+| sidebar header (**above** nav) | `[data-testid="stSidebarHeader"]` | STABLE |
+| nav container | `[data-testid="stSidebarNav"]` / `[data-testid="stSidebarNavItems"]` | STABLE |
+| nav link | `[data-testid="stSidebarNavLink"]` | STABLE |
+| **active** nav link | `[data-testid="stSidebarNavLink"][aria-current="page"]` | STABLE (attribute) |
+| active nav link class | `st-emotion-cache-1yak103` (hashed) | **FRAGILE** — do not use |
+| nav group header | `[data-testid="stNavSectionHeader"]` | STABLE |
+| sidebar user content (DB status) | `[data-testid="stSidebarUserContent"]` | STABLE |
+| main block container | `[data-testid="stMainBlockContainer"]` | STABLE |
+| native header | `[data-testid="stHeader"]` | STABLE |
+| toolbar / deploy / kebab | `[data-testid="stToolbar" / "stAppDeployButton" / "stMainMenuButton"]` | STABLE |
+
+### 4.4 Runtime-injection verdicts
+
+CSS was injected only with `page.add_style_tag` on the running app.
+
+| item | verdict | computed evidence |
+|---|---|---|
+| (i) sidebar width 256 px | **STABLE** | `[data-testid="stSidebar"]{width:256px!important;min-width:256px!important}` → computed `256px` |
+| (ii) active-item accent | **STABLE** | `[data-testid="stSidebarNavLink"][aria-current="page"]{background:…;border-inline-start:3px solid …}` → computed `3px` / `rgba(31,111,235,0.12)` |
+| (iii) brand above nav **+** DB status at bottom | **STABLE with a corrected recipe** (see below) | variant B: brand above nav = true; status pinned near sidebar bottom = true |
+| (iv) main max-width 1360 px + top padding | **STABLE** | `[data-testid="stMainBlockContainer"]{max-width:1360px!important}` → computed `1360px`; computed `padding-top: 96px` (native header is 60 px, absolute) |
+
+Screenshots: `wave-0-assets/shell-injection.png`,
+`wave-0-assets/shell-variant-b.png`.
+
+**(iii) detail — the prescribed recipe is insufficient.** Injecting a brand
+element into `stSidebarUserContent` and reordering `stSidebarContent` to
+`display:flex` (brand block above nav) **does** put the brand above the nav, but
+because the DB status also lives in `stSidebarUserContent`, it lands **above the
+nav too**, not at the bottom (`status_is_bottom = false`). A single flex child
+cannot straddle the nav.
+
+**Working recipe (variant B, all stable selectors):**
+
+```css
+[data-testid="stSidebar"] { width: 256px !important; min-width: 256px !important; }
+[data-testid="stSidebarContent"] { display: flex !important; flex-direction: column; }
+[data-testid="stSidebarHeader"] { order: 0; }          /* brand lives here (above nav) */
+[data-testid="stSidebarHeader"]::after {               /* text from i18n via t() */
+  content: "◆ سامانهٔ داده‌ها"; display: block; font-weight: 700;
+}
+[data-testid="stSidebarNav"] { order: 1; }
+[data-testid="stSidebarUserContent"] { order: 2; margin-top: auto; }  /* DB status pinned bottom */
+```
+
+This gives brand (top) → nav → DB status (bottom), all via stable
+`data-testid` hooks. The brand text must come from `i18n.py` through `t()` (the
+literal cannot live in the CSS module), and `st.logo(icon_image=…)` may
+optionally supply the icon in `stSidebarHeader`.
+
+**Fragile selectors to isolate (D6 block):** the active-nav `st-emotion-cache-*`
+class; any width/max-width that needs `!important`; and the native
+`[data-testid="stHeader"]` whose height is **60 px**, not the mockup's 48 px
+(see §8 — Task 28).
 
 ## 5. Results — Task 3 (appended in commit 3)
 
