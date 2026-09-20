@@ -101,4 +101,4 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** `poetry.lock` is git-ignored (`.gitignore:37`) and is not
   tracked, so the refreshed lock is not committed; only `pyproject.toml` lands.
   The D9 implication note in the plan records this.
-- **Commit hash:** _pending_
+- **Commit hash:** `7569676`
