@@ -693,8 +693,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `section.freshness_summary`="{fresh} به‌روز · {stale} کهنه".
 - **Depends:** Task 11.
 - **Acceptance:**
-  - [ ] Aggregate and ordering are pure and `now`-injectable.
-  - [ ] Existing `test_freshness_display_*` tests still pass; new tests pin the order and counts.
+  - [x] Aggregate and ordering are pure and `now`-injectable.
+  - [x] Existing `test_freshness_display_*` tests still pass; new tests pin the order and counts.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q`.
 
 ### 13. (A) ADD the source calendar map and calendar-aware range formatter

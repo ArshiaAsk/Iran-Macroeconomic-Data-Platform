@@ -864,6 +864,7 @@ def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd
     for row in frame.itertuples(index=False):
         source_name = str(row.source_name)
         collected = _aware_utc(row.collection_timestamp)
+        staleness = _staleness_label(source_name, collected, reference)
         rows.append(
             {
                 columns[0]: source_label(source_name),
@@ -873,10 +874,45 @@ def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd
                 columns[2]: str(row.status),
                 columns[3]: _count_label(row.records_collected),
                 columns[4]: "" if row.error_message is None else str(row.error_message),
-                columns[5]: _staleness_label(source_name, collected, reference),
+                columns[5]: staleness,
             }
         )
+    # Stale rows sort first; stable sort keeps the original order for rows
+    # with the same staleness verdict (fresh, unknown, etc.).
+    rows.sort(key=lambda r: r[columns[5]] != t("value.stale"))
     return pd.DataFrame(rows)
+
+
+def freshness_summary(frame: pd.DataFrame, *, now: datetime) -> tuple[int, int]:
+    """Count fresh and stale sources in a freshness frame.
+
+    Reuses :func:`_staleness_label` so the verdict matches
+    :func:`freshness_display` exactly. Sources with no known cadence
+    (``"unknown"``) are counted as neither fresh nor stale.
+
+    Args:
+        frame: Freshness frame from ``source_freshness()``
+        now: Reference instant for staleness; injectable for determinism
+
+    Returns:
+        ``(fresh, stale)`` counts
+    """
+    if frame.empty:
+        return (0, 0)
+    reference = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+    fresh = 0
+    stale = 0
+    fresh_label = t("value.fresh")
+    stale_label = t("value.stale")
+    for row in frame.itertuples(index=False):
+        source_name = str(row.source_name)
+        collected = _aware_utc(row.collection_timestamp)
+        verdict = _staleness_label(source_name, collected, reference)
+        if verdict == fresh_label:
+            fresh += 1
+        elif verdict == stale_label:
+            stale += 1
+    return (fresh, stale)
 
 
 def _staleness_label(source_name: str, collected: datetime | None, now: datetime) -> str:

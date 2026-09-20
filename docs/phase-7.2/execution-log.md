@@ -305,3 +305,27 @@ were never staged or committed (Task 7 owns them).
   list does not include a week key, and the prompt allowed skipping it if
   logged. Months use floor division on `days // 30`.
 - **Commit hash:** `dc5f05e`
+
+## Task 12 — (A) ADD the freshness aggregate and stale-first ordering
+
+- **Files:** `dashboard/page_view.py`, `dashboard/i18n.py`,
+  `tests/unit/dashboard/test_app_overview.py`, plan checkboxes.
+- **Build:** `freshness_summary(frame, *, now) -> tuple[int, int]` counts fresh
+  and stale sources by reusing `_staleness_label`, so its verdict matches
+  `freshness_display` exactly; a source with no known cadence (`"unknown"`) is
+  counted as neither. `freshness_display` now sorts stale rows first with a
+  **stable** secondary order (Python's stable sort keeps the original
+  `source_freshness()` order within each verdict group). i18n key
+  `section.freshness_summary` added. Both functions are pure and `now` is
+  required/injectable; no wall-clock call inside.
+- **Verify:** `poetry run pytest tests/unit/dashboard -q --no-cov` → **373
+  passed** (356 baseline + 14 from Task 11 + 3 new here).
+  `poetry run mypy src dashboard` → **0 errors**. The existing
+  `test_freshness_display_*` tests were left untouched and still pass. New
+  tests: stale-first order with a fresh source first in input order, stable
+  secondary order across two stale rows, summary counts (fresh/stale/unknown),
+  `now`-sensitivity, and the empty-frame `(0, 0)`.
+- **Deviations:** none. The `section.freshness_summary` string is added but not
+  yet rendered — its consumer is the Overview refresh (Tasks 30/32), per the
+  plan.
+- **Commit hash:** (this commit)

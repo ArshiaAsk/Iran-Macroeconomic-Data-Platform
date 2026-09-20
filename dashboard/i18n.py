@@ -84,6 +84,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.indicators_by_domain": "شاخص‌ها به تفکیک حوزه",
         "section.available_coverage": "پوشش موجود",
         "section.source_freshness": "تازگی داده‌های هر منبع",
+        "section.freshness_summary": "{fresh} به‌روز · {stale} کهنه",
         "section.key_indicators": "شاخص‌های کلیدی",
         "section.exact_join_counts": "تعداد تطابق‌های دقیق زمانی",
         "section.observations": "مشاهدات",

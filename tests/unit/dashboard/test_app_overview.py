@@ -14,7 +14,7 @@ from streamlit.testing.v1 import AppTest
 from dashboard.formatting import format_number
 from dashboard.i18n import t
 from dashboard.labels import source_label
-from dashboard.page_view import freshness_display
+from dashboard.page_view import freshness_display, freshness_summary
 from dashboard.repository import SERIES_KIND_BASE
 from tests.unit.dashboard.app_smoke import (
     ORPHAN_INDICATOR,
@@ -139,3 +139,49 @@ def test_freshness_display_is_empty_rather_than_invented_without_a_log() -> None
 
     assert display.empty
     assert t("table.staleness") in display.columns
+
+
+# --- freshness ordering and aggregate (Task 12) ----------------------------
+
+
+def _ordering_frame() -> pd.DataFrame:
+    """Fresh source first in input order, so a stale-first sort is observable."""
+    collected = datetime(2026, 1, 1, tzinfo=UTC)
+    return pd.DataFrame(
+        {
+            "source_name": ["hbsir", "tgju", "tsetmc"],
+            "collection_timestamp": [collected, collected, collected],
+            "status": ["success", "success", "success"],
+            "records_collected": [1, 2, 3],
+            "error_message": [None, None, None],
+        }
+    )
+
+
+def test_freshness_display_orders_stale_rows_first_with_stable_secondary_order() -> None:
+    display = freshness_display(_ordering_frame(), now=datetime(2026, 1, 3, tzinfo=UTC))
+
+    # Stale rows (tgju, tsetmc) move ahead of the fresh one (hbsir); the two
+    # stale rows keep their input order, so the sort is stable.
+    assert display[t("table.source_name")].tolist() == [
+        source_label("tgju"),
+        source_label("tsetmc"),
+        source_label("hbsir"),
+    ]
+    assert display[t("table.staleness")].tolist() == [
+        t("value.stale"),
+        t("value.stale"),
+        t("value.fresh"),
+    ]
+
+
+def test_freshness_summary_counts_fresh_and_stale_and_ignores_unknown() -> None:
+    # tgju is stale, hbsir is fresh, and unknown_source has no cadence.
+    assert freshness_summary(_freshness_frame(), now=datetime(2026, 1, 3, tzinfo=UTC)) == (1, 1)
+    # A different reference instant changes the verdict, so `now` is honoured.
+    assert freshness_summary(_freshness_frame(), now=datetime(2026, 1, 1, tzinfo=UTC)) == (2, 0)
+    assert freshness_summary(_ordering_frame(), now=datetime(2026, 1, 3, tzinfo=UTC)) == (1, 2)
+
+
+def test_freshness_summary_is_zero_for_an_empty_frame() -> None:
+    assert freshness_summary(pd.DataFrame(), now=datetime(2026, 1, 3, tzinfo=UTC)) == (0, 0)
