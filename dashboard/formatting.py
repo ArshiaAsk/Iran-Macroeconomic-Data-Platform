@@ -56,6 +56,7 @@ __all__ = [
     "jalali_month_label",
     "jalali_period_label",
     "jalali_year_label",
+    "range_label",
     "relative_time_label",
     "tehran_day_bounds",
     "tehran_timestamp_label",
@@ -77,6 +78,9 @@ PERSIAN_DECIMAL_SEPARATOR: Final[str] = "٫"
 PERSIAN_PERCENT_SIGN: Final[str] = "٪"
 MISSING_VALUE: Final[str] = "—"
 """Placeholder for ``None``/NaN: shown as unknown, never invented as zero."""
+
+RANGE_SEPARATOR: Final[str] = " – "
+"""En dash with surrounding spaces; matches the design mockup's coverage range."""
 
 #: Jalali month names in calendar order, derived from the shared month map so the
 #: two directions cannot drift.
@@ -367,6 +371,61 @@ def jalali_period_label(
         text = f"{season} {jalali.year}"
         return to_persian_digits(text) if digit_mode == "fa" else text
     return jalali_date_label(value, digit_mode=digit_mode)
+
+
+def _gregorian_period_label(value: datetime, frequency: str, digit_mode: DigitMode) -> str:
+    """Label a Gregorian period end for an international source (AM-27(e)).
+
+    An annual series renders as the year only (``2023``); every sub-annual
+    series — monthly, quarterly or daily — renders as year-month (``2023-05``),
+    so a bare year is never shown for sub-annual data. The date is interpreted
+    in ``Asia/Tehran`` first, matching the other display formatters.
+    """
+    tehran = to_tehran(value)
+    text = (
+        f"{tehran.year:04d}" if frequency == "annual" else f"{tehran.year:04d}-{tehran.month:02d}"
+    )
+    return to_persian_digits(text) if digit_mode == "fa" else text
+
+
+def range_label(
+    start: datetime,
+    end: datetime,
+    *,
+    frequency: str,
+    calendar: str = "jalali",
+    digit_mode: DigitMode = "fa",
+) -> str:
+    """Label a start/end period range, calendar-aware.
+
+    ``calendar="gregorian"`` (the international sources) renders Gregorian
+    periods via :func:`_gregorian_period_label`; anything else renders Jalali
+    periods via :func:`jalali_period_label`. The default is ``"jalali"`` so an
+    un-migrated caller keeps today's output byte-for-byte.
+
+    Bidi note: the Gregorian year-month form (``2023-05``) is LTR-ordered data
+    embedded in RTL text. Two such tokens separated by a neutral en dash can
+    visually swap start and end under the RTL paragraph direction, so the caller
+    must isolate the result in an LTR span (``dir="ltr"`` / ``<bdi>``) — see the
+    Task 13 execution-log entry.
+
+    Args:
+        start: Stored start period end (UTC)
+        end: Stored end period end (UTC)
+        frequency: Catalog frequency slug
+        calendar: ``"gregorian"`` for international sources, otherwise Jalali
+        digit_mode: ``"fa"`` for display, ``"latin"`` for exports and tests
+
+    Returns:
+        Two period labels joined by :data:`RANGE_SEPARATOR`
+    """
+    if calendar == "gregorian":
+        first = _gregorian_period_label(start, frequency, digit_mode)
+        last = _gregorian_period_label(end, frequency, digit_mode)
+    else:
+        first = jalali_period_label(start, frequency, digit_mode=digit_mode)
+        last = jalali_period_label(end, frequency, digit_mode=digit_mode)
+    return f"{first}{RANGE_SEPARATOR}{last}"
 
 
 def tehran_timestamp_label(value: datetime, *, digit_mode: DigitMode = "fa") -> str:

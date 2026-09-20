@@ -328,4 +328,46 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. The `section.freshness_summary` string is added but not
   yet rendered — its consumer is the Overview refresh (Tasks 30/32), per the
   plan.
+- **Commit hash:** `e3f47cf`
+
+## Task 13 — (A) ADD the source calendar map and calendar-aware range formatter
+
+- **Files:** `dashboard/labels.py`, `dashboard/formatting.py`, `dashboard/i18n.py`,
+  `tests/unit/dashboard/test_labels.py`, `tests/unit/dashboard/test_formatting.py`,
+  plan checkboxes.
+- **Source slugs (verified in `labels.py`, not assumed):** `SOURCE_LABELS` holds
+  exactly `world_bank`, `imf`, `eia`, `tgju`, `sci`, `tsetmc`, `hbsir` — the
+  plan's mapping is correct as written.
+- **Build:** `SOURCE_CALENDAR` (`world_bank`/`imf`/`eia` → `"gregorian"`;
+  `tgju`/`sci`/`tsetmc`/`hbsir` → `"jalali"`) plus
+  `source_calendar(source_name) -> str | None` (``None`` when unmapped, so the
+  caller keeps the default). In `formatting.py`, `range_label(start, end, *,
+  frequency, calendar="jalali", digit_mode="fa")` joins two period labels with
+  :data:`RANGE_SEPARATOR` (`" – "`, en dash, matching the mockup):
+  `jalali_period_label` for the Jalali path, `_gregorian_period_label` for the
+  Gregorian path. AM-27(e): Gregorian annual → year only (`2023`), every
+  sub-annual frequency → year-month (`2023-05`); quarterly is treated as
+  sub-annual. i18n key `table.coverage_footnote` added.
+- **Golden values (captured before implementing):** `jalali_period_label` on
+  annual 1960-12-31/2025-12-31 → `۱۳۳۹`/`۱۴۰۴`; monthly 1982-03-31/2023-01-31 →
+  `فروردین ۱۳۶۱`/`بهمن ۱۴۰۱`; daily 2026-09-09/2026-09-11 →
+  `۱۸ شهریور ۱۴۰۵`/`۲۰ شهریور ۱۴۰۵`. `range_label(..., calendar="jalali")` (the
+  default) is asserted to reproduce `۱۳۳۹ – ۱۴۰۴`, `فروردین ۱۳۶۱ – بهمن ۱۴۰۱`,
+  `۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵` byte-for-byte, and separately to equal the
+  `jalali_period_label` composition. The monthly golden value matches the
+  mockup's SCI coverage row exactly.
+- **Bidi decision:** the Gregorian year-month form is LTR-ordered data embedded
+  in RTL text; two tokens separated by a neutral en dash can visually swap
+  start/end under the RTL paragraph direction. Decision: the caller must isolate
+  the range in an LTR span (`dir="ltr"` / `<bdi>`) — recorded in the
+  `range_label` docstring and to be applied at the Task 32 call site.
+- **Verify:** `poetry run pytest tests/unit/dashboard -q --no-cov` → **385
+  passed** (373 + 12 new). `poetry run mypy src dashboard` → **0 errors**.
+  `ruff format` / `ruff check` on the touched files → clean.
+- **Deviations:** (1) the mockup *compacts* a daily range that shares a month
+  (`۱۸ – ۲۰ شهریور ۱۴۰۵`); `range_label` does not — it emits the two full period
+  labels (`۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵`). The plan's acceptance only requires
+  byte-for-byte reproduction of the existing Jalali output, so compaction is left
+  out of scope. (2) quarterly Gregorian → year-month is a decision, not a plan
+  requirement (the plan names only annual/monthly/daily).
 - **Commit hash:** (this commit)

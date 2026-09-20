@@ -704,9 +704,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `table.coverage_footnote`="تاریخ مشاهدهٔ منابع میلادی (مانند بانک جهانی) به‌صورت سال میلادی نمایش داده می‌شود؛ تاریخ دقیق در راهنمای هر خانه است."
 - **Depends:** Task 5.
 - **Acceptance:**
-  - [ ] Opt-in proven by a test that the default output equals today's Jalali output byte-for-byte.
-  - [ ] Gregorian mapping covers exactly the three non-Iranian slugs.
-  - [ ] A test pins annual Gregorian → year only and monthly/daily Gregorian → year-month (`2023` vs `2023-05`).
+  - [x] Opt-in proven by a test that the default output equals today's Jalali output byte-for-byte.
+  - [x] Gregorian mapping covers exactly the three non-Iranian slugs.
+  - [x] A test pins annual Gregorian → year only and monthly/daily Gregorian → year-month (`2023` vs `2023-05`).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_formatting.py tests/unit/dashboard/test_labels.py -q`.
 
 ### 14. (A) REBUILD the Plotly template from the tokens

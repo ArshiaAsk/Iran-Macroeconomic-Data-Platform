@@ -32,6 +32,7 @@ __all__ = [
     "DOMAIN_ORDER",
     "FREQUENCY_LABELS",
     "INDICATOR_LABELS",
+    "SOURCE_CALENDAR",
     "SOURCE_EXPECTED_CADENCE",
     "SOURCE_LABELS",
     "UNCLASSIFIED_DOMAIN",
@@ -40,6 +41,7 @@ __all__ = [
     "frequency_label",
     "indicator_label",
     "is_derived",
+    "source_calendar",
     "source_expected_cadence",
     "source_label",
 ]
@@ -100,6 +102,21 @@ SOURCE_EXPECTED_CADENCE: Final[Mapping[str, timedelta]] = MappingProxyType(
         "imf": CADENCE_MONTHLY,
         "eia": CADENCE_MONTHLY,
         "hbsir": CADENCE_ANNUAL,
+    }
+)
+
+#: Calendar a source's dates are *displayed* in. International sources report
+#: Gregorian periods; domestic Iranian sources report Jalali periods. A source
+#: absent from this map has no calendar claim and the caller keeps the default.
+SOURCE_CALENDAR: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "world_bank": "gregorian",
+        "imf": "gregorian",
+        "eia": "gregorian",
+        "tgju": "jalali",
+        "sci": "jalali",
+        "tsetmc": "jalali",
+        "hbsir": "jalali",
     }
 )
 
@@ -224,6 +241,16 @@ def source_label(source_name: str) -> str:
 def source_expected_cadence(source_name: str) -> timedelta | None:
     """Return the expected collection refresh interval, or ``None`` if unknown."""
     return SOURCE_EXPECTED_CADENCE.get(source_name)
+
+
+def source_calendar(source_name: str) -> str | None:
+    """Return the display calendar for a source slug, or ``None`` if unmapped.
+
+    ``"gregorian"`` for the international sources, ``"jalali"`` for the domestic
+    ones. ``None`` means the source makes no calendar claim, so the caller should
+    keep the default (Jalali) rather than guess.
+    """
+    return SOURCE_CALENDAR.get(source_name)
 
 
 def frequency_label(frequency: str) -> str:

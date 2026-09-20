@@ -224,6 +224,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.survey_year": "سال آمارگیری",
         "table.survey_year_end": "پایان سال آمارگیری (شمسی)",
         "table.period_end": "پایان دوره ذخیره‌شده (میلادی)",
+        "table.coverage_footnote": (
+            "تاریخ مشاهدهٔ منابع میلادی (مانند بانک جهانی) به‌صورت سال میلادی نمایش "
+            "داده می‌شود؛ تاریخ دقیق در راهنمای هر خانه است."
+        ),
         "table.hbsir_indicators": "سری‌های HBSIR",
         "table.hbsir_observations": "مشاهدات HBSIR",
         # Observations-table row cap (Task 15): the grid is a bounded preview and

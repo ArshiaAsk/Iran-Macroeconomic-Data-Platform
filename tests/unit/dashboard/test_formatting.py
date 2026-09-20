@@ -29,6 +29,7 @@ from dashboard.formatting import (
     jalali_month_label,
     jalali_period_label,
     jalali_year_label,
+    range_label,
     relative_time_label,
     tehran_day_bounds,
     tehran_timestamp_label,
@@ -254,3 +255,106 @@ def test_relative_time_label_latin_digits() -> None:
 
     value = _RELATIVE_NOW - timedelta(days=10)
     assert relative_time_label(value, now=_RELATIVE_NOW, digit_mode="latin") == "10 روز پیش"
+
+
+# --- range_label (Task 13) -------------------------------------------------
+
+_ANNUAL_START = datetime(1960, 12, 31, tzinfo=UTC)
+_ANNUAL_END = datetime(2025, 12, 31, tzinfo=UTC)
+_MONTHLY_START = datetime(1982, 3, 31, tzinfo=UTC)
+_MONTHLY_END = datetime(2023, 1, 31, tzinfo=UTC)
+_DAILY_START = datetime(2026, 9, 9, tzinfo=UTC)
+_DAILY_END = datetime(2026, 9, 11, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("frequency", "start", "end", "expected"),
+    [
+        # Golden values captured from jalali_period_label before range_label
+        # existed: the default must reproduce them byte-for-byte.
+        ("annual", _ANNUAL_START, _ANNUAL_END, "۱۳۳۹ – ۱۴۰۴"),
+        ("monthly", _MONTHLY_START, _MONTHLY_END, "فروردین ۱۳۶۱ – بهمن ۱۴۰۱"),
+        ("daily", _DAILY_START, _DAILY_END, "۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵"),
+    ],
+)
+def test_range_label_default_reproduces_the_existing_jalali_output(
+    frequency: str, start: datetime, end: datetime, expected: str
+) -> None:
+    assert range_label(start, end, frequency=frequency) == expected
+    # The default is explicit: naming "jalali" changes nothing.
+    assert range_label(start, end, frequency=frequency, calendar="jalali") == expected
+
+
+def test_range_label_jalali_is_the_composition_of_the_existing_period_labels() -> None:
+    assert range_label(_MONTHLY_START, _MONTHLY_END, frequency="monthly") == (
+        f"{jalali_period_label(_MONTHLY_START, 'monthly')} – "
+        f"{jalali_period_label(_MONTHLY_END, 'monthly')}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("frequency", "start", "end", "expected"),
+    [
+        # Annual → year only; every sub-annual frequency → year-month (AM-27(e)).
+        ("annual", _ANNUAL_START, _ANNUAL_END, "۱۹۶۰ – ۲۰۲۵"),
+        (
+            "monthly",
+            datetime(2023, 5, 31, tzinfo=UTC),
+            datetime(2024, 1, 31, tzinfo=UTC),
+            "۲۰۲۳-۰۵ – ۲۰۲۴-۰۱",
+        ),
+        (
+            "quarterly",
+            datetime(2026, 6, 30, tzinfo=UTC),
+            datetime(2026, 9, 30, tzinfo=UTC),
+            "۲۰۲۶-۰۶ – ۲۰۲۶-۰۹",
+        ),
+        (
+            "daily",
+            datetime(2023, 5, 31, tzinfo=UTC),
+            datetime(2023, 6, 15, tzinfo=UTC),
+            "۲۰۲۳-۰۵ – ۲۰۲۳-۰۶",
+        ),
+    ],
+)
+def test_range_label_gregorian_follows_the_annual_vs_subannual_rule(
+    frequency: str, start: datetime, end: datetime, expected: str
+) -> None:
+    assert range_label(start, end, frequency=frequency, calendar="gregorian") == expected
+
+
+def test_range_label_gregorian_never_renders_a_jalali_period_or_bare_year() -> None:
+    label = range_label(
+        datetime(2023, 5, 31, tzinfo=UTC),
+        datetime(2024, 1, 31, tzinfo=UTC),
+        frequency="monthly",
+        calendar="gregorian",
+    )
+
+    # No Jalali month name, and no bare year for a sub-annual series.
+    assert not any(month in label for month in JALALI_MONTH_NAMES)
+    assert "۲۰۲۳-۰۵" in label
+    assert "۲۰۲۴-۰۱" in label
+
+
+def test_range_label_gregorian_latin_digits() -> None:
+    assert (
+        range_label(
+            _ANNUAL_START,
+            _ANNUAL_END,
+            frequency="annual",
+            calendar="gregorian",
+            digit_mode="latin",
+        )
+        == "1960 – 2025"
+    )
+    assert (
+        range_label(
+            datetime(2023, 5, 31, tzinfo=UTC),
+            datetime(2024, 1, 31, tzinfo=UTC),
+            frequency="monthly",
+            calendar="gregorian",
+            digit_mode="latin",
+        )
+        == "2023-05 – 2024-01"
+    )
