@@ -81,6 +81,10 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "kpi_tone_warn": '[class*="st-key-kpi-"][class*="-tone-warn"]',
         "kpi_tone_err": '[class*="st-key-kpi-"][class*="-tone-err"]',
         "kpi_tone_accent": '[class*="st-key-kpi-"][class*="-tone-accent"]',
+        "bar_list": '[class*="st-key-bar-list-"]',
+        "bar_rail": ".bar-rail",
+        "bar_fill": ".bar-fill",
+        "bar_list_foot": ".bar-list-foot",
     }
 )
 
@@ -229,14 +233,24 @@ _KPI_TONE_RULES: Final[tuple[str, ...]] = tuple(
 #: Component rules as complete CSS strings, in stylesheet order. Each rule's
 #: selector is built from the :data:`CSS_SELECTORS` registry so the hook has one
 #: source (``_TABLE_RULES`` predates the registry and uses plain class selectors).
+#:
+#: **Every component container declares ``direction: rtl``.** Streamlit's main
+#: block is LTR, so an inherited ``inline-start`` is the *left* edge; declaring the
+#: direction on the component's own container makes ``inline-start``/``flex-start``
+#: resolve to the right edge, as the mockup's ``body{direction:rtl}`` does. This is
+#: the same self-contained-RTL-context rule the Task 15 table follows with
+#: ``dir="rtl"`` on its wrapper, and it keeps the flip out of the un-migrated
+#: pages (a global main-block flip is not scheduled in this plan).
 _COMPONENT_RULES: Final[tuple[str, ...]] = (
     # Callout (Task 17). The amber/blue/red tint and the text colour come from the
-    # `[theme]` alert options; this adds only the mockup's left accent bar and the
-    # info glyph. The native alert renders no icon element, so the glyph is a CSS
-    # shape (a ring with the "i" dot and stem drawn as background layers) rather
-    # than the mockup's inline SVG, which DOMPurify strips.
+    # `[theme]` alert options; this adds only the mockup's accent bar and the info
+    # glyph, both at the RTL start. The native alert renders no icon element, so
+    # the glyph is a CSS shape (a ring with the "i" dot and stem drawn as
+    # background layers) rather than the mockup's inline SVG, which DOMPurify
+    # strips.
     f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"] {{ '
-    "border-inline-start: 3px solid currentColor; border-radius: var(--radius); "
+    "direction: rtl; border-inline-start: 3px solid currentColor; "
+    "border-radius: var(--radius); "
     "display: flex; align-items: flex-start; gap: 10px; }",
     f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"]::before {{ '
     'content: ""; flex: none; box-sizing: border-box; width: 15px; height: 15px; '
@@ -246,16 +260,34 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     "linear-gradient(currentColor, currentColor) 50% 74% / 1.5px 5px no-repeat; }",
     # KPI band (Task 19): the mockup's larger corner radius, edge-to-edge columns,
     # a separator between every pair of cells and a stronger one at the start of
-    # the secondary group. The `:has()` rule must follow the `+` rule: the two have
-    # equal specificity, so source order decides the boundary cell.
-    f'{CSS_SELECTORS["kpi_band"]} {{ border-radius: var(--radius-lg) !important; '
-    "padding: 0 !important; }",
+    # the secondary group. ``direction: rtl`` is what makes "first cell" mean the
+    # *rightmost* cell, so a caller passes the cells in mockup order. The `:has()`
+    # rule must follow the `+` rule: the two have equal specificity, so source
+    # order decides the boundary cell.
+    f'{CSS_SELECTORS["kpi_band"]} {{ direction: rtl; '
+    "border-radius: var(--radius-lg) !important; padding: 0 !important; }",
     f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]} '
     f'+ {CSS_SELECTORS["kpi_column"]} {{ border-inline-start: 1px solid var(--border); }}',
     f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]}'
     f':has({CSS_SELECTORS["kpi_secondary_group"]}) '
     "{ border-inline-start: 1px solid var(--border-strong); }",
     *_KPI_TONE_RULES,
+    # Bar list (Task 20). The panel is a keyed bordered container; each row is a
+    # native st.columns trio whose middle column holds the escaped bar fragment.
+    # ``direction: rtl`` on the panel is what puts the domain label on the right,
+    # the bar in the middle and the count on the left (the mockup's
+    # `grid-template-columns:150px 1fr 34px` in an RTL grid) and what puts the
+    # footer's "جمع" caption on the right; ``direction: rtl`` on the rail anchors
+    # the fill to the right edge, so the bar grows from the RTL reading start
+    # instead of from the left.
+    f'{CSS_SELECTORS["bar_list"]} {{ direction: rtl; }}',
+    f'{CSS_SELECTORS["bar_list"]} {CSS_SELECTORS["bar_rail"]} {{ direction: rtl; '
+    "height: 8px; background: var(--neutral-bg); border-radius: 4px; overflow: hidden; }",
+    f'{CSS_SELECTORS["bar_fill"]} {{ height: 100%; background: var(--accent); '
+    "border-radius: 4px; }",
+    f'{CSS_SELECTORS["bar_list"]} [data-testid="stHorizontalBlock"] {{ align-items: center; }}',
+    f'{CSS_SELECTORS["bar_list_foot"]} {{ border-top: 1px solid var(--border); '
+    "display: flex; justify-content: space-between; color: var(--text-3); }",
 )
 
 

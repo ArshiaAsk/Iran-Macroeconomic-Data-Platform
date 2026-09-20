@@ -826,10 +826,10 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `value.status_success`="موفق", `value.status_failed`="ناموفق", `value.status_partial`="ناقص", `value.status_unknown`="نامشخص", `section.indicators_by_domain_total`="جمع".
 - **Depends:** Task 19.
 - **Acceptance:**
-  - [ ] Status slug → tone mapping is total (unknown slug renders the unknown chip).
-  - [ ] Bar list is unit-safe (counts only).
-  - [ ] The chip component states that in-table chips use the Task 15 HTML variants, not `st.badge`.
-  - [ ] Each bar row exposes a native `st.page_link` for an owned domain (or plain text for an unowned one); only the bar is an `st.html` fragment.
+  - [x] Status slug → tone mapping is total (unknown slug renders the unknown chip).
+  - [x] Bar list is unit-safe (counts only).
+  - [x] The chip component states that in-table chips use the Task 15 HTML variants, not `st.badge`.
+  - [x] Each bar row exposes a native `st.page_link` for an owned domain (or plain text for an unowned one); only the bar is an `st.html` fragment.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py -q`.
 
 ### 21. (A) ADD the section header and filter bar components

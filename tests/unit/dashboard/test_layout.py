@@ -9,10 +9,16 @@ component depends on must be registered and emitted, because the DOM behaviour
 itself is not visible to ``AppTest``.
 """
 
+import pandas as pd
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from dashboard.components.direction import CSS_SELECTORS, direction_css
+from dashboard.components.layout import BarRow, render_bar_list
+from dashboard.formatting import format_number
 from dashboard.i18n import t
+from dashboard.labels import domain_label
+from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT, html_texts
 
 # --- Task 17: callout ------------------------------------------------------
 
@@ -307,3 +313,187 @@ def test_kpi_band_container_key_lets_a_page_render_two_bands() -> None:
 
     assert not app.exception
     assert len(app.metric) == 2
+
+
+# --- Task 20: status chip, status dot, bar list ----------------------------
+
+STATUS_CHIP_SCRIPT = """
+from dashboard.components.layout import render_status_chip
+
+render_status_chip("success")
+render_status_chip("failed")
+render_status_chip("partial")
+render_status_chip("brand_new_slug")
+"""
+
+
+def test_status_chip_maps_each_known_slug_to_its_badge() -> None:
+    app = _run(STATUS_CHIP_SCRIPT)
+
+    assert not app.exception
+    badges = [element.value for element in app.markdown if "badge" in element.value]
+    assert badges == [
+        f":green-badge[{t('value.status_success')}]",
+        f":red-badge[{t('value.status_failed')}]",
+        f":orange-badge[{t('value.status_partial')}]",
+        f":gray-badge[{t('value.status_unknown')}]",
+    ]
+
+
+def test_status_chip_mapping_is_total_for_an_unknown_slug() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_status_chip\n"
+        'render_status_chip("not-a-real-status")\n'
+    )
+
+    # A new source status must not blank the page, so the fallback chip renders.
+    assert not app.exception
+    assert [element.value for element in app.markdown] == [
+        f":gray-badge[{t('value.status_unknown')}]"
+    ]
+
+
+def test_status_dot_renders_one_escaped_fragment() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_status_dot\n"
+        'render_status_dot("<b>stale</b> & <script>", "warn")\n'
+    )
+
+    assert not app.exception
+    # The `dir="rtl"` wrapper is what keeps the inline-level `.dot` at the right
+    # edge inside Streamlit's LTR main block.
+    assert html_texts(app) == [
+        '<div dir="rtl">'
+        '<span class="dot tone-warn">&lt;b&gt;stale&lt;/b&gt; &amp; &lt;script&gt;</span>'
+        "</div>"
+    ]
+
+
+def test_status_dot_rejects_an_unknown_tone() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_status_dot\n"
+        'render_status_dot("stale", "danger")\n'
+    )
+
+    assert app.exception
+    assert "unknown status dot tone" in str(app.exception[0].value)
+
+
+UNOWNED_BAR_LIST_SCRIPT = """
+from dashboard.components.layout import BarRow, render_bar_list
+
+render_bar_list(
+    [BarRow("economy", 4), BarRow("a_dead_domain", 2)],
+    "6 domain-less",
+)
+"""
+
+
+def test_bar_list_scales_each_bar_to_the_largest_count() -> None:
+    app = _run(UNOWNED_BAR_LIST_SCRIPT)
+
+    assert not app.exception
+    bars = [body for body in html_texts(app) if "bar-rail" in body]
+    assert bars == [
+        '<div class="bar-rail"><div class="bar-fill" style="width:100.0%"></div></div>',
+        '<div class="bar-rail"><div class="bar-fill" style="width:50.0%"></div></div>',
+    ]
+
+
+def test_bar_list_renders_counts_through_the_formatter() -> None:
+    app = _run(UNOWNED_BAR_LIST_SCRIPT)
+
+    assert not app.exception
+    values = [element.value for element in app.markdown]
+    # Persian digits, so the row value is display-formatted, not raw.
+    assert "۴" in values
+    assert "۲" in values
+
+
+def test_bar_list_footer_carries_the_caption_and_the_total() -> None:
+    app = _run(UNOWNED_BAR_LIST_SCRIPT)
+
+    assert not app.exception
+    footers = [body for body in html_texts(app) if "bar-list-foot" in body]
+    assert footers == [
+        '<div class="bar-list-foot">'
+        f"<span>{t('section.indicators_by_domain_total')}</span>"
+        "<b>6 domain-less</b></div>"
+    ]
+
+
+def test_bar_list_escapes_the_total_label() -> None:
+    app = _run(
+        "from dashboard.components.layout import BarRow, render_bar_list\n"
+        'render_bar_list([BarRow("economy", 1)], "<img src=x onerror=alert(1)>")\n'
+    )
+
+    assert not app.exception
+    footer = next(body for body in html_texts(app) if "bar-list-foot" in body)
+    assert "&lt;img src=x onerror=alert(1)&gt;" in footer
+    assert "<img" not in footer
+
+
+def test_bar_list_renders_the_shared_empty_state_without_rows() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_bar_list\n" 'render_bar_list([], "0")\n'
+    )
+
+    assert not app.exception
+    assert [info.value for info in app.info] == [t("empty.no_indicators_for_page")]
+
+
+def test_bar_list_keeps_the_owner_link_a_native_page_link(
+    fake_streamlit_connection: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The label of an owned domain must stay a native ``st.page_link`` (AM-17).
+
+    ``st.page_link`` only resolves inside a run whose ``st.navigation`` registered
+    the target pages, so the component is exercised through the real entrypoint
+    (``dashboard/app.py``), with the Overview's domain-counts block replaced by a
+    ``render_bar_list`` call. ``economy`` is a dead domain with no owner, so it must
+    render as plain text and produce no link.
+    """
+    rendered: list[bool] = []
+
+    def fake_domain_counts(domain_counts: pd.DataFrame) -> None:
+        rendered.append(True)
+        render_bar_list(
+            [BarRow("inflation", 15), BarRow("economy", 2)],
+            f"{format_number(17)} {t('table.indicator_count')}",
+        )
+
+    monkeypatch.setattr("dashboard.page_view._render_domain_counts", fake_domain_counts)
+    app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
+    app.run()
+
+    assert not app.exception
+    assert rendered == [True]
+    # One link: the owned domain only.
+    assert len(app.get("page_link")) == 1
+    # The unowned domain stays visible as text.
+    labels = [element.value for element in app.markdown]
+    assert domain_label("economy") in labels
+    bars = [body for body in html_texts(app) if "bar-rail" in body]
+    assert len(bars) == 2
+
+
+# --- Tasks 17-20: the component RTL context --------------------------------
+
+
+def test_component_containers_declare_their_own_rtl_context() -> None:
+    """Each shared component establishes the RTL context its mockup geometry needs.
+
+    Streamlit's main block is ``dir: ltr``, so an inherited ``inline-start`` is the
+    *left* edge. Without these declarations the callout's accent bar and glyph, the
+    KPI band's cell order and the bar-list's row order/footer/fill all mirror to the
+    left of the mockup. The declarations' DOM effect was verified with a Playwright
+    probe against Streamlit 1.61.1 and recorded in the execution log (Task 20);
+    AppTest cannot see computed styles, so the stylesheet is asserted here.
+    """
+    css = direction_css()
+
+    assert f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"] {{ direction: rtl;' in css
+    assert f'{CSS_SELECTORS["kpi_band"]} {{ direction: rtl;' in css
+    assert f'{CSS_SELECTORS["bar_list"]} {{ direction: rtl; }}' in css
+    assert f'{CSS_SELECTORS["bar_list"]} {CSS_SELECTORS["bar_rail"]} {{ direction: rtl;' in css

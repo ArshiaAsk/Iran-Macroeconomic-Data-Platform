@@ -9,7 +9,7 @@ so AppTest keeps seeing typed elements and the HTML-escaping surface stays small
 ``st.html`` is used only where no native element exists (the bar itself inside a
 bar-list row, and a standalone status dot).
 
-Three rules are load-bearing:
+Four rules are load-bearing:
 
 - **All user-visible text resolves through** :func:`dashboard.i18n.t`. No
   component passes a Persian literal to a Streamlit display call, so
@@ -23,23 +23,48 @@ Three rules are load-bearing:
   and accepts an explicit override.
 - **A tone is a closed set.** An unknown tone raises rather than reaching a class
   attribute, so a data value can never inject a CSS class.
+- **A component establishes its own RTL context.** Streamlit's main block is
+  ``dir: ltr``, so an inherited ``inline-start``/``flex-start`` is the *left*
+  edge and a ``st.columns`` row reads left-to-right. Each component's container
+  therefore declares ``direction: rtl`` in its scoped CSS, which is what makes a
+  cell order, an accent bar or a bar fill land on the right edge as in the
+  mockup. The Task 15 table does the same thing with ``dir="rtl"`` on its
+  wrapper.
 """
 
-from collections.abc import Callable, Sequence
-from typing import Final, NamedTuple
+from collections.abc import Callable, Mapping, Sequence
+from types import MappingProxyType
+from typing import Final, Literal, NamedTuple, TypeAlias
 
 import streamlit as st
 
+from dashboard.components.escaping import escape_html
+from dashboard.components.html_table import TONES
+from dashboard.formatting import format_number
 from dashboard.i18n import t
+from dashboard.labels import domain_label
+from dashboard.navigation import page_for_domain
+from src.etl.bronze import STATUS_FAILED, STATUS_PARTIAL, STATUS_SUCCESS
 
 __all__ = [
     "CALLOUT_TONES",
     "KPI_TONES",
+    "STATUS_CHIPS",
+    "STATUS_CHIP_FALLBACK",
+    "BarRow",
     "KpiCell",
+    "render_bar_list",
     "render_callout",
     "render_kpi_band",
     "render_page_header",
+    "render_status_chip",
+    "render_status_dot",
 ]
+
+BadgeColor: TypeAlias = Literal[
+    "red", "orange", "yellow", "blue", "green", "violet", "gray", "grey", "primary"
+]
+"""The colours ``st.badge`` accepts; kept local so the mapping below is typed."""
 
 CALLOUT_TONES: Final[frozenset[str]] = frozenset({"warn", "info", "error"})
 """Accepted callout tones; each maps to one native Streamlit alert element."""
@@ -50,6 +75,32 @@ KPI_TONES: Final[frozenset[str]] = frozenset({"default", "muted", "ok", "warn", 
 ``default`` inherits the metric's own colour and ``muted`` renders the secondary
 text colour; the rest resolve to their token.
 """
+
+STATUS_CHIPS: Final[Mapping[str, tuple[str, BadgeColor]]] = MappingProxyType(
+    {
+        STATUS_SUCCESS: ("value.status_success", "green"),
+        STATUS_FAILED: ("value.status_failed", "red"),
+        STATUS_PARTIAL: ("value.status_partial", "orange"),
+    }
+)
+"""Collection-run status slug -> (catalog key, badge colour)."""
+
+STATUS_CHIP_FALLBACK: Final[tuple[str, BadgeColor]] = ("value.status_unknown", "gray")
+"""The chip for a slug outside :data:`STATUS_CHIPS`, so the mapping is total."""
+
+
+class BarRow(NamedTuple):
+    """One row of the indicators-by-domain bar list.
+
+    Attributes:
+        domain: Domain slug as stored in the catalog (``inflation``, ``fx``, …)
+        indicator_count: Number of indicators in that domain (a count, never a
+            measurement, so the bar list stays unit-safe). Named after the
+            ``available_domains`` column; ``count`` would shadow ``tuple.count``.
+    """
+
+    domain: str
+    indicator_count: int
 
 
 class KpiCell(NamedTuple):
@@ -218,3 +269,115 @@ def render_kpi_band(cells: Sequence[KpiCell], *, key: str = "default") -> None:
             cell_key = f"kpi-{key}-{group}-{index}-tone-{tone}"
             with column, st.container(key=cell_key):
                 _render_kpi_cell(cell)
+
+
+def render_status_chip(status: str) -> None:
+    """Render a standalone collection-run status chip via :func:`st.badge`.
+
+    **Standalone use only.** A chip *inside* an RTL HTML table is the Task 15
+    :class:`dashboard.components.html_table.StatusChip` cell, which renders the
+    mockup's ``.chip`` markup; ``st.badge`` cannot be used there, because
+    ``st.html`` is a separate element rather than an inline container.
+
+    The slug -> tone mapping is **total**: an unrecognised slug renders the unknown
+    chip instead of raising, because the slug is a data value
+    (``DataCollectionLog.status``) and a new source status must not blank a page.
+
+    Args:
+        status: Collection status slug (``success``/``failed``/``partial``)
+    """
+    label_key, colour = STATUS_CHIPS.get(status, STATUS_CHIP_FALLBACK)
+    st.badge(t(label_key), color=colour)
+
+
+def render_status_dot(label: str, tone: str) -> None:
+    """Render a standalone status dot: a coloured dot followed by its label.
+
+    Streamlit has no native bare-dot element, so this is one escaped ``st.html``
+    fragment. It reuses the ``.dot``/``.tone-*`` rules the Task 15 table CSS
+    already emits — they are global class selectors, so they apply here too and no
+    second copy of the CSS is needed.
+
+    The fragment carries its own ``dir="rtl"`` block wrapper, so the dot anchors to
+    the right edge wherever it is placed. ``.dot`` is inline-level, so without the
+    wrapper its position would be decided by the host block's direction — which is
+    LTR for Streamlit's main block, i.e. the dot would drift to the left.
+
+    Args:
+        label: **Already resolved** display text (call ``t(...)`` or a label map
+            first); it is escaped before interpolation
+        tone: One of the shared table tones (``ok``/``warn``/``err``/``accent``/
+            ``neutral``)
+
+    Raises:
+        ValueError: When ``tone`` is not a known tone
+    """
+    validated = _validated(tone, TONES, "status dot")
+    st.html(f'<div dir="rtl"><span class="dot tone-{validated}">{escape_html(label)}</span></div>')
+
+
+def _bar_markup(count: int, largest: int) -> str:
+    """Build one escaped bar fragment, filled in proportion to ``count``.
+
+    The rail is a full-width track and the fill is anchored to the rail's RTL
+    inline start (the right edge, as in the mockup): the ``.bar-rail`` rule in
+    :mod:`dashboard.components.direction` declares ``direction: rtl``, because the
+    fragment sits in Streamlit's LTR main block and would otherwise grow from the
+    left. Only the numeric percentage is interpolated; nothing here is data-derived
+    text.
+    """
+    share = 0.0 if largest <= 0 else max(0.0, min(1.0, count / largest)) * 100.0
+    return (
+        '<div class="bar-rail">' f'<div class="bar-fill" style="width:{share:.1f}%"></div>' "</div>"
+    )
+
+
+def render_bar_list(
+    rows: Sequence[BarRow],
+    total_label: str,
+    *,
+    key: str = "default",
+) -> None:
+    """Render the indicators-by-domain bar list (AM-17).
+
+    Each row is composed with native ``st.columns`` because the label must stay a
+    native ``st.page_link``: only the bar itself is an ``st.html`` fragment
+    (``st.page_link`` cannot live inside ``st.html``). The owner of each domain
+    comes from the navigation registry (:func:`page_for_domain`), the single
+    declaration of domain ownership; a domain with no owner stays visible as plain
+    text rather than being dropped.
+
+    Counts only: the bar encodes a row count and the value column a formatted
+    count, so no unit is ever mixed on one scale.
+
+    Args:
+        rows: One :class:`BarRow` per domain, in display order
+        total_label: **Already formatted** footer total (the formatted count plus
+            its unit label)
+        key: Suffix that makes the panel's keyed container unique when a page
+            renders more than one bar list
+    """
+    with st.container(border=True, key=f"bar-list-{key}"):
+        if not rows:
+            st.info(t("empty.no_indicators_for_page"))
+            return
+        largest = max(row.indicator_count for row in rows)
+        for row in rows:
+            label = domain_label(row.domain)
+            owner = page_for_domain(row.domain)
+            label_column, bar_column, value_column = st.columns([5, 12, 1])
+            with label_column:
+                if owner is None:
+                    st.markdown(label)
+                else:
+                    st.page_link(owner.path, label=label)
+            with bar_column:
+                st.html(_bar_markup(row.indicator_count, largest))
+            with value_column:
+                st.markdown(format_number(row.indicator_count))
+        st.html(
+            '<div class="bar-list-foot">'
+            f"<span>{escape_html(t('section.indicators_by_domain_total'))}</span>"
+            f"<b>{escape_html(total_label)}</b>"
+            "</div>"
+        )

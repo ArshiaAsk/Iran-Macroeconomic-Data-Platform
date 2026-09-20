@@ -84,6 +84,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "page.labor": "بازار کار",
         # Subheaders and expanders.
         "section.indicators_by_domain": "شاخص‌ها به تفکیک حوزه",
+        "section.indicators_by_domain_total": "جمع",
         "section.available_coverage": "پوشش موجود",
         "section.source_freshness": "تازگی داده‌های هر منبع",
         "section.freshness_summary": "{fresh} به‌روز · {stale} کهنه",
@@ -387,6 +388,13 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "value.stale": "کهنه",
         "value.yes": "بله",
         "value.no": "خیر",
+        # Collection-run status chips (Task 20). The slugs are the
+        # ``src.etl.bronze`` STATUS_* constants; the chip mapping is total, so an
+        # unrecognised slug renders the unknown chip rather than raising.
+        "value.status_success": "موفق",
+        "value.status_failed": "ناموفق",
+        "value.status_partial": "ناقص",
+        "value.status_unknown": "نامشخص",
         # Relative-time labels (Task 11): coarse Persian granularity for
         # freshness and provenance display. ``{count}`` is filled by the
         # caller with already-digit-converted text.

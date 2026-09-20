@@ -690,3 +690,95 @@ were never staged or committed (Task 7 owns them).
   (4) The mockup's exact metric/subheader type scale is **not** applied (theme-layer
   change, out of this task's file scope).
 - **Commit hash:** `56a2564`
+
+## Task 20 — (A) ADD the chip, status-dot and bar-list components
+
+- **Files:** `dashboard/components/layout.py`, `dashboard/components/direction.py`
+  (component-hook CSS block + `CSS_SELECTORS`), `dashboard/i18n.py`
+  (`value.status_*`, `section.indicators_by_domain_total`),
+  `tests/unit/dashboard/test_layout.py`, `tests/unit/dashboard/test_connection.py`
+  (test-isolation fix, see deviations), plan checkboxes.
+- **Build:** `render_status_chip(status)` maps the `src.etl.bronze` `STATUS_*` slugs
+  to token tones through the **total** `STATUS_CHIPS` map plus a
+  `STATUS_CHIP_FALLBACK` (`value.status_unknown`, gray) — a new source status must
+  not blank a page, so an unrecognised slug renders the unknown chip instead of
+  raising. `render_status_dot(label, tone)` is one escaped `st.html` fragment that
+  reuses the Task 15 `.dot`/`.tone-*` rules (global class selectors, so no second
+  copy of the CSS). `render_bar_list(rows, total_label, *, key="default")` renders a
+  keyed bordered panel: each row is a native `st.columns([5, 12, 1])` trio whose
+  label is a native `st.page_link` for an owned domain (`page_for_domain`) or plain
+  text for an unowned one, whose middle column is the escaped bar fragment, and
+  whose value column is the formatted count; the footer is one escaped
+  `st.html` line. Only the bar and the footer are HTML — `st.page_link` cannot live
+  inside `st.html`. Counts only, so no unit is ever mixed on one scale.
+- **Live-DOM verification (Streamlit 1.61.1).** A throwaway Playwright probe
+  (`/tmp/phase72-probe-layout/`, not added to the repo) rendered the real components
+  with the real `inject_direction_css()` and read the geometry back. It surfaced a
+  **defect that affected Tasks 17, 19 and 20 alike**:
+  - **Before the fix, every shared-component container was `dir: ltr`** (Streamlit's
+    main block is LTR). Measured: the callout's `border-inline-start` resolved to a
+    3 px **left** border with the `::before` glyph at the left; the KPI band's first
+    cell (`منابع`) rendered **leftmost** at x = 327 and its last cell at x = 1369, so
+    the six cells were mirrored against the mockup's right-to-left order; the bar
+    list's label column sat at x = 340 (left) with the count at x = 1309 (right), the
+    footer put `جمع` at the left and the total at the right, and the bar fill was
+    anchored to the **left** (`fill.left == rail.left`, `anchoredRight: false`),
+    growing left-to-right.
+  - **Fix:** each component container now declares `direction: rtl` — the callout on
+    `[data-testid="stAlertContainer"]`, the KPI band and the bar list on their keyed
+    containers, and the `.bar-rail` as well so the fragment is self-anchoring. This
+    is the same self-contained-RTL-context rule the Task 15 table already follows
+    with `dir="rtl"` on its wrapper, and it mirrors the mockup's
+    `body{direction:rtl}`. A **global** main-block flip was deliberately **not** used:
+    it is not scheduled in this plan and would reorder every un-migrated page's
+    columns.
+  - **After:** callout `borderRight: 3px rgb(154,91,0)`, `borderLeft: 0px`; KPI band
+    `dir rtl` with the first cell at x = 1207–1369 (rightmost) and the last at
+    x = 327–489 (leftmost), separators on `borderRight`, and the secondary-group
+    boundary still applied exactly once at `1px rgb(201,208,218)` (`--border-strong`);
+    bar list `dir rtl` with the label column at 1083–1356 (right), the rail at
+    401–1069 (middle) and the count at 340–387 (left), footer `جمع` at 1331–1356
+    (right) and the total at 340–356 (left); **every fill right-anchored**
+    (`fill.right == rail.right`, `anchoredRight: true`) for the 100 % / 53.3 % /
+    26.7 % / 0 % rows; no page exception. The keyed-container hook is re-confirmed
+    (`st-key-bar-list-overview` on the panel's `stVerticalBlock`).
+  - `render_status_dot` now emits a `dir="rtl"` block wrapper, so the inline-level
+    `.dot` anchors to the right edge (measured 1328–1370, the page's right edge)
+    instead of drifting to the host block's LTR start.
+  - **Recorded limitation (carried to Task 23):** `render_status_chip` uses native
+    `st.badge`, which Streamlit renders inside a shrink-to-fit element at the host
+    block's inline start; at the main-block top level that is the **left** (measured
+    `موفق` at x = 327). Its planned home is an RTL context — the Task 27 sidebar
+    already declares `direction: rtl` — and Task 30 uses the Task 15 in-table
+    `StatusChip` cell, so no planned usage is affected. If a page ever needs a
+    top-level standalone chip, the remedy is the documented hook pattern: wrap it in
+    a keyed container whose rule declares `direction: rtl`.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` →
+    **32 passed** (21 + 11).
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **458 passed** (447 + 11),
+    no regressions against Task 19.
+  - `poetry run mypy src dashboard` → **0 errors**; `ruff check` / `ruff format`
+    clean.
+- **Deviations:** (1) the `direction: rtl` declarations were applied to the **Task 17
+  callout and Task 19 KPI-band CSS as well**, not only to Task 20's own rules: the
+  probe showed all three components were mirrored to the left of the mockup, so the
+  correction is one declaration per component rather than a Task 20-only patch.
+  (2) `render_status_dot`'s fragment gained a `dir="rtl"` wrapper (the plan's
+  signature is unchanged). (3) `tests/unit/dashboard/test_connection.py` gained a
+  module-scoped autouse fixture that clears the `st.cache_resource` `get_connection`
+  cache before and after each test — **not** in the plan's Task 20 file list. That
+  module populates the process-wide cache with a `FakeDatabaseConnection`, and
+  `monkeypatch` undoes the attribute patches but **not** the cache entry, so any later
+  test that runs the real `dashboard/app.py` failed with
+  `'FakeDatabaseConnection' object has no attribute 'test_connection'`. The Task 20
+  owner-link test is the first test in the suite to run the real entrypoint, which is
+  why a pre-existing isolation bug surfaced now (reproduced with
+  `pytest tests/unit/dashboard/test_connection.py tests/unit/dashboard/test_layout.py::test_bar_list_keeps_the_owner_link_a_native_page_link`).
+  It is fixed at the source rather than worked around in the new test.
+  (4) `BarRow`'s second field is `indicator_count`, not the plan's `count`: `count`
+  shadows `tuple.count` under mypy strict.
+- **Finding for Tasks 21/22/23:** Tasks 21 (section header, filter bar) and 22
+  (states) must declare `direction: rtl` on their own containers or they will mirror
+  the same way; Task 23's component catalogue should state the rule once.
+- **Commit hash:** `PENDING`
