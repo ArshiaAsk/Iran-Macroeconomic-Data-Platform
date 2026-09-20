@@ -243,18 +243,107 @@ number matches. No correction was required to the plan's Context. (The font-path
 and Material-icon corrections in §8 come from Tasks 1–2, not from this
 inventory.)
 
-## 6. Results — Task 4 (appended in commit 4)
+## 6. Results — Task 4 (`st.html` and theme switcher)
 
-_Pending._
+Probe payload rendered with `st.html` (own probe app, custom theme); read back
+from the live DOM and computed styles.
 
-## 7. Decisions for Waves A/B (appended in commit 4)
+| probe element / attribute | survives? | evidence | status |
+|---|---|---|---|
+| `<style>` block, class rule | **yes — applies** | `.probe-class` computed `color: rgb(1, 2, 3)` | VERIFIED |
+| `class` attribute | yes | `getAttribute("class") == "probe-class"` | VERIFIED |
+| inline `style` | yes | computed `background-color: rgb(4, 5, 6)` | VERIFIED |
+| `title` attribute | yes | `getAttribute("title") == "tip-text"` | VERIFIED |
+| `dir="rtl"` | yes | `getAttribute("dir") == "rtl"` | VERIFIED |
+| `<bdi>` | yes | element `tagName == "BDI"` | VERIFIED |
+| `data-x` attribute | yes | `getAttribute("data-x") == "hello"` | VERIFIED |
+| `<a href="/Inflation">` | yes | anchor present, `href="/Inflation"` | VERIFIED |
+| `<td title="cell-tip">` | yes | `getAttribute("title") == "cell-tip"` | VERIFIED |
+| `<svg>` | **NO — stripped** | `#probe-svg` absent from the DOM; no red circle rendered | VERIFIED (stripped) |
+| `st.markdown(..., unsafe_allow_html=True)` CSS | **yes — applies** | `#md-probe` computed `color: rgb(9, 8, 7)` | VERIFIED |
+| iframing | not iframed (`document.querySelectorAll("iframe").length == 0`) | — | VERIFIED |
 
-_Pending._
+**Named alternatives for non-surviving items.** `<svg>` is stripped by DOMPurify
+(the HTML profile does not enable the SVG profile). Alternatives: a Material
+`st.icon`/`:material/…:` glyph, a Unicode/emoji glyph, or a CSS-drawn shape
+(borders/`::before`); the mockup's inline-SVG nav glyphs and brand glyph are
+therefore **accepted deviations** (already recorded in the plan's traceability
+table).
 
-## 8. Plan corrections applied (appended in commit 4)
+**`title` tooltip on a `<td>`.** The `title` attribute survives, so the native
+tooltip mechanism is intact, but the tooltip itself could **not be captured in
+headless Chromium** (native tooltips are not rendered in headless screenshots).
+Status: **UNVERIFIED (visual)** — see the owner checklist. The fallback if it
+does not appear in a real browser: `data-` attribute + CSS `::after` tooltip.
 
-_Pending._
+### Theme switcher
 
-## 9. Owner checklist (appended in commit 4)
+| app config | theme choice offered? | evidence | status |
+|---|---|---|---|
+| **custom `[theme]` (base = light)** | **no** | no `[data-testid^="stMainMenuItem-theme-"]` in the DOM after opening the menu, at `auto`, `viewer` and `minimal` | VERIFIED |
+| **no `[theme]` (control)** | **yes** | `stMainMenuItem-theme-System` / `-Light` / `-Dark` present and visible | VERIFIED |
 
-_Pending._
+**Conclusion (D14):** a custom `[theme]` already removes the settings-menu theme
+toggle in Streamlit 1.61.1, so the theme lock is enforced without any
+`toolbarMode` change. Recommended `client.toolbarMode = "viewer"` (hides Deploy +
+developer options, keeps viewer options). No CSS hacks on the native menu.
+
+**`st.badge` / `st.segmented_control` under the custom theme:** both render
+correctly (orange badge chip; segmented control) — screenshot
+`wave-0-assets/badge-segmented.png`. `st.badge` surfaces as Markdown (as the plan
+records).
+
+---
+
+## 7. Decisions for Waves A/B
+
+| Decision | Outcome | Evidence |
+|---|---|---|
+| **Sidebar-brand fallback** | **Fallback (2) — CSS-pinned, with a corrected recipe.** Brand via `[data-testid="stSidebarHeader"]::after` (text from `t("app.brand")`), DB status pinned by `stSidebarContent` flex + `stSidebarUserContent{order:2;margin-top:auto}`. The literal "inject into user content then order" recipe fails to keep the status at the bottom. | §4.4 |
+| **`toolbarMode`** | **`"viewer"`** (hide Deploy + developer options, keep kebab + Print/Record screen). Not required for the theme toggle — the custom `[theme]` already hides it. `minimal` rejected (removes viewer options). | §4.2, §6 |
+| **Static URL** | **Confirmed:** `app/static/Vazirmatn.ttf` (HTTP 200, `font/ttf`, 241 328 B). Wrong `app/dashboard/static/…` → SPA shell, HTTP 200, silent. | §4.1 |
+| **`st.html` survival** | Keeps: `<style>` (applies), `class`, inline `style`, `title`, `dir`, `<bdi>`, `data-*`, `<a href>`, `<td title>`. Stripped: **`<svg>`** → use a Material/Unicode glyph or CSS shape. `st.markdown(unsafe_allow_html=True)` CSS applies. | §6 |
+| **Separator verdict** | **U+066C** (ARABIC THOUSANDS SEPARATOR), confirmed in the browser; **not** U+060C. No delta. | §2 (h) |
+| **Stable vs fragile selectors** | STABLE: `stSidebar`, `stSidebarContent`, `stSidebarHeader`, `stSidebarNav`, `stSidebarNavLink`, `[aria-current="page"]`, `stNavSectionHeader`, `stSidebarUserContent`, `stMainBlockContainer`, `stHeader`, `stToolbar`/`stAppDeployButton`/`stMainMenuButton`. FRAGILE: active-link `st-emotion-cache-*` class; widths needing `!important`; native header height (60 px, not 48). | §4.3, §4.4 |
+| **CSS snippets that worked** | `[data-testid="stSidebar"]{width:256px!important;min-width:256px!important}`; `[data-testid="stSidebarNavLink"][aria-current="page"]{background:…;border-inline-start:3px solid …}`; `[data-testid="stSidebarContent"]{display:flex;flex-direction:column}`; `[data-testid="stSidebarNav"]{order:1}`; `[data-testid="stSidebarUserContent"]{order:2;margin-top:auto}`; `[data-testid="stMainBlockContainer"]{max-width:1360px!important}` | §4.4 |
+| **Task 7 change** | No relocation — commit the existing `dashboard/static/Vazirmatn.ttf` / `OFL.txt` and wire static serving. | §8 |
+| **Task 9 change** | Chrome block uses the stable hooks above; the active-item accent is `[aria-current="page"]`, never the hashed class. | §4.3 |
+| **Task 15 change** | None from Wave 0 (the HTML table wrapper is unaffected); `<svg>` is unavailable inside `st.html`. | §6 |
+| **Task 27 change** | Use the corrected brand recipe (header CSS + pinned status), not `st.sidebar` content. | §4.4 |
+| **Task 28 change** | The native header is 60 px, not 48 px; the 48 px top bar is a new element or a CSS override. `toolbarMode="viewer"` recommended; theme toggle already hidden. | §4.2, §4.4 |
+
+---
+
+## 8. Plan corrections applied
+
+Minimal edits only (no other plan text changed). All are traceable to Tasks 1–4.
+
+1. **Material icons (Review outcome "Corrected" #5):** the bare-name validation
+   claim was wrong — corrected to state membership in `ALL_MATERIAL_ICONS` and
+   that `validate_material_icon` requires the `:material/…:` shortcode.
+2. **Font location (Review outcome "Corrected" #8, the "Verified in the codebase"
+   font bullet, D4, Risks #3, the AGENTS.md NOTES bullet, Task 7):** the font and
+   licence are **already under `dashboard/static/`** (untracked);
+   `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` do not exist. Task 7 now
+   **commits** them rather than relocating them.
+3. **D5 addendum / Task 27:** the brand fallback (2) recipe corrected (brand in
+   `stSidebarHeader`, not `st.sidebar` content; DB status pinned via
+   `stSidebarUserContent` flex).
+4. **D14 addendum / Task 28:** a custom `[theme]` already hides the theme toggle;
+   recommended `toolbarMode="viewer"`; no toolbarMode change required for D14.
+5. **Task 28:** native header height noted as 60 px (mockup 48 px) and the
+   1360 px max-width confirmed.
+6. **Open items:** the two `[ASSUMED]` items (static URL, toolbarMode) marked
+   **Resolved** with evidence; the D11 guard item left **open** (Task 33).
+7. **Tasks 1–4 acceptance/outcome lines and the Gate section:** Wave 0 outcomes
+   recorded; gate rule fixed as **"zero errors"**.
+
+---
+
+## 9. Owner checklist (only what could not be verified)
+
+| Item | Why unverified | Exact manual steps |
+|---|---|---|
+| Native `title` tooltip on a `<td>` inside `st.html` | Headless Chromium does not render native tooltips; the `title` attribute does survive | Run `make dashboard` (or the probe app), open the `st.html` table, hover the cell, and confirm the browser tooltip appears. If it does not, use `data-` + CSS `::after`. |
+| `client.toolbarMode` exact **introducing** version | Not derivable from the installed package (only the allowed values/default are); no network access for release notes | Check the Streamlit release notes for the first version listing `client.toolbarMode` (docs say the `viewer` fix landed in 1.54.0). This does not affect the D9 floor decision (highest requirement remains 1.44.0). |
+| `[aria-current="page"]` stability across Streamlit upgrades | Verified only at 1.61.1 | Re-run the Task 2 selector probe after any Streamlit bump; keep the chrome selectors in the D6 isolated block. |

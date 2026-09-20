@@ -44,7 +44,7 @@ Decisions for Wave A/B live in
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_navigation.py -q` →
   10 passed; ten page modules; render symbols/line numbers match the plan.
 - **Deviations:** none to production.
-- **Commit hash:** _to be filled._
+- **Commit hash:** `8a0e245`
 
 ## Task 4 — (0) VERIFY st.html rendering and theme-switcher behaviour
 

@@ -55,10 +55,10 @@ contract clean-ups (AM-27) are applied.
 2. **AGENTS.md contains no offline/font/CDN rule.** The only relevant sentence is "**Local-only deployment:** No cloud infrastructure; all services run via Docker Compose" (`AGENTS.md:620`). The "no CDN, no webfont, no vendored font file" rule lives in `.streamlit/config.toml:4-6` and `dashboard/components/direction.py:14-16` — a 7.1 *decision*, not a repo hard rule.
 3. **Vendoring a font is natively supported and local.** `[[theme.fontFaces]]` + `server.enableStaticServing=true` serves `static/<file>` at `app/static/<file>` with no CDN (advanced theming and `fontFaces`, **1.44.0**). Base64 is unnecessary.
 4. **`st.badge` exists (1.44.0)** with colours and an icon, so status chips and the "نیازمند بررسی" tag are native, not HTML. **Verified now:** `st.badge` renders as a Markdown directive, so `st.badge("tag", color="orange")` appears to AppTest as `app.markdown == [":orange-badge[tag]"]` (evidence: `AppTest.from_string` probe, 2026-09-20).
-5. **Material icons are supported and validated.** `ALL_MATERIAL_ICONS` lives in `streamlit/material_icon_names.py` (4 267 names) and `validate_material_icon` in `streamlit/string_util.py`; **verified now** that `overview`, `compare_arrows`, `menu_book`, `show_chart`, `analytics`, `currency_exchange`, `swap_horiz`, `bolt`, `home`, `paid`, `trending_up`, `work` all validate.
+5. **Material icons are supported and validated.** `ALL_MATERIAL_ICONS` lives in `streamlit/material_icon_names.py` (4 267 names) and `validate_material_icon` in `streamlit/string_util.py`; **verified now (Wave 0, 2026-09-20)** that `overview`, `compare_arrows`, `menu_book`, `show_chart`, `analytics`, `currency_exchange`, `swap_horiz`, `bolt`, `home`, `paid`, `trending_up`, `work` are all members of `ALL_MATERIAL_ICONS`. **Correction:** `validate_material_icon` expects a full shortcode — a bare name (`"overview"`) **raises** `StreamlitAPIException`; `validate_material_icon(":material/overview:")` returns `":material/overview:"`. The valid `st.Page` form is `icon=":material/overview:"`.
 6. **The declared Streamlit floor is too low for the intended APIs.** `pyproject.toml` declares `^1.36`; `row_height` needs 1.43 and `fontFaces`/`badge`/advanced-theming colours need 1.44 (installed 1.61.1). The floor must be raised (D9).
 7. **There are ten pages, not eleven.** `navigation.py:52-121` registers exactly ten `PageSpec` rows; `page_for_domain("economy")` is deliberately `None`.
-8. **The font files are not yet under `dashboard/static/` (AM-20).** **Verified now:** `ls dashboard/static/` → "No such file or directory"; the font and licence are still at `dashboard/Vazirmatn.ttf` and `dashboard/OFL.txt`, both **untracked** (`git status --short`); `.gitignore` has no rule for `*.ttf` or `static/`. The owner's stated relocation to `dashboard/static/` is **not reflected in the working tree as of this edit**, so the vendoring task must still move the files to `dashboard/static/` (Task 7). Static serving resolves a `static/` directory beside the entrypoint.
+8. **The font files are already under `dashboard/static/` (AM-20, re-verified Wave 0).** **Verified now (Wave 0, 2026-09-20):** `ls dashboard/static/` → `Vazirmatn.ttf` (241 328 B) and `OFL.txt` (4 391 B); both **untracked** (`git status --short` → `?? dashboard/static/`); `git ls-files` returns nothing; `.gitignore` has no `*.ttf`/`static/` rule. `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` **do not exist** (the earlier "still at `dashboard/`" claim was stale). Task 7 therefore only needs to **commit** the existing `dashboard/static/` files and wire static serving — no relocation step. Static serving resolves a `static/` directory beside the entrypoint (Task 2 confirmed `app/static/…` serves the file).
 9. **`st.html` is sanitized by DOMPurify with `USE_PROFILES:{html:true}`.** **Verified now** from `streamlit/static/static/js/Html.Be1G6END.js`: default path `sanitize(body, {USE_PROFILES:{html:true}, FORCE_BODY:true})`; the `unsafe_allow_javascript=True` path adds `ADD_TAGS:["script","style"]` and `ADD_ATTR:["src","type","async","defer","nonce","crossorigin","referrerpolicy","integrity"]`. The HTML profile allows `<bdi>`, `<style>` and the `class`/`dir`/`title`/inline-`style` attributes; SVG is a separate profile that is **not** enabled, so `<svg>` is expected to be stripped (Wave 0 browser task 4 confirms rendering). `st.html` is not iframed and ignores JavaScript by default.
 10. **`direction.py` injects CSS through `st.markdown(..., unsafe_allow_html=True)`, not `st.html`.** Evidence: `dashboard/components/direction.py:104`. Task 9 keeps that API, so `test_direction.py`'s `app.markdown` assertions stay valid.
 11. **AppTest exposes no `html` or `badge` accessor.** **Verified now:** `hasattr(at, "html") == False`, `hasattr(at, "badge") == False`; `at.get("html")` returns an `UnknownElement` whose markup is reachable only as `el.proto.body` (`.value` raises `AttributeError`); `at.get("badge") == []` because badges surface as Markdown (see corrected #4). This drives the test-migration strategy (AM-4) and the test-helper task (Task 16).
@@ -75,7 +75,7 @@ contract clean-ups (AM-27) are applied.
 - `dashboard/components/tables.py:43` caps grid rows at `OBSERVATIONS_ROW_LIMIT = 500`; `tables.py:103-111` is the Jalali-all-dates rule; `MISSING_VALUE` is re-exported there.
 - `test_literal_guard.py` already walks `dashboard/**/*.py` with an AST and a `WHITELISTED_MODULES` allowlist — the precedent for D11.
 - Real DB (read-only, 2026-09-20): active catalog 50, domains 9, sources 7, derived 32, orphan 32, catalog-linked Gold rows 8 195, total Gold rows 20 074.
-- Font assets (AM-20, verified now): `dashboard/Vazirmatn.ttf`, `dashboard/OFL.txt` — **still at `dashboard/`, untracked; `dashboard/static/` does not exist** (`ls`, `git status --short`). `git ls-files` returns nothing for `vazir`/`ofl`/`static`; `.gitignore` has no `*.ttf`/`static/` rule. Task 7 moves them to `dashboard/static/` and commits them.
+- Font assets (AM-20, re-verified Wave 0 2026-09-20): `dashboard/static/Vazirmatn.ttf` and `dashboard/static/OFL.txt` — **already under `dashboard/static/`, untracked** (`ls`, `git status --short` → `?? dashboard/static/`). `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` do not exist. `git ls-files` returns nothing for `vazir`/`ofl`/`static`; `.gitignore` has no `*.ttf`/`static/` rule. Task 7 commits the existing files and wires static serving.
 
 ---
 
@@ -294,29 +294,22 @@ so un-migrated pages are byte-identical. A test pins the opt-in behaviour.
 **D4 — Font (ratified).** Vendoring is permitted and now ratified: `AGENTS.md:620`
 forbids only cloud infrastructure; `theme.fontFaces` + `server.enableStaticServing=true`
 serves a local `static/Vazirmatn.ttf` at `app/static/` with no CDN (1.44.0). The
-font and licence exist in the tree (variable font, wght 100–900, from the official
-`vazirmatn` npm package 33.0.3), but **as of this edit they are still at
-`dashboard/Vazirmatn.ttf` and `dashboard/OFL.txt` and untracked — `dashboard/static/`
-does not exist** (verified now; the owner's stated relocation is not in the working
-tree). Task 7 must move them to `dashboard/static/Vazirmatn.ttf` and
-`dashboard/static/OFL.txt`, commit them, and wire static serving. Do **not**
-download or replace them. The OS-font fallback (`FONT_STACK:39`) stays as a
-safety net only. Browser verification: `http://localhost:8501/app/static/Vazirmatn.ttf`
-must serve the file and the rendered UI must use the family.
+font and licence are already in the tree at `dashboard/static/Vazirmatn.ttf` and
+`dashboard/static/OFL.txt` (variable font, wght 100–900, from the official
+`vazirmatn` npm package 33.0.3), but **untracked** (re-verified Wave 0
+2026-09-20; `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` do not exist). Task 7
+**commits** the existing `dashboard/static/` files and wires static serving — no
+relocation is required. Do **not** download or replace them. The OS-font fallback
+(`FONT_STACK:39`) stays as a safety net only. Browser verification (Task 2
+confirmed): `http://localhost:8501/app/static/Vazirmatn.ttf` serves the file
+(HTTP 200, `font/ttf`, 241 328 B) and `document.fonts` reports `Vazirmatn`
+loaded.
 
 **D5 — Icons and brand.** Use `st.Page(icon=":material/…:")` for every registered
 page; `validate_material_icon` was verified and all ten chosen names validate.
 Provide a mapping for all ten pages, semantically distinct (see Task 25). Inline
 SVG in nav is not supported by `st.Page`.
-**D5 addendum — sidebar brand, ordered fallbacks (ratified, AM-19):** the text
-brand uses **(2) a comment-marked CSS rule in the chrome block that pins a
-`st.sidebar` brand block above the navigation** (content added via `st.sidebar`
-otherwise renders *below* the `st.navigation` links); if that is not stable in
-Wave 0, **(3) the brand moves into the top bar** and the sidebar shows navigation
-only. `st.logo` is **not** used for the text brand (image-only API) — it may
-*optionally* supply only the collapsed-sidebar icon (`icon_image`), never the
-brand text. Task 2 confirms the fallback; Task 27 records which one shipped and
-how the task changed.
+**D5 addendum — sidebar brand, ordered fallbacks (ratified, AM-19; Wave 0 outcome):** the text brand uses **(2) a comment-marked CSS rule in the chrome block that pins the brand above the navigation**, else **(3) the brand moves into the top bar** and the sidebar shows navigation only. `st.logo` is **not** used for the text brand (image-only API) — it may *optionally* supply only the collapsed-sidebar icon (`icon_image`), never the brand text. **Wave 0 (Task 2) confirmed fallback (2) is stable, but with a corrected recipe:** the brand does **not** come from `st.sidebar` content (that renders in `stSidebarUserContent`, *below* the nav, and reordering it above the nav also drags the DB status up). Instead the brand is emitted via a CSS rule on `[data-testid="stSidebarHeader"]` (which already sits **above** `stSidebarNav`), with the text supplied from `i18n.py` through `t()`; the DB status is pinned at the bottom by `[data-testid="stSidebarContent"]{display:flex;flex-direction:column}` + `[data-testid="stSidebarUserContent"]{order:2;margin-top:auto}`. All hooks are stable `data-testid`s. Task 27 records which one shipped and how the task changed (see Task 27).
 
 **D6 — Theme layering.** Prefer native, then CSS, then HTML:
 1. `.streamlit/config.toml` theme options — verified available: `base`,
@@ -403,15 +396,19 @@ keeps AppTest visibility and reduces the escaping surface. The D11 guard bans ra
 calls in page modules while the shared component modules are whitelisted.
 
 **D14 — Theme lock, light only (ratified).** `base="light"` is locked; dark mode
-is not supported in 7.2 and is deferred. **D14 addendum (ratified, AM-19):** hide
-the settings-menu theme toggle with `client.toolbarMode` (`"viewer"` or
-`"minimal"`) **only if Task 4 shows it hides the toggle without removing anything
-the analyst needs**; otherwise accept and document the limitation. **No CSS hacks
-on the native settings menu.** The developer override
-`STREAMLIT_CLIENT_TOOLBAR_MODE=developer` (env var) is documented in the README so
-local development keeps the toolbar. Task 4 confirms the exact behaviour in a
-browser; the outcome is recorded in the design-system doc and NOTES, and dark mode
-is listed in Deferred Scope.
+is not supported in 7.2 and is deferred. **D14 addendum (ratified, AM-19; Wave 0
+outcome):** a custom `[theme]` in `.streamlit/config.toml` **already removes the
+settings-menu theme toggle** in 1.61.1 — Task 2/4 compared a custom-theme app (no
+`stMainMenuItem-theme-*` in the DOM) against a no-theme control
+(`stMainMenuItem-theme-System/Light/Dark` present and visible). **No
+`toolbarMode` change is needed to hide the toggle**; the locked theme meets the
+requirement. Recommended `client.toolbarMode = "viewer"` (Task 2) to also hide
+the native Deploy button and developer options while keeping the kebab and the
+viewer options (Print, Record screen); `minimal` is not recommended (it removes
+Print/Record screen). **No CSS hacks on the native settings menu.** The developer
+override `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` (env var) is documented in the
+README so local development keeps the toolbar. Dark mode is listed in Deferred
+Scope.
 
 ---
 
@@ -558,48 +555,51 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** —
 - **Acceptance:**
-  - [ ] Spike note records each item with its raw evidence.
-  - [ ] Separator result recorded as confirmed or refuted (do not treat as a delta unless confirmed).
-  - [ ] AGENTS.md is quoted verbatim where the discovery claimed a font/CDN rule.
-  - [ ] `st.logo` and `client.toolbarMode` findings recorded.
-  - [ ] Baseline recorded: `make check`, `mypy src dashboard` error count, `pytest tests/unit/dashboard -q` counts, and ten "before" screenshots under `docs/phase-7.2/wave-0-assets/before/`.
-  - [ ] If `mypy dashboard` has pre-existing errors, the per-wave gate is recorded as "no new errors"; otherwise as "zero".
+  - [x] Spike note records each item with its raw evidence.
+  - [x] Separator result recorded as confirmed or refuted (do not treat as a delta unless confirmed).
+  - [x] AGENTS.md is quoted verbatim where the discovery claimed a font/CDN rule.
+  - [x] `st.logo` and `client.toolbarMode` findings recorded.
+  - [x] Baseline recorded: `make check`, `mypy src dashboard` error count, `pytest tests/unit/dashboard -q` counts, and ten "before" screenshots under `docs/phase-7.2/wave-0-assets/before/`.
+  - [x] If `mypy dashboard` has pre-existing errors, the per-wave gate is recorded as "no new errors"; otherwise as "zero". **→ zero errors → gate is "zero".**
 - **Verify:** `poetry run python -c "import streamlit; print(streamlit.__version__)"`, `make check`, `poetry run mypy src dashboard`, `poetry run pytest tests/unit/dashboard -q`, plus a manual browser screenshot of the Overview KPI band.
 
 ### 2. (0) VERIFY shell DOM selectors, static serving, toolbar mode and brand fallbacks
 
 - **Files:** `docs/phase-7.2/wave-0-spike.md` (append).
 - **Build:** In a running app, confirm (a) the sidebar/active-nav/top-bar DOM can be targeted by the existing `CSS_SELECTORS` pattern; (b) `server.enableStaticServing=true` serves a file at `app/static/<name>` when `static/` sits beside `dashboard/app.py`; (c) `[[theme.fontFaces]]` loads the served font; (d) the `client.toolbarMode` value that hides the native Deploy button/kebab (and, per D14 addendum, the settings-menu theme toggle) without removing anything the analyst needs; (e) which sidebar-brand fallback (D5 addendum, AM-19) is stable — the **CSS-pinned brand block above the nav (2)** first, else **brand-in-top-bar (3)**; `st.logo` is not used for the text brand (it may only supply the collapsed-sidebar `icon_image`). Record which selectors are stable vs fragile at 1.61.1.
+- **Wave 0 outcome (2026-09-20, recorded in `docs/phase-7.2/wave-0-spike.md` §4):** (b) `/app/static/Vazirmatn.ttf` → 200 `font/ttf` 241 328 B; the wrong `app/dashboard/static/…` path returns the SPA shell with HTTP 200 (fails silently). (c) `document.fonts` reports `Vazirmatn` `loaded` (weight `100 900`). (d) the custom `[theme]` **already hides the theme toggle** (no `stMainMenuItem-theme-*`); recommended `toolbarMode="viewer"` to hide Deploy + developer options while keeping Print/Record screen. (e) **fallback (2) is stable with a corrected recipe** — brand via `[data-testid="stSidebarHeader"]` CSS (above nav) + DB status pinned via `stSidebarContent` flex + `stSidebarUserContent{margin-top:auto}` (see D5 addendum and Task 27). Stable hooks are all `data-testid`s + `[aria-current="page"]`; the active-link `st-emotion-cache-*` class is FRAGILE.
 - **i18n keys:** none.
 - **Depends:** Task 1.
 - **Acceptance:**
-  - [ ] Font served locally and rendered from `dashboard/static/`, or the failure recorded with its cause and the corrected path.
-  - [ ] The chosen sidebar-brand fallback recorded (CSS-pinned block preferred, else top bar), with how Task 27 changes.
-  - [ ] The chosen `toolbarMode` value recorded, including whether it hides the theme toggle without removing needed controls (D14 addendum).
-  - [ ] Fragile selectors listed explicitly for D6's isolated block.
+  - [x] Font served locally and rendered from `dashboard/static/`, or the failure recorded with its cause and the corrected path.
+  - [x] The chosen sidebar-brand fallback recorded (CSS-pinned block preferred, else top bar), with how Task 27 changes.
+  - [x] The chosen `toolbarMode` value recorded, including whether it hides the theme toggle without removing needed controls (D14 addendum).
+  - [x] Fragile selectors listed explicitly for D6's isolated block.
 - **Verify:** Manual browser check on `make dashboard`.
 
 ### 3. (0) RECORD the verified page inventory and archetypes
 
 - **Files:** `docs/phase-7.2/wave-0-spike.md` (append).
 - **Build:** Re-verify the PAGE INVENTORY table above against the code (ten pages, their `render_*` symbols and line numbers) and the archetype grouping. Correct any drift in this plan's Context.
+- **Wave 0 outcome (2026-09-20):** ten page modules under `dashboard/pages/`, ten `PageSpec` rows; every `render_*` symbol and line number in the PAGE INVENTORY matches the current `page_view.py` (`render_overview_page:742`, `render_correlation_page:1002`, `render_catalog_page:588`, `render_inflation_page:196`, `render_domain_page:138`/`render_domain_body:155`, `render_fx_gold_page:913`, `render_welfare_page:929`, `render_market_page:413`, `render_labor_page:970`); archetypes A1–A5 verified against the code. **No drift — no plan correction needed.**
 - **i18n keys:** none.
 - **Depends:** Task 1.
 - **Acceptance:**
-  - [ ] Ten pages accounted for; each mapped to one archetype.
-  - [ ] Any line-number drift corrected in the plan.
+  - [x] Ten pages accounted for; each mapped to one archetype.
+  - [x] Any line-number drift corrected in the plan (none found).
 - **Verify:** `poetry run python -m pytest tests/unit/dashboard/test_navigation.py -q` and a manual read of `navigation.py:52-121`.
 
 ### 4. (0) VERIFY st.html browser rendering and theme-switcher behaviour
 
 - **Files:** `docs/phase-7.2/wave-0-spike.md` (append).
 - **Build (AM-19):** In a running app, render an `st.html` probe containing a `<style>` block, a `class`, an inline `style`, a `title`, a `dir="rtl"`, a `<bdi>` and an `<svg>`, and record which survive to the DOM (the source read shows DOMPurify `USE_PROFILES:{html:true}`; rendering cannot be proven from source). Separately, confirm in the settings menu whether the theme toggle is still offered when a custom `[theme]` is defined, and decide per the D14 addendum: use `client.toolbarMode="viewer"`/`"minimal"` to hide it **only if** that hides the toggle without removing anything the analyst needs; otherwise accept and document the limitation. **No CSS hacks on the native settings menu.**
+- **Wave 0 outcome (2026-09-20, recorded in `docs/phase-7.2/wave-0-spike.md` §6):** `st.html` **keeps** `<style>` (rule applies), `class`, inline `style`, `title`, `dir="rtl"`, `<bdi>`, `data-*` and `<a href>`; `<svg>` is **stripped** (use an icon font / Material glyph or a CSS-drawn shape instead). `st.markdown(unsafe_allow_html=True)` CSS applies (confirmed, as `direction.py:104` relies on). A `<td title>` survives; the native hover tooltip could not be captured in headless Chromium (UNVERIFIED — see the spike note's owner checklist). Theme toggle: **already hidden by the custom `[theme]`** (no-theme control exposes System/Light/Dark); no toolbarMode change needed.
 - **i18n keys:** none.
 - **Depends:** Tasks 1, 2.
 - **Acceptance:**
-  - [ ] Survival of each probe element/attribute recorded; any non-surviving attribute has a named alternative (`data-` + CSS `::after`, or `st.markdown(unsafe_allow_html=True)`).
-  - [ ] Theme-toggle behaviour recorded; the mitigation (toolbarMode) or the accepted limitation written into the design-system doc and NOTES.
-  - [ ] The developer override `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` is noted for the README (Task 47).
+  - [x] Survival of each probe element/attribute recorded; any non-surviving attribute has a named alternative (`data-` + CSS `::after`, or `st.markdown(unsafe_allow_html=True)`).
+  - [x] Theme-toggle behaviour recorded; the mitigation (toolbarMode) or the accepted limitation written into the design-system doc and NOTES.
+  - [x] The developer override `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` is noted for the README (Task 47).
 - **Verify:** Manual browser check on `make dashboard`.
 
 ---
@@ -628,8 +628,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 
 ### 7. (A) VENDOR the Vazirmatn font and wire theme + static serving
 
-- **Files:** `dashboard/static/` (new directory), `dashboard/Vazirmatn.ttf` → `dashboard/static/Vazirmatn.ttf`, `dashboard/OFL.txt` → `dashboard/static/OFL.txt`, `.streamlit/config.toml`, `dashboard/components/tokens.py` (font token), `.gitignore`, packaging/Docker copy-paths, `docs/phase-7.2/design-system.md`.
-- **Build (AM-20):** Move the existing font and licence into `dashboard/static/` — **verified now** they are still at `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` (untracked) and `dashboard/static/` does not exist, so this relocation step is required even though the owner intended them already moved — and commit them; do **not** download or replace them. Set `[server] enableStaticServing = true`; add `[[theme.fontFaces]]` with `family="Vazirmatn"`, `url="app/static/Vazirmatn.ttf"` and `weight="100 900"`; set `theme.font`, `theme.headingFont`, `theme.codeFont` to full fallback stacks (`Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif` for UI; the mono stack for code). Keep the licence file beside the font. Check `.gitignore`, packaging and Docker/Compose copy-paths so `dashboard/static/` ships with the dashboard. Describe the graceful fallback to the OS stack. If the `app/static/…` URL does not resolve, record the cause and the corrected path. Update the existing 7.1 comments in `.streamlit/config.toml:4-6` and `direction.py:14-16` so they no longer contradict the code. **AM-24:** this is the first of the three global-look tasks (7, 8, 9); once it lands the font changes on all ten pages, so the pages are **not** visually unchanged — Task 10's screenshot script and Task 24's after-screenshot review cover it.
+- **Files:** `dashboard/static/Vazirmatn.ttf`, `dashboard/static/OFL.txt` (both already present, untracked), `.streamlit/config.toml`, `dashboard/components/tokens.py` (font token), `.gitignore`, packaging/Docker copy-paths, `docs/phase-7.2/design-system.md`.
+- **Build (AM-20; Wave 0 re-verified):** **Commit** the existing font and licence under `dashboard/static/` — **verified now (Wave 0, 2026-09-20)** they are already at `dashboard/static/Vazirmatn.ttf` (241 328 B) and `dashboard/static/OFL.txt` (4 391 B), untracked, and `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` do not exist. No relocation step is required (the earlier "still at `dashboard/`" claim was stale). Do **not** download or replace them. Set `[server] enableStaticServing = true`; add `[[theme.fontFaces]]` with `family="Vazirmatn"`, `url="app/static/Vazirmatn.ttf"` and `weight="100 900"`; set `theme.font`, `theme.headingFont`, `theme.codeFont` to full fallback stacks (`Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif` for UI; the mono stack for code). Keep the licence file beside the font. Check `.gitignore`, packaging and Docker/Compose copy-paths so `dashboard/static/` ships with the dashboard. Describe the graceful fallback to the OS stack. The `app/static/…` URL is **confirmed** to resolve (Task 2: HTTP 200, `font/ttf`, 241 328 B; `document.fonts` reports `Vazirmatn` loaded). Update the existing 7.1 comments in `.streamlit/config.toml:4-6` and `direction.py:14-16` so they no longer contradict the code. **AM-24:** this is the first of the three global-look tasks (7, 8, 9); once it lands the font changes on all ten pages, so the pages are **not** visually unchanged — Task 10's screenshot script and Task 24's after-screenshot review cover it.
 - **i18n keys:** none.
 - **Depends:** Tasks 2, 5.
 - **Acceptance:**
@@ -905,7 +905,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 ### 27. (B) BUILD the sidebar shell (brand, DB status, active item)
 
 - **Files:** `dashboard/app.py`, `dashboard/components/direction.py`, `dashboard/i18n.py`, `tests/unit/dashboard/test_app_router.py`.
-- **Build (AM-19):** In `main():48-62`, render the brand header ("سامانهٔ داده‌ها") using the D5-addendum fallback confirmed in Task 2 — **(2)** a comment-marked CSS rule that pins a `st.sidebar` brand block above the navigation (content added via `st.sidebar` otherwise renders below the `st.navigation` links), else **(3)** brand-in-top-bar — and record which shipped. `st.logo` is **not** used for the text brand; it may optionally supply only the collapsed-sidebar `icon_image`. Keep `st.navigation(position="sidebar")`, and replace the `st.success`/`st.error` banner (`render_database_status:39-45`) with the pinned status-dot component at the bottom. Active-item styling comes from the chrome CSS block (Task 9).
+- **Build (AM-19; Wave 0 corrected recipe):** In `main():48-62`, render the brand header ("سامانهٔ داده‌ها") using **fallback (2)** — confirmed stable in Task 2. **Correction from Wave 0:** the brand is **not** added via `st.sidebar` content (that renders in `stSidebarUserContent`, *below* the nav; reordering it above the nav also drags the DB status up). Instead emit a comment-marked chrome CSS rule on `[data-testid="stSidebarHeader"]` (which already sits above `stSidebarNav`) whose `::after` `content` comes from `t("app.brand")`, and pin the DB status with `[data-testid="stSidebarContent"]{display:flex;flex-direction:column}` + `[data-testid="stSidebarUserContent"]{order:2;margin-top:auto}`. `st.logo` is **not** used for the text brand; it may optionally supply only the collapsed-sidebar `icon_image` in `stSidebarHeader`. Keep `st.navigation(position="sidebar")`, and replace the `st.success`/`st.error` banner (`render_database_status:39-45`) with the pinned status-dot component at the bottom. Active-item styling comes from the chrome CSS block (Task 9). Record which fallback shipped in the design-system doc.
 - **i18n keys:** `app.brand`="سامانهٔ داده‌ها", `app.db_status_label`="پایگاه داده متصل", `app.db_status_offline`="پایگاه داده متصل نیست".
 - **Depends:** Tasks 9, 20.
 - **Acceptance:**
@@ -917,7 +917,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 ### 28. (B) BUILD the top bar / breadcrumb with the last-collection stamp
 
 - **Files:** `dashboard/app.py`, `dashboard/components/layout.py`, `dashboard/queries.py`, `dashboard/i18n.py`, `tests/unit/dashboard/test_layout.py`.
-- **Build (AM-19):** A 48 px top bar rendered once in the shell, built with native `st.columns` inside `st.container` plus scoped CSS (D13/AM-7): breadcrumb from the registry group + page label on one side; "آخرین گردآوری: <Jalali date> · <time> · منطقهٔ زمانی تهران" on the other, sourced from `cached_source_freshness()` (max `collection_timestamp`, TTL from Task 26). Apply `layout="wide"` plus a max content width of 1360 px and account for the fixed native header (main-container top padding). Full-bleed styling is optional; if a non-bleed fallback is used it is recorded as an accepted mockup deviation. Apply the `client.toolbarMode` value chosen in Task 2 to hide the native Deploy button/kebab (and the settings-menu theme toggle, per the D14 addendum); document the `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` env override for local development.
+- **Build (AM-19; Wave 0 outcomes):** A 48 px top bar rendered once in the shell, built with native `st.columns` inside `st.container` plus scoped CSS (D13/AM-7): breadcrumb from the registry group + page label on one side; "آخرین گردآوری: <Jalali date> · <time> · منطقهٔ زمانی تهران" on the other, sourced from `cached_source_freshness()` (max `collection_timestamp`, TTL from Task 26). Apply `layout="wide"` plus a max content width of 1360 px and account for the fixed native header (main-container top padding). **Wave 0 note:** the native `[data-testid="stHeader"]` is **60 px** tall and `position:absolute` at `z-index:999990`, not 48 px — the 48 px mockup bar is a *new* element (or a CSS override of the native header), and the main-container top padding is already 96 px; Task 2 confirmed `[data-testid="stMainBlockContainer"]{max-width:1360px}` applies. Full-bleed styling is optional; if a non-bleed fallback is used it is recorded as an accepted mockup deviation. Apply the `client.toolbarMode` value chosen in Task 2 (`"viewer"` recommended) to hide the native Deploy button/kebab; **the settings-menu theme toggle is already hidden by the custom `[theme]`** (Task 2/4), so no toolbarMode change is needed for D14. Document the `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` env override for local development.
 - **i18n keys:** `shell.last_collection`="آخرین گردآوری: {date}", `shell.timezone`="منطقهٔ زمانی تهران", `shell.breadcrumb_root`="سامانه".
 - **Depends:** Tasks 11, 26, 27.
 - **Acceptance:**
@@ -1196,7 +1196,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 
 ### Gate (every wave)
 
-`make check` (format + lint + typecheck + test) and the router smoke of all ten pages. Because `make typecheck` covers `src/` only, waves must also run `poetry run mypy src dashboard`. **AM-21:** the per-wave `mypy` gate is **"zero errors"** if the Task 1 baseline had none, otherwise **"no new errors"** against the recorded baseline error count; the baseline `make check`/`pytest` results are the reference for "no regressions".
+`make check` (format + lint + typecheck + test) and the router smoke of all ten pages. Because `make typecheck` covers `src/` only, waves must also run `poetry run mypy src dashboard`. **AM-21:** the per-wave `mypy` gate is **"zero errors"** if the Task 1 baseline had none, otherwise **"no new errors"** against the recorded baseline error count; the baseline `make check`/`pytest` results are the reference for "no regressions". **Wave 0 baseline (2026-09-20):** `mypy src dashboard` → **0 errors**, so the gate is **"zero errors"**; `make check` PASS (1 158 passed, 3 skipped), dashboard subset 341 passed — "no regressions" against those.
 
 ---
 
@@ -1222,7 +1222,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 ## NOTES
 
 - **AGENTS.md boundary is absolute.** Nothing under `src/`, `alembic/` or `airflow/` changes. If a task seems to need it, it belongs in Deferred Scope. This is how the IMF forecast item was deferred in 7.1.
-- **AGENTS.md contains no offline/font/CDN rule (AM-20).** The only relevant line is `AGENTS.md:620` ("Local-only deployment: No cloud infrastructure"). The stricter "no CDN, no webfont, no vendored font file" wording is a **7.1 decision** documented at `.streamlit/config.toml:5-6` and `dashboard/components/direction.py:14-16`. **D4 is ratified:** the owner reverses that 7.1 decision and vendors Vazirmatn locally. **Verified now:** the font and licence are still at `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` (untracked) and `dashboard/static/` does not exist; Task 7 relocates them to `dashboard/static/` and commits them. The OS fallback remains a safety net only.
+- **AGENTS.md contains no offline/font/CDN rule (AM-20).** The only relevant line is `AGENTS.md:620` ("Local-only deployment: No cloud infrastructure"). The stricter "no CDN, no webfont, no vendored font file" wording is a **7.1 decision** documented at `.streamlit/config.toml:5-6` and `dashboard/components/direction.py:14-16`. **D4 is ratified:** the owner reverses that 7.1 decision and vendors Vazirmatn locally. **Verified now (Wave 0):** the font and licence are already at `dashboard/static/Vazirmatn.ttf` / `dashboard/static/OFL.txt` (untracked); Task 7 commits them and wires static serving (no relocation). The OS fallback remains a safety net only.
 - **D9 lock-file implication.** Raising the constraint to `>=1.44,<2` should not change any resolved version (1.61.1 is already installed). If `poetry lock` proposes changes, stop and report rather than accepting upgrades silently.
 - **Theme lock (D14 addendum, AM-19).** `base="light"` is locked; dark mode is unsupported and deferred. The settings-menu theme toggle is hidden with `client.toolbarMode="viewer"`/`"minimal"` **only if** Task 4 shows that hides the toggle without removing anything the analyst needs; otherwise it is accepted and documented as a limitation. No CSS hacks on the native settings menu. Local development keeps the toolbar via `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` (documented in the README).
 - **Plan-template conflict.** `.agents/commands/plan-feature.md:171-357` prescribes a different skeleton (Phases 1–4, `VALIDATION COMMANDS`, `ACCEPTANCE CRITERIA`) than the 7.1 plan. Per the task instruction, the 7.1 skeleton wins; the extra sections (`VALIDATION COMMANDS`, `ACCEPTANCE CRITERIA`) are folded into `## TESTING & VALIDATION` and the per-task acceptance lists.
@@ -1266,7 +1266,7 @@ AM-24); **18** page header (AM-22); **24** Wave A after-screenshot review
 
 1. **Streamlit-version-fragile CSS.** Sidebar width, active-nav bar, pinned status and top bar rely on internal DOM. Mitigation: one isolated, version-named block + manual checklist; prefer theme options wherever possible.
 2. **HTML table vs native dataframe.** The HTML component is escaped and RTL-correct but loses sorting/virtualization; the native grid is sortable but LTR and cannot style chips. Mitigation: the D1 classification is explicit per table; in-table chips use the HTML variants, `st.badge` is standalone-only.
-3. **Font vendoring (AM-20).** Ratified; **verified now** the files are still at `dashboard/Vazirmatn.ttf` / `dashboard/OFL.txt` (untracked) and `dashboard/static/` does not exist, so Task 7 must relocate them. Mitigation: Task 2 confirms the serving path; Task 7 relocates and commits; OS fallback retained.
+3. **Font vendoring (AM-20).** Ratified; **verified now (Wave 0)** the files are already at `dashboard/static/Vazirmatn.ttf` / `dashboard/static/OFL.txt` (untracked), so Task 7 only commits them. Mitigation: Task 2 confirmed the `app/static/…` serving path and that `document.fonts` loads the family; Task 7 commits the files and wires static serving; OS fallback retained.
 4. **Calendar mapping is a heuristic.** `SOURCE_CALENDAR` is a slug-keyed map, in tension with 7.1's "metadata over lists" principle. Mitigation: it is presentation-only, opt-in, and pinned by a test; a DB-held calendar would be a future phase.
 5. **"Gold observations" label semantics.** The KPI counts catalog-linked rows (8 195), not total Gold (20 074). Mitigation: keep the label, state the scope in the tooltip (D2); tooltip copy is data-agnostic (AM-9).
 6. **No visual-regression tooling.** Mitigation: Wave 0 browser checklist, per-archetype owner review, optional screenshot script; validation doc separates verified from unverified.
@@ -1277,8 +1277,8 @@ AM-24); **18** page header (AM-22); **24** Wave A after-screenshot review
 
 ### Open items
 
-- `[ASSUMED]` The D11 guard can be scoped per **function** without false positives; validate in Task 33 before relying on it in later waves.
-- `[ASSUMED]` `client.toolbarMode="viewer"`/`"minimal"` hides the native Deploy button/kebab and the theme toggle without removing anything the analyst needs; Task 2/Task 4 confirm (D14 addendum).
-- `[ASSUMED]` The `app/static/Vazirmatn.ttf` URL resolves when the font sits in `dashboard/static/` beside `dashboard/app.py`; Task 2 confirms or records the corrected path.
+- `[ASSUMED]` The D11 guard can be scoped per **function** without false positives; validate in Task 33 before relying on it in later waves. **(Still open — not testable in Wave 0.)**
+- **Resolved (Wave 0, Task 2/4):** `client.toolbarMode` behaviour is verified — `viewer` hides the native Deploy button and developer options while keeping the kebab and viewer options (Print, Record screen); `minimal` hides the whole menu; and the settings-menu **theme toggle is already hidden by the custom `[theme]`**, so no toolbarMode change is needed for D14. Recommended value: `"viewer"`.
+- **Resolved (Wave 0, Task 2):** `http://localhost:8501/app/static/Vazirmatn.ttf` resolves (HTTP 200, `font/ttf`, 241 328 B) when the font sits in `dashboard/static/` beside `dashboard/app.py`; the wrong `app/dashboard/static/…` path returns the SPA shell with HTTP 200 (fails silently).
 
 Resolved since the review (no longer open): the font-vendoring ratification (D4); the Material-icon set (D5); the **sidebar-brand fallback order** (D5 addendum, AM-19 — CSS-pinned sidebar block, else top bar; `st.logo` icon-only); the **settings-menu theme-toggle handling** (D14 addendum, AM-19 — hide via `toolbarMode` only if nothing needed is removed, else document the limitation, no CSS hacks); `theme.fontFaces` accepting the `app/static/…` path (source-confirmed, browser-confirmed in Task 2); the separator observation (Task 1 records confirmed/refuted).
