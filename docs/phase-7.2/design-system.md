@@ -1,0 +1,549 @@
+# Phase 7.2 design system (first draft)
+
+The reference for the dashboard's presentation layer: the tokens, the theme
+mapping, the shared components, the layout contract, the CSS ownership model and
+the testing rules.
+
+**Status: first draft (Task 23).** It covers what exists after Wave A
+(Tasks 1–22). Task 47 extends the component catalogue with the pieces that land
+later — the top bar (Task 28), the sidebar shell (Task 27) and the dev-only
+screenshot script (Task 10) — and with the per-archetype review outcomes.
+
+- Mockup: [`docs/design/phase-7.2/overview-redesign-mockup.html`](../design/phase-7.2/overview-redesign-mockup.html)
+- Plan and decisions: [`docs/plans/phase-7.2-dashboard-redesign.md`](../plans/phase-7.2-dashboard-redesign.md)
+- Wave 0 verification: [`docs/phase-7.2/wave-0-spike.md`](wave-0-spike.md)
+- Per-task record: [`docs/phase-7.2/execution-log.md`](execution-log.md)
+- Wave A review: `docs/phase-7.2/VALIDATION.md` — created by Task 24; linked
+  here once it exists.
+
+Everything below was verified against the installed **Streamlit 1.61.1** unless a
+line says otherwise.
+
+---
+
+## 1. Layering: native, then CSS, then HTML (D6, D13)
+
+A dashboard feature is built in this order, and only falls through when the layer
+above cannot express it:
+
+1. **A native Streamlit element** styled by the `[theme]` options in
+   [`.streamlit/config.toml`](../../.streamlit/config.toml). This is the default
+   and it is what keeps `AppTest` able to see the UI.
+2. **Scoped CSS** owned by
+   [`dashboard/components/direction.py`](../../dashboard/components/direction.py),
+   targeting a keyed container or a stable `data-testid` (sections 5 and 6).
+3. **An escaped `st.html` fragment**, only where no native element exists: the
+   RTL table cells, the bar inside a bar-list row, the standalone status dot, the
+   brand block.
+
+The rule behind the order is **D13 (native-first)**: `st.html` content is
+invisible to `AppTest`, so every fragment is a surface that unit tests cannot
+read. Where a native element must sit beside an HTML fragment, the row is
+composed with native `st.columns` — a bar-list row is a native `st.page_link`
+beside an escaped `st.html` bar, because `st.page_link` cannot live inside
+`st.html`.
+
+## 2. Design tokens
+
+[`dashboard/components/tokens.py`](../../dashboard/components/tokens.py) is the
+single source for the palette, the radii and the font families. It mirrors the
+mockup's `:root` block exactly, and
+`tests/unit/dashboard/test_tokens.py` parses the mockup and fails when the two
+drift — so a token added to the mockup cannot be silently forgotten in code.
+
+| Token | Value | Used for |
+|---|---|---|
+| `bg` | `#F6F7F9` | App background |
+| `surface` | `#fff` | Panels, tables, alerts |
+| `surface-2` | `#F1F3F6` | Table headers |
+| `hover` | `#F3F6FA` | Table row hover |
+| `border` | `#E1E5EB` | Hairlines, cell separators, chart grid |
+| `border-strong` | `#C9D0DA` | Group boundaries, missing-value dash, chart zero line |
+| `text-1` | `#1B2430` | Primary text |
+| `text-2` | `#4A5566` | Secondary text, units |
+| `text-3` | `#667385` | Tertiary text, section sub-labels, footers |
+| `accent` | `#1D4E89` | Brand, links, active nav, bar fill |
+| `accent-soft` | `#E8EFF8` | Active nav background, accent chip background |
+| `ok` / `ok-bg` | `#1F7A4D` / `#E6F3EC` | Success tone |
+| `warn` / `warn-bg` | `#9A5B00` / `#FBF1DC` | Warning tone (the methodology callout) |
+| `err` / `err-bg` | `#B42318` / `#FDECEA` | Error tone |
+| `neutral-bg` | `#EEF1F5` | Bar rail, unit chip background |
+| `radius` | `6px` | Alerts, inputs, chips |
+| `radius-lg` | `8px` | Panels, KPI band, table wrapper |
+| `font-ui` | `"Vazirmatn",Tahoma,system-ui,sans-serif` | All UI text |
+| `font-mono` | `"DejaVu Sans Mono",monospace` | Indicator ids, units |
+
+`CHART_CATEGORICAL_COLOR_TOKENS` names the seven tokens that make up the chart
+palette, in order, and `CHART_CATEGORICAL_COLORS` derives their values from
+`TOKENS` — so the palette cannot drift from the theme and no literal colour
+exists in the chart layer.
+
+`token(name)` raises on an unknown name; `css_custom_properties()` emits the
+`--name: value;` block that `direction_css()` puts in `:root`.
+
+**How the tokens reach the browser.** Three consumers, one source: the
+`[theme]` block in `config.toml` (Streamlit-rendered elements), the `:root`
+custom properties emitted by `direction_css()` (component CSS), and
+`plotly_template()` (charts).
+
+## 3. Theme mapping
+
+[`.streamlit/config.toml`](../../.streamlit/config.toml) holds the options that
+Streamlit can only apply through the theme. It never restates a token value that
+the tests can compare — `test_tokens.py` asserts the chart palette equals
+`CHART_CATEGORICAL_COLORS` in order.
+
+| Theme option | Value / source |
+|---|---|
+| `base` | `light` (locked — section 9) |
+| `primaryColor` | `accent` |
+| `backgroundColor` | `bg` |
+| `secondaryBackgroundColor` | `surface` |
+| `textColor` | `text-1` |
+| `borderColor` | `border` |
+| `baseRadius` / `buttonRadius` | `radius` |
+| `baseFontSize` | `14` |
+| `font` / `headingFont` | The Persian-first family list with an OS fallback tail (`Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif`) |
+| `codeFont` | The mono list (`"DejaVu Sans Mono", "SFMono-Regular", Menlo, Consolas, monospace`) |
+| `[[theme.fontFaces]]` | `Vazirmatn`, `app/static/Vazirmatn.ttf`, weight `100 900` |
+| `dataframeHeaderBackgroundColor` | `surface-2` |
+| `chartCategoricalColors` | `CHART_CATEGORICAL_COLORS`, in order |
+| `showWidgetBorder`, `showSidebarBorder` | enabled |
+| `theme.{red,orange,yellow,blue,green}{Color,BackgroundColor,TextColor}` | `Color`/`TextColor` = the tone token, `BackgroundColor` = its `*-bg` token, so `st.warning`/`st.info`/`st.error` match the callout tones |
+| `server.enableStaticServing` | `true` (serves `app/static/Vazirmatn.ttf`) |
+
+The `font`/`codeFont` values are **not** the `font-ui`/`font-mono` token
+strings: the theme takes a richer family list (with `IRANSans`/`Menlo` before the
+generic tail), while `direction.py` repeats the token stack as `FONT_STACK` for
+the CSS that must not depend on the theme. Only the palette, the radii and the
+base size are asserted token-equal (`test_tokens.py`).
+
+`client.toolbarMode` is **not** set yet. The custom `[theme]` already hides the
+theme toggle (section 9), so the only remaining reason for it is hiding the
+native Deploy button and developer options; the plan's recommended `"viewer"`
+value lands with the top bar (Task 28), together with the documented
+`STREAMLIT_CLIENT_TOOLBAR_MODE=developer` local override.
+
+**The font is vendored, not fetched.** `dashboard/static/Vazirmatn.ttf` (241 328 B,
+variable, wght 100–900, from the official `vazirmatn` npm package 33.0.3) plus its
+licence `dashboard/static/OFL.txt` are committed; static serving resolves
+`app/static/<file>`. The OS stack in `font-ui` is a graceful-fallback safety net
+only, and `FONT_STACK` in `direction.py` repeats it for the CSS that must not
+depend on the theme. Verified in Wave 0: the URL returns HTTP 200 `font/ttf` and
+`document.fonts` reports `Vazirmatn` loaded.
+
+## 4. Component catalogue
+
+Every public `render_*` and `build_*` in `dashboard/components/` is listed here;
+`tests/unit/dashboard/test_design_system_doc.py` scans that package and fails when
+one is missing. Unless a row says otherwise, the component is **native-first** and
+needs no `unsafe_allow_html`.
+
+### 4.1 Layout and states — `components/layout.py`, `components/states.py`
+
+| Component | Signature | Purpose |
+|---|---|---|
+| `render_page_header` | `(title_key, *, callout_key=None, tone="warn")` | The one page-header pattern: a native `st.title` plus an optional callout. |
+| `render_callout` | `(key, *, tone="warn", label_key=None, detail=None, container_key=None)` | The mockup's callout as a native `st.warning`/`st.info`/`st.error`. |
+| `render_kpi_band` | `(cells, *, key="default")` | One bordered row of metric cells, with an optional separated secondary group. |
+| `render_section_header` | `(title_key, *, subtitle=None, trailing=None, key=None)` | A native `st.subheader` with optional secondary text, laid out as one baseline-aligned row. |
+| `render_filter_bar` | `(controls, *, trailing=(), key="default")` | One filter-bar row over an arbitrary number of control callables. |
+| `render_status_chip` | `(status)` | A standalone collection-run chip (`st.badge`), for use **outside** tables. |
+| `render_status_dot` | `(label, tone)` | A standalone coloured dot with a label; the one escaped fragment here. |
+| `render_bar_list` | `(rows, total_label, *, key="default")` | The indicators-by-domain bar panel. |
+| `render_empty` | `(key)` | The shared empty state for any `empty.*` message. |
+| `render_error` | `(key, *, detail=None)` | The shared error state: message, retry hint, optional detail. |
+| `render_loading` | `()` | The shared loading placeholder. |
+
+```python
+from dashboard.components.layout import KpiCell, render_kpi_band, render_page_header
+from dashboard.components.states import render_empty
+
+render_page_header("page.overview", callout_key="warn.forecasts_indistinguishable")
+render_kpi_band(
+    [
+        KpiCell("metric.sources", "۷"),
+        KpiCell("metric.gold_observations", "۸٬۱۹۵", help_key="metric.gold_observations_help"),
+        KpiCell("metric.derived_series", "۳۲", tone="muted", secondary=True),
+    ],
+    key="overview",
+)
+if frame.empty:
+    render_empty("empty.no_observations")
+```
+
+**Contract details that are easy to get wrong.**
+
+- **Tones are closed sets.** `CALLOUT_TONES`, `KPI_TONES` and the table `TONES`
+  reject an unknown value with `ValueError` before it can reach a class attribute,
+  so a data value can never inject a CSS class. `render_status_chip` is the one
+  deliberate exception: its slug is a data value, so an unrecognised collection
+  status falls back to the "unknown" chip instead of blanking a page.
+- **Already-formatted vs catalog input.** `title_key`, `callout_key`, `label_key`,
+  `help_key` and `tag_key` are **catalog keys** and go through `t()`. `value`,
+  `subtitle`, `trailing`, `detail`, `label` and `total_label` are **already
+  resolved** text (call `t()` or a label map first); numbers must already be
+  formatted with `dashboard.formatting`.
+- **Container keys.** A keyed container is the CSS hook, and Streamlit raises on a
+  repeated container key. `render_callout` derives its key from the body key and
+  takes `container_key` to disambiguate; `render_section_header` derives it from
+  the title; the components that a page may render more than once
+  (`render_kpi_band`, `render_bar_list`, `render_filter_bar`) take an explicit
+  `key`. The states inherit the callout's rule, so one state key must not render
+  twice in a run.
+- **`st.badge` cannot live inside `st.html`.** A chip or dot *inside* the RTL
+  table is the typed `StatusChip`/`Dot` cell (section 8); `render_status_chip` is
+  for standalone use.
+- **The page header emits no keyed class of its own** — `st.title` already takes
+  the theme's heading font and size, and the optional callout brings its own hook.
+
+### 4.2 Tables — `components/html_table.py`
+
+| Component | Signature | Purpose |
+|---|---|---|
+| `render_html_table` | `(columns, rows, *, density="comfortable", null_placeholder="—")` | Render an RTL HTML table from typed cells. |
+| `build_html_table` | `(columns, rows, *, density=…, null_placeholder=…)` | The same table as a markup string (used by the tests). |
+
+### 4.3 Filters and diagnostics — `components/filters.py`, `components/quality.py`
+
+| Component | Signature | Purpose |
+|---|---|---|
+| `render_filters` | `(catalog, key_prefix, default_indicators=None)` | The common domain/frequency/source/indicator/date filter set; returns the exact selection. |
+| `render_quality_summary` | `(quality)` | Quality diagnostics for the selected series. |
+
+### 4.4 Downloads — `components/exports.py`
+
+| Component | Signature | Purpose |
+|---|---|---|
+| `render_data_downloads` | `(frame, file_prefix)` | CSV/Excel download buttons for a frame. |
+| `render_chart_downloads` | `(figure, file_prefix)` | PNG/SVG/HTML download buttons for a figure. |
+
+### 4.5 Charts — `components/charts.py`
+
+`build_time_series_chart`, `build_overlay_chart`, `build_small_multiples_chart`,
+`build_scaled_time_series_chart`, `build_survey_year_chart`,
+`build_chain_linking_chart` and `build_correlation_chart` are figure builders, not
+renderers; every one funnels through `apply_plotly_typography`, so the shared
+template is the single lever for chart typography and palette (section 10).
+
+## 5. CSS ownership and the hook pattern
+
+`dashboard/components/direction.py` is the **only** module that emits a
+`<style>` block, once per run through `inject_direction_css()`. No component emits
+its own. The stylesheet has five sections: the `:root` token block, the RTL
+typography rules, a comment-marked chrome block (section 6), the RTL table rules,
+and the shared-component hook rules.
+
+**`CSS_SELECTORS` is the one selector registry.** Every selector the module styles
+is declared there, so the internal `data-testid`s that are the real instability
+live in one mapping instead of being scattered through rule strings.
+`test_direction.py::test_every_declared_selector_is_styled` fails when an entry is
+declared but unused, so the registry stays honest.
+
+**The keyed-container hook.** Never target a hashed `st-emotion-cache-*` class.
+Use `st.container(key="…")`, which Streamlit 1.61.1 renders as
+`class="stVerticalBlock st-key-<sanitized key> …"`, and scope the rule with an
+attribute-substring selector:
+
+```python
+with st.container(key=f"bar-list-{key}"):
+    ...
+```
+
+```css
+[class*="st-key-bar-list-"] { direction: rtl; }
+```
+
+Verified on 1.61.1: the class lands on the container's `stVerticalBlock`, and
+Streamlit **sanitizes the key into a CSS identifier** — `.` becomes `-`, `_` is
+kept — so a catalog key such as `warn.forecasts_indistinguishable` becomes
+`st-key-callout-warn-forecasts_indistinguishable`. A component whose key can
+legitimately repeat in one run derives it from its argument and accepts an
+override.
+
+**Every component container declares `direction: rtl`.** Streamlit's main block is
+`dir: ltr`, so an inherited `inline-start` / `flex-start` is the *left* edge and a
+`st.columns` row reads left-to-right. A component that places an accent bar, a
+cell order, a row order or a bar fill at the "start" must declare the direction on
+its own container, exactly as the mockup's `body{direction:rtl}` does and as the
+table does with `dir="rtl"` on its wrapper. Without it every such component
+mirrors to the left of the mockup. A **global** main-block flip is deliberately
+not used: it would reorder every un-migrated page's columns.
+
+Measured consequences of that rule (live DOM, 1.61.1):
+
+| Component | What the direction fixes |
+|---|---|
+| callout | `border-inline-start` accent bar and the first flex child (the CSS glyph) land on the **right** |
+| KPI band | "first cell" means the **rightmost** cell, so a caller passes cells in mockup order; separators resolve to the right edge of each following cell |
+| bar list | the domain label is rightmost, the bar is in the middle and the count is leftmost; the footer's `جمع` caption is on the right; the fill grows from the right |
+| section header | the title is at the RTL start and the trailing text at the far end |
+| filter bar | the first control is the rightmost |
+
+A **`dir="rtl"` attribute** is the equivalent move for an `st.html` fragment whose
+content is inline-level and would otherwise anchor to the host block's LTR start
+(the standalone status dot uses this).
+
+`:has()` is available in the app's Chromium and is used for the KPI band's
+secondary-group boundary. It is a CSS feature, not a Streamlit API, so it does not
+raise the version floor.
+
+## 6. Streamlit-chrome selectors (version-fragile)
+
+Chrome rules are isolated in one comment-marked block naming the tested version
+(1.61.1), because `AppTest` cannot see chrome and only a manual browser checklist
+can catch a break. **Do not extend the block without re-running the selector
+probe** (Task 2's recipe, `wave-0-spike.md` §4).
+
+Stable hooks — use these:
+
+| Element | Hook | Verdict |
+|---|---|---|
+| Sidebar container | `[data-testid="stSidebar"]` | STABLE |
+| Sidebar content (the flex parent) | `[data-testid="stSidebarContent"]` | STABLE |
+| Sidebar header (**above** the nav) | `[data-testid="stSidebarHeader"]` | STABLE |
+| Nav container / items | `[data-testid="stSidebarNav"]`, `…NavItems` | STABLE |
+| Nav link | `[data-testid="stSidebarNavLink"]` | STABLE |
+| **Active** nav link | `[data-testid="stSidebarNavLink"][aria-current="page"]` | STABLE (attribute) |
+| Nav group header | `[data-testid="stNavSectionHeader"]` | STABLE |
+| Sidebar user content (DB status) | `[data-testid="stSidebarUserContent"]` | STABLE |
+| Main block container | `[data-testid="stMainBlockContainer"]` | STABLE |
+| Native header | `[data-testid="stHeader"]` | STABLE |
+| Toolbar / deploy / kebab | `[data-testid="stToolbar"]`, `…stAppDeployButton`, `…stMainMenuButton` | STABLE |
+| Alert body / tint | `[data-testid="stAlertContainer"]` | STABLE |
+| Alert kind | `[data-testid="stAlertContentWarning"\|"…Info"\|"…Error"]` | STABLE |
+| Metric / metric value | `[data-testid="stMetric"]`, `…stMetricValue` | STABLE |
+| Column | `[data-testid="stColumn"]` | STABLE |
+| Horizontal row | `[data-testid="stHorizontalBlock"]` | STABLE |
+| Segmented control | `[data-testid="stButtonGroup"]` | STABLE |
+| Keyed container | `class*="st-key-<key>"` | STABLE (documented API) |
+
+Fragile — **do not use**:
+
+| Element | Hook | Why |
+|---|---|---|
+| Active nav link styling | `st-emotion-cache-1yak103` (hashed) | Hash changes between builds; use `[aria-current="page"]` |
+| Anything requiring a width/max-width | — | Streamlit sets inline widths, so a `!important` override is unavoidable and must stay in the chrome block |
+
+**Known gaps.** The native `[data-testid="stHeader"]` is **60 px**, not the
+mockup's 48 px top bar — Task 28 builds the mockup's bar as a new element and does
+not restyle the native one. The native alert ships **no icon element**, which is
+why the callout glyph is drawn in CSS.
+
+## 7. `st.html` survival (DOMPurify, `USE_PROFILES:{html:true}`)
+
+`st.html` is not iframed and ignores JavaScript by default. What survives, verified
+in Wave 0 (`wave-0-spike.md` §6):
+
+| Probe | Survives? | Alternative when it does not |
+|---|---|---|
+| `<style>` block, class rules | **yes — applies** | — |
+| `class`, inline `style`, `data-*` | yes | — |
+| `title` attribute | yes | native tooltip; the fallback if a browser drops it is a `data-` attribute + CSS `::after` |
+| `dir="rtl"` | yes | — |
+| `<bdi>` | yes | — |
+| `<a href>` | yes | for an **internal** page use a native `st.page_link`, never a raw anchor — a plain anchor is a full browser navigation, not the supported in-app switch |
+| `<td title="…">` | yes | — |
+| `<svg>` | **no — stripped** | a Material `:material/…:` glyph, a Unicode glyph, or a CSS-drawn shape (borders / `::before`) |
+| `st.markdown(..., unsafe_allow_html=True)` CSS | yes — applies | this is how `direction.py` injects the stylesheet |
+
+Because `<svg>` is stripped, the mockup's inline-SVG nav and brand glyphs are
+**accepted deviations**.
+
+**`st.html` and `AppTest`.** `AppTest` exposes no `html` accessor; a fragment is
+reachable only as `element.proto.body`, which is why
+`tests/unit/dashboard/app_smoke.py` provides the `html_texts(app)` helper. Assert
+`st.html` output through that helper, never through `app.markdown`.
+
+## 8. Tables: classification and the typed-cell model (D1)
+
+**The rule.** A table that is *small, static and presentation-only* is an RTL HTML
+table (`render_html_table`); a table that must sort, scroll or scale is a
+`st.dataframe` styled by the theme and `column_config`.
+
+| Table (page) | Rows (observed) | Class | Component |
+|---|---|---|---|
+| Freshness (overview) | 7 | small/static | HTML table |
+| Coverage (overview) | 50 | small/static | HTML table |
+| Survey-year panel (welfare) | 2 | small/static | HTML table |
+| Chain-linking provenance (inflation) | ~3 | small/static | HTML table |
+| Quality summary (all domain pages) | = indicator count | small/static | HTML table |
+| Catalog (catalog) | 50–54 | sortable | `st.dataframe` |
+| Observations (all domain pages) | capped 500 (underlying up to ~20 074) | large/scrollable | `st.dataframe` |
+| Join counts (correlation) | N×N | matrix | `st.dataframe` |
+| Overlap summary (correlation) | N | small/sortable | `st.dataframe` |
+
+**Why the split exists.** `st.dataframe` keeps its documented **LTR grid** and
+cannot express a status dot, a tone chip, a mono LTR id beneath a name, or a
+date/time/age stack. The HTML table can, and pays for it with `st.html`
+invisibility to `AppTest`.
+
+**The typed-cell model.** A cell is one of six frozen dataclasses, so a cell's kind
+is checked by the type checker rather than by a format string:
+
+| Cell | Renders |
+|---|---|
+| `Text(value, title=None)` | Plain text; `None` renders the missing-value em-dash |
+| `Ltr(value, title=None)` | A left-to-right mono token (an indicator id), `unicode-bidi: isolate` so it cannot flip the table |
+| `UnitChip(value, title=None)` | A left-to-right mono chip for a unit (`current US$`) |
+| `StatusChip(label, tone, title=None)` | An HTML/CSS chip with a tone dot — **never** `st.badge` |
+| `Dot(label, tone, title=None)` | An HTML/CSS status dot |
+| `TwoLine(primary, secondary_parts=(), title=None)` | A bold primary line above inline parts joined by the mockup's `·` |
+
+`TONES` (`ok`/`warn`/`err`/`accent`/`neutral`) and `DENSITIES`
+(`comfortable`/`compact`) are closed sets; an unknown value raises. Density is a
+CSS class on the table, and it is the HTML table's density control — the
+`st.dataframe` class uses `row_height` instead.
+
+**Every data-derived value is escaped** through `escape_html` before
+interpolation, and the whole table is emitted inside an `overflow-x: auto` wrapper
+so a wide table scrolls **inside its own box** and the page never scrolls
+sideways.
+
+## 9. Calendar rule (D3) and the theme lock (D14)
+
+**Calendar.** Timestamps are stored timezone-aware **UTC** and Gregorian. Jalali is
+a **display** concern. `SOURCE_CALENDAR` in
+[`dashboard/labels.py`](../../dashboard/labels.py) maps a source to
+`"gregorian"` or `"jalali"`: `world_bank`, `imf` and `eia` are Gregorian; `tgju`,
+`sci`, `tsetmc` and `hbsir` are Jalali. A range formatter is calendar-aware only
+when the caller opts in, so an un-migrated page's output is unchanged, and a test
+pins the opt-in behaviour. `Asia/Tehran` is applied only when a value is rendered
+or a selected day is interpreted; `tehran_day_bounds` / `jalali_day_bounds` are
+the only bounds constructors. The Plotly grid stays LTR (time flows left to
+right) — only the legend and titles are RTL-aligned.
+
+**Theme lock.** `base="light"` is locked; dark mode is not supported in 7.2 and is
+deferred. A custom `[theme]` in `config.toml` already removes the settings-menu
+theme toggle in 1.61.1 (verified: no `stMainMenuItem-theme-*` at any
+`toolbarMode`), so the lock is enforced today with **no CSS hacks on the native
+menu**. The plan's recommended `client.toolbarMode = "viewer"` — to hide the
+native Deploy button and developer options while keeping the viewer options the
+analyst needs — is **not applied yet**; it lands with the top bar (Task 28). For
+local development the developer override is the environment variable
+`STREAMLIT_CLIENT_TOOLBAR_MODE=developer`.
+
+## 10. Charts and exports
+
+**One template.** `plotly_template()` in `direction.py` builds the shared template
+from the tokens: the Persian font, the token `colorway`, token grid/border colours,
+and RTL-friendly legend (horizontal, top, right-aligned) and title placement.
+Sizing and margins stay with the individual builders. Every builder funnels through
+`apply_plotly_typography`, so the template is the single lever.
+
+The time axis is **not** reversed: time flows left to right on the LTR canvas,
+per the project's LTR-grid rule. This is asserted in the contract test
+(`xaxis.autorange is None`).
+
+Streamlit injects the theme's `chartCategoricalColors` into every chart
+client-side, so the browser's trace colours come from the theme while the
+**server-side/export** path renders with the figure's own template — which is why
+the template's `colorway` is asserted in tests and exercised by the export smoke.
+
+**The export engine is Kaleido v1, not Playwright.**
+`components/exports.py` imports `from kaleido import Kaleido` and calls
+`Kaleido(path=find_chromium_executable())` → `await renderer.open()` →
+`renderer.calc_fig(...)`. Playwright is only the *source of the Chromium binary*:
+`find_chromium_executable()` scans `~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome`
+and then the system Chrome.
+
+That smoke needs a Chromium executable, so it is marked `@pytest.mark.integration`
+and is **deselected by `make check`** (`pytest -m "not integration"`). Run it
+explicitly after any change to the template or the export path:
+
+```bash
+poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov
+```
+
+## 11. Testing rules
+
+| Rule | Why |
+|---|---|
+| **Subset runs use `--no-cov`.** | `pyproject.toml`'s `addopts` carries `--cov=src --cov-fail-under=80`. Coverage is measured on `src`, so a dashboard-only subset reports a near-zero number and fails the gate for the wrong reason. `make check` runs the full suite and keeps the gate. |
+| **The export smoke is opt-in.** | It needs Chromium; `make check` deselects `integration`. Run it explicitly (section 10). |
+| **Live API tests are opt-in.** | `@pytest.mark.live`, gated behind `RUN_LIVE_API_TESTS=1`. |
+| **`st.html` output is asserted through `html_texts(app)`.** | `AppTest` has no `html` accessor; `element.proto.body` is the only route. |
+| **`st.badge` surfaces as Markdown.** | `st.badge("tag", color="orange")` appears to `AppTest` as `app.markdown == [":orange-badge[tag]"]`. |
+| **The literal guard scans the dashboard tree.** | `test_literal_guard.py` fails on `st.<display>(<literal>)`, so every user-visible string resolves through `t()`. The shared-component modules are whitelisted for the D11 guard but **not** for the literal guard. |
+| **The D11 layout guard is function-scoped.** | Every page composition lives in one large module, so `MIGRATED_PAGES` maps module → migrated function names and grows per wave. It lands in Task 33. |
+
+## 12. The page-layout contract (D11)
+
+A **migrated** page function opens with `render_page_header`, renders KPI values
+through `render_kpi_band`, section titles through `render_section_header`, filters
+through `render_filter_bar`, and empty/error/loading through
+`components/states.py`. It does not call raw `st.title`, `st.metric`,
+`st.warning`/`st.info`/`st.error`, or `unsafe_allow_html` where a shared component
+exists.
+
+The guard is an AST check modelled on `test_literal_guard.py`. Because every page
+composition lives in `dashboard/page_view.py`, the guard is **function-scoped**:
+
+```python
+MIGRATED_PAGES = {"dashboard/page_view.py": {"render_overview_page", ...}}
+```
+
+The whitelist is the shared-component modules —
+`components/layout.py` (including `render_page_header`, `render_callout`,
+`render_kpi_band`, `render_section_header`, `render_filter_bar`),
+`components/states.py`, `components/html_table.py` and `components/direction.py` —
+not the page modules, because the components themselves must call those APIs.
+
+**Status:** the contract above is ratified (D11); the guard itself lands with
+Task 33 and its `MIGRATED_PAGES` map starts with the Overview's migrated
+functions, growing once per wave. Until a function is listed, it is not checked.
+
+## 13. Do / Don't
+
+**Do**
+
+- Build with a native element first; add scoped CSS second; reach for `st.html`
+  third and only where nothing native exists.
+- Put every user-visible string in `dashboard/i18n.py` and resolve it through
+  `t()`; put every display name in `dashboard/labels.py`.
+- Scope CSS with a keyed container or a stable `data-testid`, and register the
+  selector in `CSS_SELECTORS`.
+- Declare `direction: rtl` on any component container whose geometry depends on
+  the inline start.
+- Escape every data-derived value with `escape_html` before it reaches an HTML
+  fragment.
+- Keep tones in closed sets and raise on an unknown value — except where the value
+  is data (the collection-run status chip), which falls back instead.
+- Format numbers with `dashboard.formatting` before handing them to a component.
+- Add a new selector to the chrome block's version note when you touch chrome.
+
+**Don't**
+
+- Don't target `st-emotion-cache-*`; the hash changes between builds.
+- Don't emit a `<style>` block outside `direction.py`.
+- Don't use `st.badge` inside `st.html`, or a raw `<a href>` for an internal page.
+- Don't render the same state or callout key twice in one run — Streamlit raises
+  on a repeated container key; pass `container_key`/`key` instead.
+- Don't interpolate a data value into a class name.
+- Don't reverse the Plotly time axis or flip the dataframe grid: both stay LTR.
+- Don't change anything under `src/`, `alembic/` or `airflow/` for a presentation
+  change. If a dashboard feature seems to need an ETL change, it is a new phase.
+- Don't restyle the native `stHeader` or the native settings menu.
+
+## 14. Accepted deviations from the mockup
+
+| Mockup element | Deviation | Why |
+|---|---|---|
+| Inline-SVG nav and brand glyphs | A CSS-drawn shape or a Material/Unicode glyph | DOMPurify strips `<svg>` (`st.html` HTML profile) |
+| Callout glyph | A CSS-drawn ring with the "i" dot and stem | The native alert ships no icon element |
+| 48 px top bar | The native header stays 60 px; the mockup's bar is a new element | Task 28 |
+| Metric/subheader type scale | The theme's own scale | `tokens.py` holds no type-scale tokens; the scale belongs to the `[theme]` layer |
+| KPI tag placement | A real `st.badge` beneath the metric | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
+| Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
+| Filter-bar spacer | A `st.columns` weight, not `flex: 1` | `st.columns` expresses fixed proportions, not "absorb the remainder" |
+
+## 15. Open items
+
+- **Task 27** records which sidebar-brand fallback shipped and extends section 6.
+- **Task 28** builds the top bar/breadcrumb and the last-collection stamp.
+- **Task 33** lands the D11 AST guard with its first `MIGRATED_PAGES` entry.
+- **Task 47** extends this document with the top bar, the sidebar shell and the
+  screenshot script, plus the per-archetype review outcomes.
+- **Deferred:** dark mode (D14), the explicit refresh control, indicator search on
+  domain pages, the IMF forecast/actual labeling (needs an ETL change), and the
+  cache-TTL item.

@@ -909,3 +909,60 @@ were never staged or committed (Task 7 owns them).
   `st.info`, not `st.spinner`: the plan routes states through the callout and the
   acceptance requires `app.info`, and a spinner is invisible to `AppTest`.
 - **Commit hash:** `a38ce18`
+
+## Task 23 — (A) WRITE the design-system document (first draft)
+
+- **Files:** `docs/phase-7.2/design-system.md` (new),
+  `tests/unit/dashboard/test_design_system_doc.py` (new), plan checkboxes.
+- **Build:** Fifteen sections: the native→CSS→`st.html` layering (D6/D13); the
+  token table plus the three consumers (theme / `:root` / Plotly template); the
+  theme mapping; the component catalogue (every `render_*`/`build_*` with signature
+  and purpose, a worked example, and the contract details that are easy to get
+  wrong — closed tone sets, catalog-key vs already-resolved arguments, container-key
+  collisions); CSS ownership and the keyed-container hook including the
+  **`direction: rtl`-per-container rule** with its measured consequences; the
+  Streamlit-chrome selectors split into STABLE and FRAGILE with the version named;
+  the `st.html` survival table with an alternative per stripped feature; the D1
+  table classification and the six typed cells; the D3 calendar rule and the D14
+  theme lock; charts and the Kaleido-v1 export engine; the testing rules; the D11
+  layout contract; do/don't; accepted deviations; open items.
+- **The document is guarded, not just written.** `test_design_system_doc.py` scans
+  `dashboard/components/*.py` with an AST and fails when a public `render_*` or
+  `build_*` is absent from the document, asserts the page-header component is named,
+  asserts all six typed cells are listed, pins the seven required section headings,
+  re-states the D11 whitelist (the four shared-component modules and the five
+  shared layout components) against the decision text, and resolves every relative
+  markdown link. The guard is itself tested: an empty document and a document with
+  one name renamed both fail, and the link helper is asserted to ignore `http`,
+  `mailto:` and `#` targets.
+- **Two factual errors were found by the manual review and fixed before commit.**
+  (1) The first draft claimed `client.toolbarMode = "viewer"` was set in
+  `.streamlit/config.toml`; it is **not** — no `[client]` section exists, and the
+  plan lands that value with the top bar (Task 28). Sections 3 and 9 now say the
+  lock is enforced today by the custom `[theme]` alone (the toggle is already
+  hidden) and name Task 28 for `toolbarMode` plus the
+  `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` override. (2) The first draft equated
+  `theme.font`/`codeFont` with the `font-ui`/`font-mono` tokens; the config actually
+  carries richer family lists (`IRANSans`/`Menlo`), so the row now states that only
+  the palette, the radii and the base size are token-equal.
+- **A dangling link was removed rather than left for Task 24.**
+  `docs/phase-7.2/VALIDATION.md` does not exist yet (Task 24 creates it), so the
+  "Wave A review" reference is plain text until then; every remaining link resolves,
+  and the link test will hold Task 47 to that when it extends the document.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_design_system_doc.py -q --no-cov` →
+    **10 passed**.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **491 passed** (481 + 10),
+    no regressions against Task 22.
+  - `poetry run mypy src dashboard` → **0 errors** (68 source files);
+    `ruff check` / `ruff format` clean.
+- **Deviations:** (1) The guard's scope is the component surface (`render_*` +
+  `build_*`), not every public function in the package: `serialize_*`,
+  `find_chromium_executable`, `unique_values` and the other helpers are engine
+  internals, and documenting them would turn the reference into an API dump. The
+  scope is stated in the test docstring. (2) The document is longer than the plan's
+  Build list strictly requires (it also covers the export engine, the chrome
+  selector split and the testing rules) because those are the facts later waves
+  would otherwise re-derive; the plan calls this a first draft for Task 47 to
+  extend.
+- **Commit hash:** `PENDING`

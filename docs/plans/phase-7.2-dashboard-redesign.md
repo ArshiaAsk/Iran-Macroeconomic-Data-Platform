@@ -861,8 +861,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 5–22.
 - **Acceptance:**
-  - [ ] Every component in `dashboard/components/` (including `render_page_header`) is documented.
-  - [ ] The layout contract matches the D11 guard.
+  - [x] Every component in `dashboard/components/` (including `render_page_header`) is documented.
+  - [x] The layout contract matches the D11 guard.
 - **Verify:** Manual review; links resolve.
 
 ### 24. (A) RECORD the Wave A after-screenshots and review them against the baseline (AM-24)
