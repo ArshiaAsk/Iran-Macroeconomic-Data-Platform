@@ -781,4 +781,4 @@ were never staged or committed (Task 7 owns them).
 - **Finding for Tasks 21/22/23:** Tasks 21 (section header, filter bar) and 22
   (states) must declare `direction: rtl` on their own containers or they will mirror
   the same way; Task 23's component catalogue should state the rule once.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `496b4ce`
