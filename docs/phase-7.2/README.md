@@ -2,9 +2,10 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave 0 in progress** (verification spike + baseline). See
-[`wave-0-spike.md`](wave-0-spike.md) for the recorded capabilities, the
-pre-change baseline and the per-wave gate rule. Implementation waves A–H follow.
+Status: **Wave A in progress** (foundation). Wave 0 is recorded in
+[`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change baseline and the
+per-wave gate rule). Per-task evidence lives in
+[`execution-log.md`](execution-log.md). Implementation waves B–H follow.
 
 Planned documents (added by later waves):
 

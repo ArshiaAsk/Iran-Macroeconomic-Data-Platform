@@ -69,3 +69,22 @@ Decisions for Wave A/B live in
 
 All commits are docs-only. The untracked font files under `dashboard/static/`
 were never staged or committed (Task 7 owns them).
+
+---
+
+## Task 5 — (A) ADD the design-token module
+
+- **Files:** `dashboard/components/tokens.py` (new),
+  `tests/unit/dashboard/test_tokens.py` (new), plan checkboxes.
+- **Build:** frozen `MappingProxyType` of the mockup's entire `:root` block
+  (22 tokens: palette, soft backgrounds, `surface-2`, `hover`, radii, `font-ui`,
+  `font-mono`), with `token()` / `custom_properties()` /
+  `css_custom_properties()` helpers. The test parses
+  `docs/design/phase-7.2/overview-redesign-mockup.html` and asserts set equality.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_tokens.py -q --no-cov`
+  → **6 passed**. `ruff format`/`ruff check` clean. `poetry run mypy src dashboard`
+  → **0 errors** (64 source files).
+- **Deviations:** the token↔`[theme]` consistency assertion is deferred to
+  Task 8: its premise (the Task 8 theme values) does not exist yet, and a
+  failing test must not be committed. Task 8 appends it to `test_tokens.py`.
+- **Commit hash:** _pending_

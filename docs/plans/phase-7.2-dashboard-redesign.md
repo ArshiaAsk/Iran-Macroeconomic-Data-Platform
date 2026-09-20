@@ -611,8 +611,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** —
 - **Acceptance:**
-  - [ ] Tokens are immutable and typed; no literal colour remains outside this module and `.streamlit/config.toml`.
-  - [ ] A test asserts the token set matches the mockup's `:root` block.
+  - [x] Tokens are immutable and typed; no literal colour remains outside this module and `.streamlit/config.toml`.
+  - [x] A test asserts the token set matches the mockup's `:root` block.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_tokens.py -q`.
 
 ### 6. (A) RAISE the Streamlit floor and refresh the lock
