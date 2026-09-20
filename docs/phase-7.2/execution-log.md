@@ -525,3 +525,23 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none beyond the map corrections above (the plan explicitly asks
   for drift to be fixed here).
 - **Commit hash:** `37e26f4`
+
+## Step 0 (A-3) — EXTEND the Task 30/32 acceptance lines before starting Tasks 17–24
+
+- **Files:** `docs/plans/phase-7.2-dashboard-redesign.md` (Task 30 + Task 32
+  acceptance only), `docs/phase-7.2/execution-log.md`.
+- **Build:** Docs-only, no code. Two acceptance additions so later Wave-C work is
+  pinned to decisions already taken in Wave A:
+  - **Task 30** — the `section.freshness_summary` string (Task 12) is rendered as
+    the `trailing` text of the freshness section header via `render_section_header`
+    (Task 21).
+  - **Task 32** — (a) an opt-in `compact` argument to `range_label` (default
+    unchanged so the golden Jalali tests keep passing) collapsing a
+    same-month/same-year daily range to the mockup's `۱۸ – ۲۰ شهریور ۱۴۰۵`, with
+    tests; (b) an opt-in `wrap_headers` option for `render_html_table` matching the
+    mockup's two-line coverage headers, with a test; (c) Gregorian ranges render in
+    an `Ltr` cell and Jalali ranges in a `Text` cell (the Task 13 bidi decision).
+- **Verify:** `git diff --stat` shows only the two docs; no checkbox in Tasks
+  1–16 changed. No test run needed (no code touched).
+- **Deviations:** none.
+- **Commit hash:** `PENDING`

@@ -951,6 +951,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
   - [ ] Relative age and run-status chip render; stale rows sort first.
   - [ ] Empty log renders the shared empty state.
   - [ ] The freshness assertions use the markup strategy, not `app.dataframe`.
+  - [ ] The `section.freshness_summary` string (Task 12) is rendered as the
+    `trailing` text of the freshness section header via `render_section_header`
+    (Task 21).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q`.
 
 ### 31. (C) REDESIGN the Overview domain bars
@@ -978,6 +981,15 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
   - [ ] The coverage assertions use the markup strategy, not `app.dataframe`.
   - [ ] **AM-26:** at 1280 px and 1024 px the coverage table scrolls inside its `overflow-x: auto` wrapper and the page does not scroll sideways (manual check, shared with Task 15).
   - [ ] **AM-26 (deferred from Task 15):** re-run the 1280/1024 px check on the **real Overview coverage table** (Task 15 could only verify this on its probe app).
+  - [ ] **Compact daily range (opt-in):** `range_label` gains an opt-in `compact`
+    argument (default unchanged, so the golden Jalali tests keep passing) that
+    collapses a same-month/same-year daily range to the mockup's form
+    (`۱۸ – ۲۰ شهریور ۱۴۰۵`), with tests.
+  - [ ] **Two-line headers (opt-in):** `render_html_table` gains an opt-in
+    `wrap_headers` option matching the mockup's two-line coverage headers
+    (`تعداد<br>مشاهدات`), with a test.
+  - [ ] **Bidi placement:** Gregorian ranges render in an `Ltr` cell and Jalali
+    ranges in a `Text` cell, per the Task 13 bidi decision.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q` + manual browser check against the mockup.
 
 ### 33. (C) APPLY the page header + methodology callout and enable the guard for Overview
