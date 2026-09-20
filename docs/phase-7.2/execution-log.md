@@ -626,3 +626,67 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none to production. The "every component has a keyed container"
   pattern is applied where scoped CSS exists (the callout), not mechanically.
 - **Commit hash:** `22739b9`
+
+## Task 19 — (A) ADD the KPI band component
+
+- **Files:** `dashboard/components/layout.py`, `dashboard/components/direction.py`
+  (KPI hook selectors + rules), `dashboard/i18n.py` (four `metric.*` keys),
+  `tests/unit/dashboard/test_layout.py`, `pyproject.toml` (one
+  `per-file-ignores` line for Persian digits in the new test file, matching the
+  existing dashboard test-file convention), plan checkboxes.
+- **Build:** `render_kpi_band(cells, *, key="default")` renders one
+  `st.container(border=True)` holding **one** `st.columns(len(cells))` row (so the
+  cells line up as a single strip, as in the mockup), one `st.metric` per column
+  with `help=` from `help_key`, and an optional `st.badge` tag. Cells are
+  `KpiCell(label_key, value, help_key=None, tone="default", secondary=False,
+  tag_key=None)` — a `NamedTuple` rather than the plan's bare 4-tuple, because the
+  user's brief adds the `secondary` flag and the `st.badge` tag to the same cell
+  spec; named fields keep the call sites readable. Value formatting stays with the
+  caller.
+  - **Secondary group separation** is a `:has()` rule on the band's columns:
+    `[class*="st-key-kpi-band-"] [data-testid="stColumn"] + [data-testid="stColumn"]`
+    draws the normal separator and
+    `… [data-testid="stColumn"]:has([class*="st-key-kpi-"][class*="-secondary-0-tone-"])`
+    upgrades it to `--border-strong` at the group boundary. The two rules have equal
+    specificity, so the `:has()` rule is emitted **after** the `+` rule. `:has()` is
+    a CSS feature, not a Streamlit API, so the 1.44 floor (D9/AM-13) is unchanged;
+    `CSS.supports('selector(:has(*))')` is **true** in the app's Chromium.
+  - The cell key is `kpi-<band key>-<group>-<index>-tone-<tone>`, so the tone is
+    addressable (`[class*="-tone-warn"] [data-testid="stMetricValue"]`) and two
+    bands can coexist on one page without a duplicate key. The CSS anchors on the
+    fixed suffix, so the band key in the middle does not affect it.
+- **Tone sizing / theme:** the band sets **no font-size literal**. The metric value
+  size comes from the theme as it stands; per the plan's `Files:` field neither
+  Task 19 nor 21 may edit `.streamlit/config.toml`, so `metricValueFontSize` /
+  `headingFontSizes` remain the theme's own defaults (31.5 px value / 24.5 px
+  subheader) rather than the mockup's 28 px / 18 px. Flagged for Task 29/34: if the
+  owner wants the mockup's exact scale it is a **theme-layer** change, not a
+  component change. Recorded in `design-system.md`.
+- **Hook pattern verified in the live DOM (Streamlit 1.61.1).** Throwaway probe,
+  real component + real `inject_direction_css()`:
+  - **one** `stHorizontalBlock` inside the band → a single row (6 columns);
+  - band computed `border-radius: 8px` (`--radius-lg`), `padding: 0`, theme border;
+  - columns 2–6 `border-inline-start: 1px solid rgb(225,229,235)` (`--border`) and
+    column 5 (the first secondary cell) `1px solid rgb(201,208,218)`
+    (`--border-strong`) — the `:has()` boundary applies exactly once;
+  - primary metric values `rgb(27,36,48)` (`--text-1`), secondary `rgb(74,85,102)`
+    (`--text-2`, the `muted` tone);
+  - cell classes: `st-key-kpi-overview-primary-0-tone-default` … and
+    `st-key-kpi-overview-secondary-0-tone-muted`;
+  - the `st.badge` renders as `.stMarkdownBadge` with the warn background beneath
+    the metric; no page exception.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` →
+    **21 passed** (12 + 9).
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **447 passed**.
+  - `poetry run mypy src dashboard` → **0 errors**; `ruff check` clean.
+- **Deviations:** (1) the cell spec is a 6-field `NamedTuple`, not the plan's
+  4-tuple (reason above). (2) The tag is a real `st.badge` **beneath** the metric,
+  per the brief, rather than the mockup's inline tag beside the label; the
+  `:orange-badge[…]` markdown shorthand would leak its own syntax into the metric
+  label and the tooltip's accessible name. Task 29/34 may revisit the placement.
+  (3) The band's own `key` argument and the `:has()`-based boundary are additions
+  the plan did not specify (the plan's signature is `render_kpi_band(cells)`).
+  (4) The mockup's exact metric/subheader type scale is **not** applied (theme-layer
+  change, out of this task's file scope).
+- **Commit hash:** `PENDING`

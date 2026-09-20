@@ -119,6 +119,21 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         # that have no catalog row of their own.
         "metric.derived_series": "سری‌های مشتق‌شده",
         "metric.orphan_series": "سری‌های بدون ردیف فهرست",
+        # KPI band tooltips and tag (Task 19). The copy is deliberately
+        # data-agnostic (AM-9): it describes each set and how they nest, never a
+        # current count and never a claim about today's data.
+        "metric.derived_series_help": (
+            "سری‌هایی که این سامانه از سری والد محاسبه کرده و ردیف فهرست مستقل ندارند."
+        ),
+        "metric.orphan_series_help": (
+            "سری‌های لایهٔ طلایی که ردیف فهرست ندارند. سری‌های مشتق‌شده معمولاً در این "
+            "مجموعه قرار می‌گیرند؛ بنابراین این دو شمارنده می‌توانند هم‌پوشانی داشته باشند."
+        ),
+        "metric.gold_observations_help": (
+            "تنها مشاهدات متصل به یک ردیف فهرست را می‌شمارد؛ سری‌های مشتق‌شده و بدون "
+            "فهرست در این عدد نیستند."
+        ),
+        "metric.orphan_series_tag": "نیازمند بررسی",
         "section.series_inventory": "سری‌های طلایی خارج از فهرست",
         # Filter controls.
         "filter.domain": "حوزه",

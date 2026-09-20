@@ -161,3 +161,149 @@ def test_page_header_rejects_an_unknown_callout_tone() -> None:
 
     assert app.exception
     assert "unknown callout tone" in str(app.exception[0].value)
+
+
+# --- Task 19: KPI band -----------------------------------------------------
+
+KPI_BAND_SCRIPT = """
+from dashboard.components.layout import KpiCell, render_kpi_band
+
+render_kpi_band(
+    [
+        KpiCell("metric.sources", "۷"),
+        KpiCell("metric.domains", "۹"),
+        KpiCell("metric.active_indicators", "۵۰"),
+        KpiCell("metric.gold_observations", "۸٬۱۹۵", help_key="metric.gold_observations_help"),
+        KpiCell(
+            "metric.derived_series",
+            "۳۲",
+            help_key="metric.derived_series_help",
+            tone="muted",
+            secondary=True,
+        ),
+        KpiCell(
+            "metric.orphan_series",
+            "۳۲",
+            help_key="metric.orphan_series_help",
+            tone="muted",
+            secondary=True,
+            tag_key="metric.orphan_series_tag",
+        ),
+    ],
+    key="overview",
+)
+"""
+
+
+def test_kpi_band_renders_every_cell_in_order() -> None:
+    app = _run(KPI_BAND_SCRIPT)
+
+    assert not app.exception
+    assert [metric.label for metric in app.metric] == [
+        t("metric.sources"),
+        t("metric.domains"),
+        t("metric.active_indicators"),
+        t("metric.gold_observations"),
+        t("metric.derived_series"),
+        t("metric.orphan_series"),
+    ]
+    # The caller formats values; the component must not reformat them.
+    assert [metric.value for metric in app.metric][-3:] == ["۸٬۱۹۵", "۳۲", "۳۲"]
+
+
+def test_kpi_band_exposes_each_tooltip_as_a_metric_help() -> None:
+    app = _run(KPI_BAND_SCRIPT)
+
+    assert not app.exception
+    helps = [metric.help for metric in app.metric]
+    assert helps == [
+        "",
+        "",
+        "",
+        t("metric.gold_observations_help"),
+        t("metric.derived_series_help"),
+        t("metric.orphan_series_help"),
+    ]
+
+
+def test_kpi_band_tag_renders_as_a_badge_beneath_the_metric() -> None:
+    app = _run(KPI_BAND_SCRIPT)
+
+    assert not app.exception
+    # st.badge surfaces to AppTest as markdown, which is the only signal that the
+    # tag rendered; exactly one cell carries it.
+    badges = [element.value for element in app.markdown if "badge" in element.value]
+    assert badges == [f":orange-badge[{t('metric.orphan_series_tag')}]"]
+
+
+def test_kpi_band_separates_the_secondary_group() -> None:
+    app = _run(KPI_BAND_SCRIPT)
+    css = direction_css()
+
+    assert not app.exception
+    # The boundary is a scoped CSS hook on the first secondary cell's container:
+    # AppTest cannot see classes, so the hook's presence is asserted here and its
+    # DOM effect was verified in the live probe (see the execution log).
+    assert CSS_SELECTORS["kpi_secondary_group"] in css
+    assert (
+        f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]}'
+        f':has({CSS_SELECTORS["kpi_secondary_group"]})' in css
+    )
+    assert "border-inline-start: 1px solid var(--border-strong);" in css
+
+
+def test_kpi_band_tone_rules_read_design_tokens() -> None:
+    css = direction_css()
+
+    for selector_key, token_name in (
+        ("kpi_tone_muted", "text-2"),
+        ("kpi_tone_ok", "ok"),
+        ("kpi_tone_warn", "warn"),
+        ("kpi_tone_err", "err"),
+        ("kpi_tone_accent", "accent"),
+    ):
+        assert CSS_SELECTORS[selector_key] in css, selector_key
+        assert (
+            f'{CSS_SELECTORS[selector_key]} {CSS_SELECTORS["kpi_value"]} '
+            f"{{ color: var(--{token_name}); }}" in css
+        )
+
+
+def test_kpi_band_help_copy_is_data_agnostic() -> None:
+    """AM-9: no tooltip may state a count or a claim about the current data."""
+    digits = "0123456789۰۱۲۳۴۵۶۷۸۹"
+
+    for key in (
+        "metric.derived_series_help",
+        "metric.orphan_series_help",
+        "metric.gold_observations_help",
+    ):
+        assert not any(character in digits for character in t(key)), key
+
+
+def test_kpi_band_rejects_an_unknown_tone() -> None:
+    app = _run(
+        "from dashboard.components.layout import KpiCell, render_kpi_band\n"
+        'render_kpi_band([KpiCell("metric.sources", "۷", tone="danger")])\n'
+    )
+
+    assert app.exception
+    assert "unknown kpi tone" in str(app.exception[0].value)
+
+
+def test_kpi_band_rejects_an_empty_cell_list() -> None:
+    app = _run("from dashboard.components.layout import render_kpi_band\nrender_kpi_band([])\n")
+
+    assert app.exception
+    assert "at least one cell" in str(app.exception[0].value)
+
+
+def test_kpi_band_container_key_lets_a_page_render_two_bands() -> None:
+    app = _run(
+        "from dashboard.components.layout import KpiCell, render_kpi_band\n"
+        'render_kpi_band([KpiCell("metric.sources", "۱")], key="first")\n'
+        'render_kpi_band([KpiCell("metric.domains", "۲")], key="second")\n'
+    )
+
+    assert not app.exception
+    assert len(app.metric) == 2

@@ -814,9 +814,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `metric.derived_series_help`="سری‌هایی که این سامانه از سری والد محاسبه کرده و ردیف فهرست مستقل ندارند.", `metric.orphan_series_help`="سری‌های لایهٔ طلایی که ردیف فهرست ندارند. سری‌های مشتق‌شده معمولاً در این مجموعه قرار می‌گیرند؛ بنابراین این دو شمارنده می‌توانند هم‌پوشانی داشته باشند.", `metric.gold_observations_help`="تنها مشاهدات متصل به یک ردیف فهرست را می‌شمارد؛ سری‌های مشتق‌شده و بدون فهرست در این عدد نیستند.", `metric.orphan_series_tag`="نیازمند بررسی".
 - **Depends:** Task 17.
 - **Acceptance:**
-  - [ ] Six-cell band renders; tooltips via `st.metric(help=…)`.
-  - [ ] Secondary group is visually separated.
-  - [ ] No UI string states a specific count or a claim about current data (AM-9).
+  - [x] Six-cell band renders; tooltips via `st.metric(help=…)`.
+  - [x] Secondary group is visually separated.
+  - [x] No UI string states a specific count or a claim about current data (AM-9).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py -q`.
 
 ### 20. (A) ADD the chip, status-dot and bar-list components

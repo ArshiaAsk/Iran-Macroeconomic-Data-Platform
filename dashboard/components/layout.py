@@ -25,8 +25,8 @@ Three rules are load-bearing:
   attribute, so a data value can never inject a CSS class.
 """
 
-from collections.abc import Callable
-from typing import Final
+from collections.abc import Callable, Sequence
+from typing import Final, NamedTuple
 
 import streamlit as st
 
@@ -34,12 +34,47 @@ from dashboard.i18n import t
 
 __all__ = [
     "CALLOUT_TONES",
+    "KPI_TONES",
+    "KpiCell",
     "render_callout",
+    "render_kpi_band",
     "render_page_header",
 ]
 
 CALLOUT_TONES: Final[frozenset[str]] = frozenset({"warn", "info", "error"})
 """Accepted callout tones; each maps to one native Streamlit alert element."""
+
+KPI_TONES: Final[frozenset[str]] = frozenset({"default", "muted", "ok", "warn", "err", "accent"})
+"""Accepted KPI value tones; each maps to a design token (see ``direction.py``).
+
+``default`` inherits the metric's own colour and ``muted`` renders the secondary
+text colour; the rest resolve to their token.
+"""
+
+
+class KpiCell(NamedTuple):
+    """One KPI band cell.
+
+    A :class:`NamedTuple` rather than a plain tuple so the optional fields are
+    named at the call site while ``label_key``/``value`` stay positional.
+
+    Attributes:
+        label_key: Catalog key of the cell label
+        value: **Already formatted** value (digit conversion is the caller's job)
+        help_key: Optional catalog key of the tooltip copy
+        tone: One of :data:`KPI_TONES`
+        secondary: When true the cell joins the visually separated secondary group
+        tag_key: Optional catalog key of a :func:`st.badge` tag rendered beneath the
+            metric
+    """
+
+    label_key: str
+    value: str
+    help_key: str | None = None
+    tone: str = "default"
+    secondary: bool = False
+    tag_key: str | None = None
+
 
 #: The native alert renderer for each callout tone. ``error`` is the Streamlit
 #: spelling of the mockup's red callout; the plan's vocabulary is ``error`` too.
@@ -127,3 +162,59 @@ def render_page_header(
     st.title(t(title_key))
     if callout_key is not None:
         render_callout(callout_key, tone=tone)
+
+
+def _render_kpi_cell(cell: KpiCell) -> None:
+    """Render one cell inside its already-created keyed container."""
+    st.metric(
+        t(cell.label_key),
+        cell.value,
+        help=t(cell.help_key) if cell.help_key is not None else None,
+    )
+    if cell.tag_key is not None:
+        # A real st.badge element beneath the metric, not the `:orange-badge[…]`
+        # markdown shorthand: the shorthand would leak its own syntax into the
+        # metric label and into the tooltip's accessible name.
+        st.badge(t(cell.tag_key), color="orange")
+
+
+def render_kpi_band(cells: Sequence[KpiCell], *, key: str = "default") -> None:
+    """Render the reusable KPI band (D2) as one bordered row of metric cells.
+
+    The band is a single ``st.container(border=True)`` holding one
+    ``st.columns`` row, so the cells line up as in the mockup; cells flagged
+    ``secondary`` form a visually separated trailing group (a stronger inline
+    separator, drawn by the ``:has()`` rule in :mod:`dashboard.components.direction`).
+    Cell sizing comes from the theme (``metricValueFontSize`` and friends), so no
+    component sets a font-size literal.
+
+    The CSS hook is the per-cell keyed container,
+    ``kpi-<band key>-<group>-<index>-tone-<tone>``: the group and index make the
+    secondary boundary addressable, the tone makes the value colour addressable,
+    and the band key keeps the key unique per cell so no two cells collide (a page
+    may render more than one band). The CSS anchors on the ``kpi-`` prefix and the
+    fixed ``-<group>-<index>-tone-<tone>`` suffix, so the band key in the middle is
+    irrelevant to it.
+
+    Args:
+        cells: One :class:`KpiCell` per column, in display order
+        key: Suffix that makes the band's keyed container unique when a page
+            renders more than one band
+
+    Raises:
+        ValueError: When ``cells`` is empty or a cell carries an unknown tone
+    """
+    if not cells:
+        message = "render_kpi_band needs at least one cell"
+        raise ValueError(message)
+    with st.container(border=True, key=f"kpi-band-{key}"):
+        columns = st.columns(len(cells))
+        group_indexes: dict[str, int] = {}
+        for column, cell in zip(columns, cells, strict=True):
+            tone = _validated(cell.tone, KPI_TONES, "kpi")
+            group = "secondary" if cell.secondary else "primary"
+            index = group_indexes.get(group, 0)
+            group_indexes[group] = index + 1
+            cell_key = f"kpi-{key}-{group}-{index}-tone-{tone}"
+            with column, st.container(key=cell_key):
+                _render_kpi_cell(cell)

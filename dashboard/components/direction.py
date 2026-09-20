@@ -72,6 +72,15 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         # carries `st-key-<sanitized key>`, so an attribute substring selector
         # scopes a rule to one component without a hashed `st-emotion-cache-*`.
         "callout": '[class*="st-key-callout-"]',
+        "kpi_band": '[class*="st-key-kpi-band-"]',
+        "kpi_secondary_group": '[class*="st-key-kpi-"][class*="-secondary-0-tone-"]',
+        "kpi_column": '[data-testid="stColumn"]',
+        "kpi_value": '[data-testid="stMetricValue"]',
+        "kpi_tone_muted": '[class*="st-key-kpi-"][class*="-tone-muted"]',
+        "kpi_tone_ok": '[class*="st-key-kpi-"][class*="-tone-ok"]',
+        "kpi_tone_warn": '[class*="st-key-kpi-"][class*="-tone-warn"]',
+        "kpi_tone_err": '[class*="st-key-kpi-"][class*="-tone-err"]',
+        "kpi_tone_accent": '[class*="st-key-kpi-"][class*="-tone-accent"]',
     }
 )
 
@@ -200,6 +209,23 @@ _COMPONENT_COMMENT: Final[str] = (
     "component. */"
 )
 
+#: KPI value tone -> design-token name (Task 19). ``default`` is deliberately
+#: absent: it inherits the metric's own colour, so no rule is needed.
+_KPI_TONE_TOKENS: Final[tuple[tuple[str, str], ...]] = (
+    ("muted", "text-2"),
+    ("ok", "ok"),
+    ("warn", "warn"),
+    ("err", "err"),
+    ("accent", "accent"),
+)
+
+#: One rule per non-default KPI tone, colouring only the metric value.
+_KPI_TONE_RULES: Final[tuple[str, ...]] = tuple(
+    f'{CSS_SELECTORS[f"kpi_tone_{tone}"]} {CSS_SELECTORS["kpi_value"]} '
+    f"{{ color: var(--{token_name}); }}"
+    for tone, token_name in _KPI_TONE_TOKENS
+)
+
 #: Component rules as complete CSS strings, in stylesheet order. Each rule's
 #: selector is built from the :data:`CSS_SELECTORS` registry so the hook has one
 #: source (``_TABLE_RULES`` predates the registry and uses plain class selectors).
@@ -218,6 +244,18 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     "background: radial-gradient(circle, currentColor 0 1.1px, transparent 1.2px) "
     "50% 26% / 100% 100% no-repeat, "
     "linear-gradient(currentColor, currentColor) 50% 74% / 1.5px 5px no-repeat; }",
+    # KPI band (Task 19): the mockup's larger corner radius, edge-to-edge columns,
+    # a separator between every pair of cells and a stronger one at the start of
+    # the secondary group. The `:has()` rule must follow the `+` rule: the two have
+    # equal specificity, so source order decides the boundary cell.
+    f'{CSS_SELECTORS["kpi_band"]} {{ border-radius: var(--radius-lg) !important; '
+    "padding: 0 !important; }",
+    f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]} '
+    f'+ {CSS_SELECTORS["kpi_column"]} {{ border-inline-start: 1px solid var(--border); }}',
+    f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]}'
+    f':has({CSS_SELECTORS["kpi_secondary_group"]}) '
+    "{ border-inline-start: 1px solid var(--border-strong); }",
+    *_KPI_TONE_RULES,
 )
 
 
