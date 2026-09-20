@@ -29,7 +29,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.basedatatypes import BaseFigure
 
-from dashboard.components.tokens import css_custom_properties
+from dashboard.components.tokens import CHART_CATEGORICAL_COLORS, css_custom_properties, token
 
 __all__ = [
     "CSS_SELECTORS",
@@ -156,11 +156,20 @@ def inject_direction_css() -> None:
 
 
 def plotly_template() -> go.layout.Template:
-    """Build the shared Plotly typography template for dashboard figures.
+    """Build the shared Plotly template for dashboard figures.
+
+    The template carries typography, the categorical palette, token grid/border
+    colours and RTL-friendly legend/title placement. Chart builders still own
+    figure sizing (``width``/``height``/``autosize``) and margins.
+
+    RTL decision (recorded in the Task 14 execution-log entry): the legend and
+    title are aligned for right-to-left reading, but the **time axis is not
+    reversed** — time flows left to right on the LTR plot canvas (the grid stays
+    LTR per AGENTS.md), so only the chrome around the plot is RTL-aware.
 
     Returns:
-        A template carrying only font/typography settings, so chart builders keep
-        their own sizing, axes and trace layout.
+        A template carrying palette, grid, legend/title placement and typography,
+        so chart builders keep their own sizing, margins and trace layout.
     """
     template = go.layout.Template()
     template.layout.font = {
@@ -169,15 +178,30 @@ def plotly_template() -> go.layout.Template:
     }
     template.layout.title = {
         "font": {"family": FONT_STACK, "size": PLOTLY_TITLE_FONT_SIZE},
+        # Right-aligned title reads naturally at the start of an RTL line.
+        "x": 1,
+        "xanchor": "right",
     }
-    template.layout.legend = {"font": {"family": FONT_STACK}}
+    template.layout.legend = {
+        "font": {"family": FONT_STACK},
+        # Horizontal, above the plot, right-aligned: the RTL reading start.
+        "orientation": "h",
+        "yanchor": "bottom",
+        "y": 1.02,
+        "xanchor": "right",
+        "x": 1,
+    }
     template.layout.hoverlabel = {"font": {"family": FONT_STACK}}
-    axis_typography = {
+    template.layout.colorway = list(CHART_CATEGORICAL_COLORS)
+    axis_layout = {
         "tickfont": {"family": FONT_STACK},
         "title": {"font": {"family": FONT_STACK}},
+        "gridcolor": token("border"),
+        "linecolor": token("border-strong"),
+        "zerolinecolor": token("border-strong"),
     }
-    template.layout.xaxis = axis_typography
-    template.layout.yaxis = axis_typography
+    template.layout.xaxis = axis_layout
+    template.layout.yaxis = axis_layout
     return template
 
 

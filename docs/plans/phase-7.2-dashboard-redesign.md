@@ -716,9 +716,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 5, 9.
 - **Acceptance:**
-  - [ ] The template contract test is renamed/split and passes; it asserts the template covers typography **plus** palette/grid/legend-axis placement and still forbids sizing and margins (extended, not weakened).
-  - [ ] `test_charts.py` passes; a new assertion checks the token palette is applied.
-  - [ ] **AM-25:** `tests/unit/dashboard/test_exports.py` includes a Kaleido PNG **and** SVG render smoke of at least one figure built with the new template (the export path is exercised here, not only in the final audit).
+  - [x] The template contract test is renamed/split and passes; it asserts the template covers typography **plus** palette/grid/legend-axis placement and still forbids sizing and margins (extended, not weakened).
+  - [x] `test_charts.py` passes; a new assertion checks the token palette is applied.
+  - [x] **AM-25:** `tests/unit/dashboard/test_exports.py` includes a Kaleido PNG **and** SVG render smoke of at least one figure built with the new template (the export path is exercised here, not only in the final audit).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_charts.py tests/unit/dashboard/test_direction.py tests/unit/dashboard/test_exports.py -q`.
 
 ### 15. (A) ADD the escaping helper and the RTL HTML table with the typed cell model

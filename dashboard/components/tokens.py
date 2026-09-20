@@ -16,7 +16,14 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
 
-__all__ = ["TOKENS", "css_custom_properties", "custom_properties", "token"]
+__all__ = [
+    "CHART_CATEGORICAL_COLORS",
+    "CHART_CATEGORICAL_COLOR_TOKENS",
+    "TOKENS",
+    "css_custom_properties",
+    "custom_properties",
+    "token",
+]
 
 TOKENS: Final[Mapping[str, str]] = MappingProxyType(
     {
@@ -45,6 +52,31 @@ TOKENS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 """Every token in the mockup's ``:root`` block, keyed by name without ``--``."""
+
+CHART_CATEGORICAL_COLOR_TOKENS: Final[tuple[str, ...]] = (
+    "accent",
+    "ok",
+    "warn",
+    "err",
+    "text-3",
+    "text-2",
+    "border-strong",
+)
+"""Token names, in order, that make up the categorical chart palette.
+
+The order matches ``chartCategoricalColors`` in ``.streamlit/config.toml`` so
+Streamlit's built-in charts and the Plotly template assign colours identically.
+"""
+
+CHART_CATEGORICAL_COLORS: Final[tuple[str, ...]] = tuple(
+    TOKENS[name] for name in CHART_CATEGORICAL_COLOR_TOKENS
+)
+"""The categorical chart palette, derived from :data:`TOKENS` (single source).
+
+No literal colour lives here: the values are token lookups, so the palette
+cannot drift from the theme. ``tests/unit/dashboard/test_tokens.py`` asserts the
+``config.toml`` list equals this tuple, order included.
+"""
 
 
 def token(name: str) -> str:

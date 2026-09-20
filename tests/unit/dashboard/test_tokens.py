@@ -16,6 +16,7 @@ from typing import cast
 import pytest
 
 from dashboard.components.tokens import (
+    CHART_CATEGORICAL_COLORS,
     TOKENS,
     css_custom_properties,
     custom_properties,
@@ -135,6 +136,12 @@ def test_theme_chart_categorical_colours_are_token_colours() -> None:
     assert isinstance(colours, list)
     for colour in colours:
         assert colour in token_values, colour
+
+
+def test_theme_chart_categorical_colours_match_the_token_palette_exactly() -> None:
+    # One source: the config list must equal the token-derived palette, order
+    # included, so Streamlit and the Plotly template assign colours identically.
+    assert tuple(_theme_section()["chartCategoricalColors"]) == CHART_CATEGORICAL_COLORS
 
 
 def test_theme_font_keys_are_owned_by_task_seven() -> None:

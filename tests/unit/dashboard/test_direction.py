@@ -18,6 +18,7 @@ from dashboard.components.direction import (
     inject_direction_css,
     plotly_template,
 )
+from dashboard.components.tokens import CHART_CATEGORICAL_COLORS, token
 
 INJECTION_SCRIPT = (
     "from dashboard.components.direction import inject_direction_css\n" "inject_direction_css()\n"
@@ -60,16 +61,41 @@ def test_direction_css_pins_the_ltr_grid_and_plotly_canvases() -> None:
     assert f'{CSS_SELECTORS["plotly_chart"]} {{ direction: ltr; }}' in css
 
 
-def test_plotly_template_is_typography_only() -> None:
+def test_plotly_template_typography() -> None:
+    """The template supplies the Persian typography the builders rely on."""
     template = plotly_template()
 
     assert template.layout.font.family == FONT_STACK
+    assert template.layout.font.size == 13
+    assert template.layout.title.font.family == FONT_STACK
     assert template.layout.xaxis.title.font.family == FONT_STACK
     assert template.layout.yaxis.tickfont.family == FONT_STACK
-    # Sizing stays with the chart builders.
+    assert template.layout.hoverlabel.font.family == FONT_STACK
+
+
+def test_plotly_template_is_typography_palette_and_layout_only() -> None:
+    template = plotly_template()
+
+    # Palette comes from the token-derived categorical colours.
+    assert list(template.layout.colorway) == list(CHART_CATEGORICAL_COLORS)
+    # Grid/border colours are tokens, not literals.
+    assert template.layout.xaxis.gridcolor == token("border")
+    assert template.layout.yaxis.gridcolor == token("border")
+    assert template.layout.xaxis.linecolor == token("border-strong")
+    # RTL-friendly legend/title placement is present, but the time axis is not
+    # reversed (no autorange reversal) — time stays left to right.
+    assert template.layout.legend.orientation == "h"
+    assert template.layout.legend.xanchor == "right"
+    assert template.layout.title.xanchor == "right"
+    assert template.layout.xaxis.autorange is None
+    # Sizing and margins stay with the chart builders.
     assert template.layout.height is None
     assert template.layout.width is None
     assert template.layout.autosize is None
+    assert template.layout.margin.l is None
+    assert template.layout.margin.r is None
+    assert template.layout.margin.t is None
+    assert template.layout.margin.b is None
 
 
 def test_apply_plotly_typography_preserves_existing_layout() -> None:

@@ -370,4 +370,72 @@ were never staged or committed (Task 7 owns them).
   byte-for-byte reproduction of the existing Jalali output, so compaction is left
   out of scope. (2) quarterly Gregorian → year-month is a decision, not a plan
   requirement (the plan names only annual/monthly/daily).
+- **Commit hash:** `9b5e7ad`
+
+## Task 14 — (A) REBUILD the Plotly template from the tokens
+
+- **Files:** `dashboard/components/tokens.py`, `dashboard/components/direction.py`,
+  `tests/unit/dashboard/test_tokens.py`, `tests/unit/dashboard/test_direction.py`,
+  `tests/unit/dashboard/test_charts.py`, `tests/unit/dashboard/test_exports.py`,
+  plan checkboxes.
+- **Export engine (verified, plan wording correct):** the export path is
+  **Kaleido v1**, not Playwright. `dashboard/components/exports.py` imports
+  `from kaleido import Kaleido` and calls `Kaleido(path=find_chromium_executable())`
+  → `await renderer.open()` → `renderer.calc_fig(...)`. Playwright is only the
+  *source of the Chromium binary* (`find_chromium_executable()` scans
+  `~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome`, then system Chrome).
+  On this machine it resolves to `/usr/bin/google-chrome` and a real PNG+SVG
+  render succeeds.
+- **Build:** `tokens.py` gains `CHART_CATEGORICAL_COLOR_TOKENS` (the token names,
+  in order) and `CHART_CATEGORICAL_COLORS` (derived from `TOKENS`, so no literal
+  colour is introduced). The palette's single source is the token map;
+  `.streamlit/config.toml`'s `chartCategoricalColors` is now asserted equal to it,
+  order included. `plotly_template()` gains `layout.colorway` (the token
+  palette), token grid/border colours (`gridcolor`=`border`,
+  `linecolor`/`zerolinecolor`=`border-strong`) and RTL-friendly legend/title
+  placement (legend horizontal at the top, right-aligned; title right-aligned).
+  Sizing and margins stay with the builders.
+- **RTL decision:** legend and title are aligned for RTL reading, but the **time
+  axis is not reversed** — time flows left to right on the LTR plot canvas (the
+  grid stays LTR, per AGENTS.md). Recorded in the `plotly_template` docstring and
+  asserted in the contract test (`xaxis.autorange is None`).
+- **Test revision:** `test_plotly_template_is_typography_only` was **split** into
+  `test_plotly_template_typography` (focused typography) and
+  `test_plotly_template_is_typography_palette_and_layout_only` (palette + grid +
+  legend/title placement present; sizing and all four margins still absent).
+  `test_charts.py` gained a per-builder token-palette assertion.
+- **AM-25 smoke and how it is run:** `test_kaleido_renders_png_and_svg_with_the_new_template`
+  renders a real PNG+SVG of a figure built with the new template. It needs a
+  Chromium executable, so it is marked `@pytest.mark.integration` and is
+  **deselected by `make check`** (`pytest -m "not integration"`). Run it
+  explicitly: `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov`
+  → **1 passed** (PNG starts with the PNG magic bytes, SVG with `<svg`).
+- **Visual check (before/after, real charts):** captured the first Plotly chart
+  on `inflation` (small multiples, 10 series) and `gdp` (single series) with the
+  **old** template (reverted `direction.py` to `HEAD`, then restored) and the new
+  one. Findings:
+  - **Legend placement changed as intended:** inflation's legend moved from a
+    vertical stack down the right edge (old) to a horizontal right-aligned band
+    above the plot (new); gdp's single-entry legend stays top-right. No legend
+    overlap with the plot area or panel titles.
+  - **Panel/title alignment:** the small-multiples panel titles are now
+    right-aligned (RTL) instead of left-aligned.
+  - **Palette:** the trace colours are **identical before and after** in the
+    browser. Reason: Streamlit injects the theme's `chartCategoricalColors`
+    (set in Task 8) into every Plotly chart client-side, so the browser already
+    used the token palette. The template `colorway` therefore matters for the
+    **server-side/export** path (Kaleido renders with the figure's own template);
+    it is asserted in tests and exercised by the AM-25 smoke.
+  - **No defects found:** Persian glyphs render in Vazirmatn, axis titles/ticks
+    are readable, grid lines are the token border colour. The rotated bottom
+    Jalali tick labels are dense on the 10-series inflation chart — a
+    pre-existing density artifact, identical before and after, not introduced
+    here.
+- **Verify:** `poetry run pytest tests/unit/dashboard -q --no-cov` → **389 passed**
+  (385 + 4 new). `poetry run mypy src dashboard` → **0 errors**. `ruff format` /
+  `ruff check` on the touched files → clean.
+- **Deviations:** none material. The `chartCategoricalColors` palette lives in
+  `.streamlit/config.toml` (Task 8), not in `tokens.py` as the prompt assumed;
+  `tokens.py` now derives the same palette from token names and a test pins the
+  two equal, so there is still exactly one colour source.
 - **Commit hash:** (this commit)
