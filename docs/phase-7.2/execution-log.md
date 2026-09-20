@@ -855,4 +855,4 @@ were never staged or committed (Task 7 owns them).
   the theme-owned type scale. (3) `render_filter_bar`'s spacer weight is a module
   constant (`2.0`) rather than a mockup value: the mockup's `.grow` is `flex: 1`
   over fixed-width controls, which `st.columns` proportions cannot express exactly.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `f55efaf`
