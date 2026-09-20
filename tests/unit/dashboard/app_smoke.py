@@ -825,6 +825,23 @@ def app_test(page_filename: str, *, use_router: bool = True) -> AppTest:
     return app.switch_page(f"pages/{page_filename}").run()
 
 
+def html_texts(app: AppTest) -> list[str]:
+    """Return the raw HTML bodies rendered by ``st.html`` in an AppTest.
+
+    ``AppTest`` has no typed accessor for ``st.html``, so the markup is read off
+    the element's protobuf (``app.get("html")[i].proto.body``). Use this to assert
+    on the markup a migrated component renders (the Task 16 migration map): a
+    table built by ``render_html_table`` is invisible to ``app.dataframe``.
+
+    Args:
+        app: A run :class:`AppTest`
+
+    Returns:
+        One HTML string per ``st.html`` element, in render order
+    """
+    return [element.proto.body for element in app.get("html")]
+
+
 class FakeDashboardRepository:
     def __init__(self) -> None:
         timestamps = list(INFLATION_TIMESTAMPS)

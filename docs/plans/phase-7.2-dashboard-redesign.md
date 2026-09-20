@@ -759,17 +759,17 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
   | `test_app_correlation.py` | `app.dataframe` (join/overlap) | 42 (stay `st.dataframe`) | none |
   | `test_app_catalog.py` | `app.dataframe`, `app.info` | 44 (grid stays; callout native) | none |
   | `test_app_economy.py` | `app.title`, `app.subheader`, `app.caption` | 36 | none |
-  | `test_app_economy.py` | `app.dataframe` (quality) | 35 (→ `st.html`) | rewrite: markup assertion |
   | `test_app_economy.py` | `app.dataframe` (observations) | 35 (stays `st.dataframe`) | none |
-  | `test_app_trade_welfare.py` | `app.dataframe` (quality) | 35 | rewrite: markup assertion |
-  | `test_app_fx_gold.py` | `app.dataframe` (quality) | 35 | rewrite: markup assertion |
+  | `test_app_trade_welfare.py` | *(no `app.dataframe` assertion)* | 35 | none — **corrected 2026-09-21**: the file only smoke-asserts `not app.exception`; there is no quality-table dataframe assertion to migrate |
+  | `test_app_fx_gold.py` | *(no `app.dataframe` assertion)* | 35 | none — **corrected 2026-09-21**: same as `test_app_trade_welfare.py`, smoke-only |
   | `test_app_labor.py` | `app.title`, `app.info` | 36 | none |
-  | `test_app_labor.py` | `app.dataframe` (quality) | 35 | rewrite: markup assertion |
+  | `test_app_labor.py` | `app.dataframe` (quality, `table.rows_returned`) | 35 | rewrite: markup assertion |
   | `test_app_welfare.py` | `app.title`, `app.subheader`, `app.info`, `app.warning` | 39 | none |
   | `test_app_welfare.py` | `app.dataframe` (survey-year panel) | 39 (→ `st.html`) | rewrite: markup assertion |
   | `test_app_economy.py` (Inflation) | `app.subheader`, `app.caption` (chain-linking) | 38 | none — **verified now**: no `app.dataframe` assertion covers the Inflation provenance table (`test_app_economy.py:253-255` asserts `app.subheader`/`app.caption`) |
   | `test_app_market.py` | `app.title`, `app.subheader`, `app.metric`, `app.info`, `app.warning` | 40 | none |
   | `test_derived_series.py` | `app.dataframe` (observations) | 35 (stays `st.dataframe`) | none |
+  | `test_derived_series.py` | `app.dataframe` (quality, `_quality_frame`, lines 230/243) | 35 (→ `st.html`) | rewrite: markup assertion — **added 2026-09-21**: the file asserts the quality table too, not only observations |
   | `test_scaling.py` | `app.dataframe`, `app.info` | 35 | none |
   | `test_filters.py` | `app.caption` | 21/32 | none |
   | `test_i18n.py`, `test_app_router.py` | `app.title` | — | none |
@@ -778,8 +778,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Task 15.
 - **Acceptance:**
-  - [ ] The helper exists and has a unit test against a minimal `st.html` probe.
-  - [ ] The migration map above is recorded (not the rewrites; those live in Tasks 30, 32, 35, 39).
+  - [x] The helper exists and has a unit test against a minimal `st.html` probe.
+  - [x] The migration map above is recorded (not the rewrites; those live in Tasks 30, 32, 35, 39).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_html_text_helper.py -q`.
 
 ### 17. (A) ADD the callout component (native, D13)

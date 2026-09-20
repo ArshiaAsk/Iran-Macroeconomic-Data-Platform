@@ -438,7 +438,7 @@ were never staged or committed (Task 7 owns them).
   `.streamlit/config.toml` (Task 8), not in `tokens.py` as the prompt assumed;
   `tokens.py` now derives the same palette from token names and a test pins the
   two equal, so there is still exactly one colour source.
-- **Commit hash:** (this commit)
+- **Commit hash:** `8b2e6ee`
 
 ## Task 15 — (A) ADD the escaping helper and the RTL HTML table with the typed cell model
 
@@ -491,4 +491,37 @@ were never staged or committed (Task 7 owns them).
   `secondary_parts` is typed as a tuple of text-like **cells** (not raw strings),
   which is what lets the coverage id render as an isolated mono `Ltr`; the plan
   left the element type open.
+- **Commit hash:** `f501078`
+
+## Task 16 — (A) ADD the AppTest HTML-text helper and record the test-migration map
+
+- **Files:** `tests/unit/dashboard/app_smoke.py` (helper),
+  `tests/unit/dashboard/test_html_text_helper.py` (new), plan migration map
+  (corrected), plan checkboxes.
+- **Build:** `html_texts(app) -> list[str]` reads
+  `app.get("html")[i].proto.body` for every ``st.html`` element in render order.
+  `AppTest` has no typed accessor for ``st.html``, so this is the only way to
+  assert on the markup a migrated table renders. No suite was rewritten here (per
+  the plan, the rewrites live in Tasks 30, 32, 35, 39).
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_html_text_helper.py -q
+  --no-cov` → **2 passed** (a minimal `st.html` probe app returns both bodies in
+  order; a page with no `st.html` returns `[]`).
+- **Migration map verified by grep and corrected (3 rows drifted):**
+  - `test_app_economy.py` — the map claimed an `app.dataframe` **quality**
+    assertion; the file has only the **observations** grid
+    (`table.timestamp`, line 90). Row removed; the observations row already
+    covers it. The Inflation chain-linking claim is accurate
+    (`test_app_economy.py:253-255` asserts `app.subheader`/`app.caption`).
+  - `test_app_trade_welfare.py` and `test_app_fx_gold.py` — the map claimed
+    `app.dataframe` **quality** assertions; both files contain a single smoke test
+    asserting `not app.exception` and **no** `app.dataframe`. Rows corrected to
+    "none".
+  - `test_derived_series.py` — the map listed only the **observations** grid; the
+    file also asserts the **quality** table via `_quality_frame` (lines 230/243),
+    which will migrate to `st.html` in Task 35. A rewrite row was added.
+  - All other rows were confirmed accurate (the authoritative quality-table
+    marker is the `table.rows_returned` column; only `test_app_labor.py` and
+    `test_derived_series.py` assert it).
+- **Deviations:** none beyond the map corrections above (the plan explicitly asks
+  for drift to be fixed here).
 - **Commit hash:** (this commit)
