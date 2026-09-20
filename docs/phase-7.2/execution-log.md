@@ -146,3 +146,26 @@ were never staged or committed (Task 7 owns them).
   config error** in the streamlit log (`curl /` → 200).
 - **Deviations:** none.
 - **Commit hash:** `2bca541`
+
+## Task 9 — (A) EXTEND the shell CSS owner with tokens and the chrome block
+
+- **Files:** `dashboard/components/direction.py`,
+  `tests/unit/dashboard/test_direction.py`, plan checkboxes.
+- **Build:** added `css_custom_properties()` to `direction_css()` so the token
+  `:root` block is emitted; registered stable chrome selectors in
+  `CSS_SELECTORS`; added a comment-marked, version-named `/* Streamlit-chrome
+  selectors — verified on Streamlit 1.61.1 ... */` block implementing sidebar
+  width 256 px, flex column pinning `stSidebarUserContent` to the bottom via
+  `order:2;margin-top:auto`, active-nav accent via `[aria-current="page"]`
+  (`border-inline-start:3px solid var(--accent)`), and main-container max-width
+  1360 px. No brand or top-bar rules; main top padding untouched. CSS still
+  injected via `st.markdown(..., unsafe_allow_html=True)`.
+- **Verify:** `poetry run pytest tests/unit/dashboard -q --no-cov` → **356
+  passed** (341 baseline + 15 new). `poetry run mypy src dashboard` → **0
+  errors**. Visual Playwright check: sidebar computed width **256 px**, main
+  container `max-width:1360px`, `--accent` token on `:root` equals
+  `#1D4E89`, active nav item has the accent bar, DB status pinned at the
+  bottom. Native header computed height **52.5 px** (close to the spike's
+  recorded 60 px; recorded as note).
+- **Deviations:** none.
+- **Commit hash:** _pending_

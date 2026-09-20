@@ -107,3 +107,51 @@ def test_injection_helper_wraps_the_stylesheet_in_a_style_element() -> None:
 
 def test_injection_helper_is_importable_without_a_streamlit_run() -> None:
     assert callable(inject_direction_css)
+
+
+def test_direction_css_emits_token_custom_properties_on_root() -> None:
+    css = direction_css()
+
+    assert ":root {" in css
+    assert "--accent: #1D4E89;" in css
+    assert "--radius: 6px;" in css
+    assert "--font-ui:" in css
+
+
+def test_chrome_selectors_are_registered() -> None:
+    for key in (
+        "sidebar_content",
+        "sidebar_header",
+        "sidebar_nav_link_active",
+        "sidebar_user_content",
+        "main_block_container",
+    ):
+        assert key in CSS_SELECTORS, key
+
+
+def test_chrome_block_is_comment_marked_and_names_the_tested_version() -> None:
+    css = direction_css()
+
+    # The chrome block is isolated behind a comment that names the tested
+    # Streamlit version, so a future bump is a visible manual checkpoint.
+    assert "Streamlit-chrome selectors" in css
+    assert "Streamlit 1.61.1" in css
+    assert "wave-0-spike.md" in css
+    # The fragile active-link class is not used.
+    assert "st-emotion-cache-" not in css
+
+
+def test_chrome_block_styles_sidebar_width_active_item_and_max_width() -> None:
+    css = direction_css()
+
+    assert "width: 256px" in css
+    assert "max-width: 1360px" in css
+    assert f'{CSS_SELECTORS["sidebar_nav_link_active"]} {{' in css
+    assert "border-inline-start: 3px solid var(--accent);" in css
+    assert f'{CSS_SELECTORS["sidebar_user_content"]} {{ order: 2; margin-top: auto;' in css
+
+
+def test_chrome_block_does_not_touch_main_container_top_padding() -> None:
+    css = direction_css()
+
+    assert "padding-top" not in css

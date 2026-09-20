@@ -658,9 +658,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 2, 5.
 - **Acceptance:**
-  - [ ] The chrome block is the only place with version-fragile selectors and names the tested version (1.61.1).
-  - [ ] The selector set is consistent with the Wave 0 selector findings (Task 2).
-  - [ ] `test_direction.py` still passes and gains a test that the chrome block is comment-tagged.
+  - [x] The chrome block is the only place with version-fragile selectors and names the tested version (1.61.1).
+  - [x] The selector set is consistent with the Wave 0 selector findings (Task 2).
+  - [x] `test_direction.py` still passes and gains a test that the chrome block is comment-tagged.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_direction.py -q`.
 
 ### 10. (A) ADD the dev-only screenshot script (moved from Wave H; AM-24)

@@ -29,6 +29,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.basedatatypes import BaseFigure
 
+from dashboard.components.tokens import css_custom_properties
+
 __all__ = [
     "CSS_SELECTORS",
     "FONT_STACK",
@@ -51,7 +53,11 @@ PLOTLY_TITLE_FONT_SIZE: Final[int] = 17
 CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "sidebar": '[data-testid="stSidebar"]',
+        "sidebar_content": '[data-testid="stSidebarContent"]',
+        "sidebar_header": '[data-testid="stSidebarHeader"]',
         "sidebar_nav": '[data-testid="stSidebarNav"]',
+        "sidebar_nav_link_active": '[data-testid="stSidebarNavLink"][aria-current="page"]',
+        "sidebar_user_content": '[data-testid="stSidebarUserContent"]',
         "markdown": '[data-testid="stMarkdownContainer"]',
         "heading": '[data-testid="stHeading"], h1, h2, h3, h4, h5, h6',
         "metric": '[data-testid="stMetric"]',
@@ -60,6 +66,7 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "form_label": '[data-testid="stForm"] label',
         "dataframe": '[data-testid="stDataFrame"]',
         "plotly_chart": '[data-testid="stPlotlyChart"]',
+        "main_block_container": '[data-testid="stMainBlockContainer"]',
     }
 )
 
@@ -85,12 +92,53 @@ _RULES: Final[tuple[tuple[str, str], ...]] = (
     ("plotly_chart", "direction: ltr;"),
 )
 
+#: Streamlit-chrome selectors verified on Streamlit 1.61.1
+#: (``docs/phase-7.2/wave-0-spike.md`` §4.3/§4.4). Every hook here is a stable
+#: ``data-testid`` or the ``[aria-current="page"]`` attribute; the hashed
+#: ``st-emotion-cache-*`` active-link class is deliberately **not** used.
+#: Widths need ``!important`` against Streamlit's inline styles. The native
+#: ``[data-testid="stHeader"]`` is 60 px (the mockup's 48 px top bar is a new
+#: element built in Task 28); the main container's top padding is intentionally
+#: **not** touched here. Brand and top-bar rules land in Tasks 27/28.
+_CHROME_COMMENT: Final[str] = (
+    "/* Streamlit-chrome selectors — verified on Streamlit 1.61.1 "
+    "(wave-0-spike.md §4.3/§4.4). Stable data-testid hooks + "
+    '[aria-current="page"]; widths need !important. Native header '
+    '[data-testid="stHeader"] is 60 px (mockup top bar 48 px → Task 28). '
+    "Do not extend without re-running the selector probe. */"
+)
+
+#: Chrome rules as ``(selector key, declarations)`` in stylesheet order.
+_CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
+    ("sidebar", "width: 256px !important; min-width: 256px !important;"),
+    ("sidebar_content", "display: flex !important; flex-direction: column;"),
+    ("sidebar_header", "order: 0;"),
+    ("sidebar_nav", "order: 1;"),
+    ("sidebar_user_content", "order: 2; margin-top: auto;"),
+    (
+        "sidebar_nav_link_active",
+        "background: var(--accent-soft); color: var(--accent); "
+        "font-weight: 600; border-inline-start: 3px solid var(--accent);",
+    ),
+    ("main_block_container", "max-width: 1360px !important;"),
+)
+
 
 def direction_css() -> str:
-    """Return the scoped RTL/typography stylesheet as a string."""
-    header = "/* dashboard RTL + Persian typography: dashboard/components/direction.py */"
+    """Return the scoped RTL/typography/chrome stylesheet as a string.
+
+    The stylesheet has three sections: the design-token ``:root`` block (the
+    single source for the palette/radii/fonts), the RTL typography rules, and a
+    comment-marked, version-named chrome block for the Streamlit shell selectors.
+    """
+    header = "/* dashboard RTL + Persian typography + chrome: dashboard/components/direction.py */"
+    root_block = css_custom_properties()
     rules = [f"{CSS_SELECTORS[selector]} {{ {declarations} }}" for selector, declarations in _RULES]
-    return "\n".join([header, *rules])
+    chrome_rules = [
+        f"{CSS_SELECTORS[selector]} {{ {declarations} }}"
+        for selector, declarations in _CHROME_RULES
+    ]
+    return "\n".join([header, root_block, *rules, _CHROME_COMMENT, *chrome_rules])
 
 
 def inject_direction_css() -> None:
