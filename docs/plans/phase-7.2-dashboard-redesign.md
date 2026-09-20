@@ -682,8 +682,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `value.relative_today`="امروز", `value.relative_hours_ago`="{count} ساعت پیش", `value.relative_days_ago`="{count} روز پیش", `value.relative_months_ago`="{count} ماه پیش".
 - **Depends:** —
 - **Acceptance:**
-  - [ ] Pure function; no wall-clock call inside.
-  - [ ] Tests pin today/hours/days/months and the future-clamp.
+  - [x] Pure function; no wall-clock call inside.
+  - [x] Tests pin today/hours/days/months and the future-clamp.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_formatting.py -q`.
 
 ### 12. (A) ADD the freshness aggregate and stale-first ordering

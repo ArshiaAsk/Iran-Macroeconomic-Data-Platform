@@ -233,7 +233,9 @@ were never staged or committed (Task 7 owns them).
 
 1. **Screenshot capture timing — open multiselect (inflation):** The script does
    not collapse open dropdowns before capturing. Filed for a future Task 10
-   refinement or for Task 24 retake if needed. Non-blocking.
+   refinement or for Task 24 retake if needed. Non-blocking. — **RESOLVED in
+   Step 0b** (see below): the re-run shows the previously expanded
+   "شاخص‌ها" multiselect collapsed to a single chip and no open popover.
 2. **Extra controls visible below the fold (gdp/labor):** The chart-state
    selector is present in the DOM but becomes visible because the main content
    max-width changed the layout. Not a Wave A defect; confirm it still renders
@@ -241,7 +243,8 @@ were never staged or committed (Task 7 owns them).
 3. **Toolbar state in captures:** The after images show "Stop" + "Deploy" (dev
    toolbar) while the baseline shows only "Deploy". This is runtime environment
    noise, not a product regression. No action needed unless automated pixel
-   comparison is introduced later.
+   comparison is introduced later. — **RESOLVED in Step 0b** (see below): the
+   re-run captures show only "Deploy".
 
 ### Gate result
 
@@ -250,3 +253,55 @@ were never staged or committed (Task 7 owns them).
   Wave B (shell: brand, Material icons, active-item style, DB status, top
   bar/breadcrumb) begins at Task 25, **not** Task 11 as previously recorded
   here.
+
+---
+
+## Step 0b — (0) Harden the screenshot script and re-verify captures
+
+- **Files:** `scripts/dashboard_screenshots.py` (committed in `6c1296c`), this
+  log entry.
+- **Build (committed `6c1296c`):** `wait_ready()` now also waits for
+  `[data-testid="stStatusWidget"]` to detach (the "Stop"/running indicator)
+  plus a 500 ms settle; `neutralise(page)` presses Escape, moves the mouse to
+  the sidebar top and scrolls the main container to the top before every
+  capture. File names and the default output directory are unchanged.
+- **Verify (this session):** app launched with
+  `poetry run streamlit run dashboard/app.py --server.port 8501`; script re-run
+  → **10 PNGs** written to
+  `docs/phase-7.2/wave-a-assets/after-global-look/` (gitignored).
+  - **"Stop" button: GONE.** The re-run captures show only "Deploy" + the kebab
+    menu in the toolbar.
+  - **Inflation multiselect: GONE (no open dropdown).** A live DOM probe
+    (`/tmp/probe_inflation.py`, throwaway) reported
+    `visible popovers=0 visible listboxes=0 statusWidget=0` on the inflation
+    page. The "شاخص‌ها" multiselect now shows a single collapsed chip; the
+    decile multiselect's ten chips are its normal *collapsed* inline wrap, not
+    an open menu.
+  - `poetry run ruff format --check` / `ruff check` / `mypy` on the script →
+    clean (0 errors).
+- **Deviations:** none. Defects #1 and #3 of the global-look checkpoint are now
+  resolved (annotated above).
+- **Commit hash:** `6c1296c` (script); this entry is docs-only.
+
+## Task 11 — (A) ADD the relative-time formatter
+
+- **Files:** `dashboard/formatting.py`, `dashboard/i18n.py`,
+  `tests/unit/dashboard/test_formatting.py`.
+- **Build:** `relative_time_label(value, *, now, digit_mode="fa")` with explicit
+  floor-division boundaries — `< 1 h` → "امروز"; `< 24 h` → `{n} ساعت پیش`;
+  `< 30 d` → `{n} روز پیش`; otherwise `{n} ماه پیش` (`days // 30`). A future
+  instant clamps to "امروز". `now` is required and no wall-clock call appears
+  inside. Naive datetimes are normalised to UTC (the neighbouring helpers'
+  convention). Persian digits via `to_persian_digits` honouring `digit_mode`.
+  Four i18n keys added: `value.relative_today` / `_hours_ago` / `_days_ago` /
+  `_months_ago`.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_formatting.py
+  tests/unit/dashboard/test_app_overview.py -q --no-cov` → **54 passed**. The
+  parametrized boundary test pins 12 cases (0 m, 30 m, 3599 s, 1 h, 5 h, 23 h,
+  24 h, 5 d, 29 d, 30 d, 60 d, 365 d) plus a future-clamp and a `latin` digit
+  case.
+- **Deviations:** the plan mentioned "a week/month granularity"; only the four
+  keys listed in the plan were added (no week granularity) — the plan's own key
+  list does not include a week key, and the prompt allowed skipping it if
+  logged. Months use floor division on `days // 30`.
+- **Commit hash:** `dc5f05e`
