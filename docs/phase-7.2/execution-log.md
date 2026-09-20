@@ -625,4 +625,4 @@ were never staged or committed (Task 7 owns them).
   - `ruff format` / `ruff check` on the touched files → clean.
 - **Deviations:** none to production. The "every component has a keyed container"
   pattern is applied where scoped CSS exists (the callout), not mechanically.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `22739b9`
