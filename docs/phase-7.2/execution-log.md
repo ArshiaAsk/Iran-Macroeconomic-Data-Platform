@@ -1037,4 +1037,4 @@ were never staged or committed (Task 7 owns them).
   change was needed. (2) `VALIDATION.md` is created here as a Wave A report rather
   than a bare stub, because the plan's acceptance requires the four categories to
   be recorded in it; later tasks append to the same file.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `081e227`
