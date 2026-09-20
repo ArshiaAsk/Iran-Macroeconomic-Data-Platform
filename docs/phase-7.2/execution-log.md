@@ -782,3 +782,77 @@ were never staged or committed (Task 7 owns them).
   (states) must declare `direction: rtl` on their own containers or they will mirror
   the same way; Task 23's component catalogue should state the rule once.
 - **Commit hash:** `496b4ce`
+
+## Task 21 — (A) ADD the section header and filter bar components
+
+- **Files:** `dashboard/components/layout.py`, `dashboard/components/direction.py`
+  (component-hook CSS block + `CSS_SELECTORS`), `dashboard/i18n.py`
+  (`filter.all`, `filter.showing_rows`, `filter.density`, `filter.density_comfortable`,
+  `filter.density_compact`), `tests/unit/dashboard/test_layout.py`, plan checkboxes.
+- **Build:** `render_section_header(title_key, *, subtitle=None, trailing=None, key=None)`
+  renders a native `st.subheader` plus optional already-resolved secondary text.
+  `render_filter_bar(controls, *, trailing=(), key="default")` lays out one row of
+  zero-argument control callables (the leading group, then the mockup's `.grow`
+  spacer, then `trailing`) with `st.columns(..., vertical_alignment="center")`; it
+  raises on an empty bar.
+- **Design notes.**
+  - **The title is grouped.** The row override makes the header container a
+    `space-between` row, so the title and its subtitle share a
+    `section-title-<suffix>` container and the trailing text is the row's other
+    child; otherwise the subtitle would be spread into the middle of the row. That
+    grouping container has no CSS of its own and therefore no `CSS_SELECTORS` entry
+    (`test_direction.py::test_every_declared_selector_is_styled` enforces that every
+    registry entry is styled).
+  - **`key` defaults to `title_key`**, not to `"default"`: a page legitimately
+    renders several section headers, so a fixed default key would raise on the
+    second one. This is a documented addition to the plan's signature (the plan
+    lists `subtitle`/`trailing` only); the plan's call form is unaffected.
+- **Live-DOM verification (Streamlit 1.61.1).** A throwaway Playwright probe
+  (`/tmp/phase72-probe-layout/probe_task21.py`, not added to the repo) rendered the
+  real components with the real `inject_direction_css()`:
+  - Section header container computed `direction: rtl; display: flex;
+    flex-direction: row; justify-content: space-between; align-items: baseline`; the
+    title child sits at x = 855–1370 (RTL start) and the trailing child at
+    x = 326–841 (far end) — the mockup's `.sec-h`. A header with no secondary text
+    spans the full 326–1370.
+  - Secondary text computed `font-size: 12.5px`, `color: rgb(102,115,133)`
+    (`--text-3`) — the mockup's `.sec-h .sub`.
+  - **Finding (fixed in this task):** the first cut scoped that rule to the *title*
+    container, which also matched the subheader's own markdown container and
+    recoloured the heading. `st.subheader` renders `stHeading` **and** a
+    `stMarkdownContainer`, so the secondary type needs its own container
+    (`section-subtitle-<suffix>`). Re-measured: the heading is `H3` at `24.5px` in
+    `rgb(27,36,48)` (`--text-1`), unchanged by the component CSS; the page `H1` is
+    `38.5px`.
+  - Filter bar: container `direction: rtl`; with three selects plus the trailing
+    group the six columns sit at x = 1233–1370 (`حوزه`, rightmost), 1081–1219,
+    930–1067, 629–916 (the spacer, 287 px), 477–615 (`نمایش ۸ ردیف`) and 326–463
+    (`چگالی`, leftmost) — the mockup's `.tb` with its `.grow`. A bar with one control
+    and no trailing group spans the full width and gets no spacer.
+  - **`vertical_alignment="center"` verified to work** (it does **not** set
+    `align-items` on the row; Streamlit makes the short column fit-content and
+    centres it): in the bar the 62 px row holds the 27 px row-count column at
+    y = 379 and the 55 px density column at y = 365, both centred; an isolated probe
+    confirmed the same behaviour for a plain `st.columns(2, vertical_alignment="center")`
+    against an unaligned control row.
+  - **Selector inventory addition:** `st.segmented_control` renders as
+    `[data-testid="stButtonGroup"]` (there is no `stSegmentedControl` testid). The
+    filter bar does not need it — the density toggle is a control callable, not
+    styled chrome — but the hook is recorded for the Task 23 design-system doc.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` →
+    **46 passed** (32 + 14).
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **472 passed** (458 + 14),
+    no regressions against Task 20.
+  - `poetry run mypy src dashboard` → **0 errors**; `ruff check` / `ruff format`
+    clean.
+- **Deviations:** (1) `render_section_header` gains an optional `key` (reason above);
+  the plan's signature has none. (2) The plan's acceptance says the section header
+  uses "the token type scale" — read as: the heading keeps the theme's scale (no
+  competing scale is introduced) and only the *secondary* text gets a component
+  value (`12.5px`/`--text-3`, the mockup's `.sub`). `tokens.py` holds no type-scale
+  tokens, so no token could be referenced; this matches the Task 19 deviation about
+  the theme-owned type scale. (3) `render_filter_bar`'s spacer weight is a module
+  constant (`2.0`) rather than a mockup value: the mockup's `.grow` is `flex: 1`
+  over fixed-width controls, which `st.columns` proportions cannot express exactly.
+- **Commit hash:** `PENDING`

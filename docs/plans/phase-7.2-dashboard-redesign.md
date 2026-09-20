@@ -839,8 +839,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `filter.all`="همه", `filter.showing_rows`="نمایش {count} ردیف", `filter.density`="چگالی", `filter.density_comfortable`="راحت", `filter.density_compact`="فشرده".
 - **Depends:** Task 19.
 - **Acceptance:**
-  - [ ] Section headers use the token type scale and remain visible as `app.subheader`.
-  - [ ] Filter bar renders an arbitrary number of controls without layout break.
+  - [x] Section headers use the token type scale and remain visible as `app.subheader`.
+  - [x] Filter bar renders an arbitrary number of controls without layout break.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py -q`.
 
 ### 22. (A) ADD shared empty / error / loading states (native, D13)

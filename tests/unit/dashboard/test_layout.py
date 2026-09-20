@@ -497,3 +497,186 @@ def test_component_containers_declare_their_own_rtl_context() -> None:
     assert f'{CSS_SELECTORS["kpi_band"]} {{ direction: rtl;' in css
     assert f'{CSS_SELECTORS["bar_list"]} {{ direction: rtl; }}' in css
     assert f'{CSS_SELECTORS["bar_list"]} {CSS_SELECTORS["bar_rail"]} {{ direction: rtl;' in css
+
+
+# --- Task 21: section header, filter bar -----------------------------------
+
+SECTION_HEADER_SCRIPT = """
+from dashboard.components.layout import render_section_header
+
+render_section_header("section.available_coverage")
+render_section_header("section.source_freshness", trailing="۵ به‌روز · ۲ کهنه")
+render_section_header(
+    "section.indicators_by_domain",
+    subtitle="شاخص‌های فعال هر حوزه",
+    trailing="تعداد شاخص",
+    key="bars",
+)
+"""
+
+
+def test_section_header_renders_the_title_natively() -> None:
+    app = _run(SECTION_HEADER_SCRIPT)
+
+    assert not app.exception
+    # A native st.subheader, so AppTest keeps seeing app.subheader.
+    assert [subheader.value for subheader in app.subheader] == [
+        t("section.available_coverage"),
+        t("section.source_freshness"),
+        t("section.indicators_by_domain"),
+    ]
+
+
+def test_section_header_secondary_text_is_optional() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_section_header\n"
+        'render_section_header("section.available_coverage")\n'
+    )
+
+    assert not app.exception
+    # No subtitle and no trailing text, so nothing but the subheader is emitted.
+    assert not app.markdown
+    assert len(app.subheader) == 1
+
+
+def test_section_header_renders_the_trailing_text() -> None:
+    app = _run(SECTION_HEADER_SCRIPT)
+
+    assert not app.exception
+    # The trailing slot carries already-resolved text, so it passes through.
+    assert "۵ به‌روز · ۲ کهنه" in [element.value for element in app.markdown]
+
+
+def test_section_header_renders_the_subtitle_under_the_title() -> None:
+    app = _run(SECTION_HEADER_SCRIPT)
+
+    assert not app.exception
+    assert "شاخص‌های فعال هر حوزه" in [element.value for element in app.markdown]
+
+
+def test_section_header_container_key_derives_from_the_title() -> None:
+    # A page renders several headers, so the default key is the title itself and
+    # distinct titles never collide.
+    app = _run(
+        "from dashboard.components.layout import render_section_header\n"
+        'render_section_header("section.available_coverage")\n'
+        'render_section_header("section.source_freshness")\n'
+    )
+
+    assert not app.exception
+    assert len(app.subheader) == 2
+
+
+def test_section_header_container_key_can_be_overridden() -> None:
+    # The same title twice needs an explicit key, exactly as the callout does.
+    app = _run(
+        "from dashboard.components.layout import render_section_header\n"
+        'render_section_header("section.available_coverage")\n'
+        'render_section_header("section.available_coverage", key="second")\n'
+    )
+
+    assert not app.exception
+    assert len(app.subheader) == 2
+
+
+def test_section_header_css_turns_the_container_into_one_row() -> None:
+    css = direction_css()
+
+    assert CSS_SELECTORS["section_header"] in css
+    assert (
+        f'{CSS_SELECTORS["section_header"]} {{ direction: rtl; flex-direction: row !important; '
+        "justify-content: space-between; align-items: baseline; }" in css
+    )
+    # The mockup's `.sec-h .sub` type reaches only the optional secondary text.
+    assert (
+        f'{CSS_SELECTORS["section_subtitle"]} [data-testid="stMarkdownContainer"], '
+        f'{CSS_SELECTORS["section_trailing"]} [data-testid="stMarkdownContainer"] '
+        "{ font-size: 12.5px; color: var(--text-3); }" in css
+    )
+
+
+def test_section_header_selectors_cannot_match_the_nested_containers() -> None:
+    """The row override must not apply to the containers it positions.
+
+    The hooks are attribute-substring selectors, so a nested container whose key
+    started with the header's stem would also receive the row override and lose its
+    column layout. The title/subtitle grouping container is unstyled, so only the
+    two styled nested hooks can be checked here.
+    """
+    stem = "st-key-section-header-"
+
+    assert stem in CSS_SELECTORS["section_header"]
+    for key in ("section_subtitle", "section_trailing"):
+        assert stem not in CSS_SELECTORS[key], key
+
+
+def _filter_bar_script(control_count: int) -> str:
+    return (
+        "import streamlit as st\n"
+        "from dashboard.components.layout import render_filter_bar\n"
+        "from dashboard.i18n import t\n"
+        'KEYS = ["filter.domain", "filter.source", "filter.frequency", '
+        '"filter.indicators", "filter.start_date", "filter.end_date"]\n'
+        "\n"
+        "\n"
+        "def make(key):\n"
+        "    def control():\n"
+        "        st.selectbox(t(key), [t('filter.all')])\n"
+        "    return control\n"
+        "\n"
+        "\n"
+        f"render_filter_bar([make(key) for key in KEYS[:{control_count}]])\n"
+    )
+
+
+@pytest.mark.parametrize("control_count", [1, 3, 6])
+def test_filter_bar_renders_an_arbitrary_number_of_controls(control_count: int) -> None:
+    app = _run(_filter_bar_script(control_count))
+
+    assert not app.exception
+    assert len(app.selectbox) == control_count
+
+
+def test_filter_bar_pins_the_trailing_group_to_the_far_end() -> None:
+    app = _run(
+        "import streamlit as st\n"
+        "from dashboard.components.layout import render_filter_bar\n"
+        "from dashboard.i18n import t\n"
+        "\n"
+        "\n"
+        "def row_count():\n"
+        "    st.markdown(t('filter.showing_rows', count='۸'))\n"
+        "\n"
+        "\n"
+        "def density():\n"
+        "    st.segmented_control(\n"
+        "        t('filter.density'),\n"
+        "        [t('filter.density_comfortable'), t('filter.density_compact')],\n"
+        "    )\n"
+        "\n"
+        "\n"
+        "def domain():\n"
+        "    st.selectbox(t('filter.domain'), [t('filter.all')])\n"
+        "\n"
+        "\n"
+        "render_filter_bar([domain], trailing=[row_count, density])\n"
+    )
+
+    assert not app.exception
+    assert [selectbox.label for selectbox in app.selectbox] == [t("filter.domain")]
+    assert [control.label for control in app.segmented_control] == [t("filter.density")]
+    assert t("filter.showing_rows", count="۸") in [element.value for element in app.markdown]
+
+
+def test_filter_bar_rejects_an_empty_control_list() -> None:
+    app = _run("from dashboard.components.layout import render_filter_bar\nrender_filter_bar([])\n")
+
+    assert app.exception
+    assert "at least one control" in str(app.exception[0].value)
+
+
+def test_filter_bar_container_declares_the_rtl_context() -> None:
+    css = direction_css()
+
+    assert CSS_SELECTORS["filter_bar"] in css
+    assert f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}' in css

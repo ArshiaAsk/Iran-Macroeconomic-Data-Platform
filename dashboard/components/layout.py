@@ -55,8 +55,10 @@ __all__ = [
     "KpiCell",
     "render_bar_list",
     "render_callout",
+    "render_filter_bar",
     "render_kpi_band",
     "render_page_header",
+    "render_section_header",
     "render_status_chip",
     "render_status_dot",
 ]
@@ -381,3 +383,101 @@ def render_bar_list(
             f"<b>{escape_html(total_label)}</b>"
             "</div>"
         )
+
+
+#: Relative width of the filter bar's spacer column, the mockup's `.grow`: it
+#: absorbs the slack so the trailing group pins to the far end of the bar instead
+#: of butting up against the filters.
+_FILTER_BAR_SPACER_WEIGHT: Final[float] = 2.0
+
+
+def render_section_header(
+    title_key: str,
+    *,
+    subtitle: str | None = None,
+    trailing: str | None = None,
+    key: str | None = None,
+) -> None:
+    """Render a section header: a native subheader with optional secondary text.
+
+    The title stays a native ``st.subheader``, so ``AppTest`` keeps seeing
+    ``app.subheader``. The mockup's ``.sec-h`` is one baseline-aligned row with the
+    title at the RTL start and the secondary text at the far end; that layout comes
+    from the scoped CSS in :mod:`dashboard.components.direction`, which turns the
+    keyed container into a ``space-between`` row. The secondary text carries the
+    mockup's ``.sec-h .sub`` type (muted, one step down from body text) — the
+    subheader itself keeps the theme's heading scale.
+
+    Args:
+        title_key: Catalog key of the section title (``section.<name>``)
+        subtitle: Optional **already resolved** secondary line rendered beneath the
+            title (call ``t(...)`` first). Markdown, so keep it to plain text
+        trailing: Optional **already resolved** text pinned to the far end of the
+            header row, e.g. a freshness summary. Markdown, so keep it to plain
+            text
+        key: Optional container-key override. Defaults to ``title_key``, because a
+            page renders several section headers and Streamlit raises on a repeated
+            container key; distinct titles therefore need no key at all
+    """
+    suffix = key if key is not None else title_key
+    with st.container(key=f"section-header-{suffix}"):
+        # The title and its subtitle share one container so the row override places
+        # them together at the RTL start; the trailing text is the row's other end.
+        with st.container(key=f"section-title-{suffix}"):
+            st.subheader(t(title_key))
+            if subtitle is not None:
+                # Its own container: `st.subheader` renders a `stMarkdownContainer`
+                # of its own, so the `.sub` type has to be addressable separately
+                # from the heading.
+                with st.container(key=f"section-subtitle-{suffix}"):
+                    st.markdown(subtitle)
+        if trailing is not None:
+            with st.container(key=f"section-trailing-{suffix}"):
+                st.markdown(trailing)
+
+
+def render_filter_bar(
+    controls: Sequence[Callable[[], None]],
+    *,
+    trailing: Sequence[Callable[[], None]] = (),
+    key: str = "default",
+) -> None:
+    """Render one filter-bar layout over an arbitrary number of controls.
+
+    Each control is a zero-argument callable that renders itself into the column it
+    is given (``st.selectbox``, ``st.segmented_control``, an existing
+    ``render_filters`` helper, …), so the bar owns the layout and nothing else.
+    Columns are centre-aligned so controls of differing heights — a selectbox next
+    to a segmented control — share one baseline row. The container declares
+    ``direction: rtl`` (see :mod:`dashboard.components.direction`), so the first
+    control is the rightmost, in reading order.
+
+    ``trailing`` holds the controls that belong at the far end of the bar (the
+    mockup's row-count echo and density toggle). A spacer column between the two
+    groups is the mockup's ``.grow``; it is added only when both groups are present.
+
+    Args:
+        controls: Callables rendering the leading filter controls, in display order
+        trailing: Callables rendering the controls pinned to the far end
+        key: Suffix that makes the container key unique when a page renders more
+            than one filter bar
+
+    Raises:
+        ValueError: When neither group carries a control
+    """
+    if not controls and not trailing:
+        message = "render_filter_bar needs at least one control"
+        raise ValueError(message)
+    weights = [1.0] * len(controls)
+    if controls and trailing:
+        weights.append(_FILTER_BAR_SPACER_WEIGHT)
+    weights += [1.0] * len(trailing)
+    with st.container(key=f"filter-bar-{key}"):
+        columns = st.columns(weights, vertical_alignment="center")
+        trailing_start = len(controls) + (1 if controls and trailing else 0)
+        for column, control in zip(columns[: len(controls)], controls, strict=True):
+            with column:
+                control()
+        for column, control in zip(columns[trailing_start:], trailing, strict=True):
+            with column:
+                control()

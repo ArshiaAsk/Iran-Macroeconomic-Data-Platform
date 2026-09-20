@@ -85,6 +85,15 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "bar_rail": ".bar-rail",
         "bar_fill": ".bar-fill",
         "bar_list_foot": ".bar-list-foot",
+        # Section header (Task 21). These are the styled hooks; the component also
+        # wraps the title/subtitle pair in a `section-title-<suffix>` container so
+        # the row below sees it as one child, and that container needs no rule of
+        # its own. The three keys here diverge from the header's stem before the
+        # `header`/`subtitle`/`trailing` part, so the row rule cannot match them.
+        "section_header": '[class*="st-key-section-header-"]',
+        "section_subtitle": '[class*="st-key-section-subtitle-"]',
+        "section_trailing": '[class*="st-key-section-trailing-"]',
+        "filter_bar": '[class*="st-key-filter-bar-"]',
     }
 )
 
@@ -288,6 +297,23 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     f'{CSS_SELECTORS["bar_list"]} [data-testid="stHorizontalBlock"] {{ align-items: center; }}',
     f'{CSS_SELECTORS["bar_list_foot"]} {{ border-top: 1px solid var(--border); '
     "display: flex; justify-content: space-between; color: var(--text-3); }",
+    # Section header (Task 21). The mockup's `.sec-h` is one baseline-aligned row
+    # with the title at the RTL start and the secondary text at the far end, so the
+    # container's column direction is overridden to a `space-between` row. The
+    # title/subtitle pair is one child and the trailing text the other, which is why
+    # the nested containers have keys that do not share this selector's stem.
+    f'{CSS_SELECTORS["section_header"]} {{ direction: rtl; flex-direction: row !important; '
+    "justify-content: space-between; align-items: baseline; }",
+    # The mockup's `.sec-h .sub`: muted, one step down from body text. Scoped to the
+    # subtitle/trailing containers only: `st.subheader` renders a
+    # `stMarkdownContainer` of its own, so a rule on the title container would also
+    # recolour the heading.
+    f'{CSS_SELECTORS["section_subtitle"]} [data-testid="stMarkdownContainer"], '
+    f'{CSS_SELECTORS["section_trailing"]} [data-testid="stMarkdownContainer"] '
+    "{ font-size: 12.5px; color: var(--text-3); }",
+    # Filter bar (Task 21): only the reading direction is ours; the columns, their
+    # weights and their centre alignment come from `st.columns`.
+    f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}',
 )
 
 

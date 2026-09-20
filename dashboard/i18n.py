@@ -165,6 +165,15 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
             "بازه اعمال‌شده: {jalali_start} تا {jalali_end} — "
             "کرانه‌های میلادی (UTC): {start} تا {end}"
         ),
+        # Filter-bar chrome (Task 21): the "all" option every catalog select
+        # carries, the row-count echo and the density toggle. The bar itself
+        # renders whatever controls it is handed, so these are the only strings it
+        # owns.
+        "filter.all": "همه",
+        "filter.showing_rows": "نمایش {count} ردیف",
+        "filter.density": "چگالی",
+        "filter.density_comfortable": "راحت",
+        "filter.density_compact": "فشرده",
         # CPI decile selector on the Inflation page (Task 13).
         "filter.cpi_deciles": "دهک‌های هزینه",
         # Chart labels and legends.
