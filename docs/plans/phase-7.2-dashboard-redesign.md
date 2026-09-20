@@ -789,9 +789,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `note.methodology_label`="یادداشت روش‌شناسی".
 - **Depends:** Task 5.
 - **Acceptance:**
-  - [ ] Tone maps to the theme alert colours; label is optional.
-  - [ ] No literal Persian string outside `i18n.py`.
-  - [ ] The callout is visible to AppTest as `app.warning`/`app.info`/`app.error`.
+  - [x] Tone maps to the theme alert colours; label is optional.
+  - [x] No literal Persian string outside `i18n.py`.
+  - [x] The callout is visible to AppTest as `app.warning`/`app.info`/`app.error`.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py -q`.
 
 ### 18. (A) ADD the page-header component (native, D13, AM-22)

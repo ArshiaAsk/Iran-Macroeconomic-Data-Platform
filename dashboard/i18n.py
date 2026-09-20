@@ -42,6 +42,8 @@ KEY_PREFIXES: Final[tuple[str, ...]] = (
     "export.",
     "empty.",
     "warn.",
+    "note.",
+    "state.",
     "value.",
 )
 
@@ -360,6 +362,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
             "به همین دلیل مقایسه آن‌ها روی یک مقیاس مشترک انجام می‌شود و هیچ نرمال‌سازی "
             "یا تبدیل واحدی اعمال نمی‌شود."
         ),
+        # Shared component chrome (Tasks 17-22). The callout label is rendered as
+        # a bold prefix inside the callout body; the body text itself is passed to
+        # ``render_callout`` as an existing key.
+        "note.methodology_label": "یادداشت روش‌شناسی",
         # Shared value placeholders.
         "value.unknown": "نامشخص",
         "value.fresh": "به‌روز",

@@ -545,3 +545,59 @@ were never staged or committed (Task 7 owns them).
   1–16 changed. No test run needed (no code touched).
 - **Deviations:** none.
 - **Commit hash:** `d06f4cd`
+
+## Task 17 — (A) ADD the callout component (native, D13)
+
+- **Files:** `dashboard/components/layout.py` (new),
+  `dashboard/components/direction.py` (component-hook CSS block + `CSS_SELECTORS`
+  entry), `dashboard/i18n.py` (`note.*` + `state.*` namespace prefixes,
+  `note.methodology_label`), `tests/unit/dashboard/test_layout.py` (new),
+  plan checkboxes.
+- **Build:** `render_callout(key, *, tone="warn", label_key=None,
+  container_key=None)` maps the tone to a native `st.warning`/`st.info`/
+  `st.error` through a closed `CALLOUT_TONES` set (an unknown tone raises, so a
+  tone can never reach a class attribute). The optional label is rendered as a
+  markdown-bold prefix inside the body (`**label** body`), which needs no HTML and
+  no escaping. `container_key` is a **documented addition to the plan signature**:
+  the keyed container is the CSS hook and Streamlit raises on a repeated container
+  key, so a callout whose body key legitimately renders twice in one run (two
+  Overview-style sections both showing `empty.no_observations`) needs a
+  disambiguator.
+- **Hook pattern verified in the live DOM (Streamlit 1.61.1).** A throwaway probe
+  (`/tmp/phase72-probe-layout/`, not added to the repo) rendered the real component
+  with the real `inject_direction_css()` and read the DOM back with Playwright:
+  - `st.container(key="callout-warn.forecasts_indistinguishable")` →
+    `class="stVerticalBlock st-key-callout-warn-forecasts_indistinguishable …"`.
+    **Streamlit sanitizes the key into a CSS identifier** (`.` → `-`, `_` kept), so
+    the attribute-substring selector `[class*="st-key-callout-"]` is valid and the
+    hook is stable. Recorded in `design-system.md`.
+  - Stable native alert hooks: `[data-testid="stAlert"]`,
+    `[data-testid="stAlertContainer"]` (carries `role="alert"` and the tint),
+    `[data-testid="stAlertContentWarning"|"stAlertContentInfo"|"stAlertContentError"]`.
+  - **The native alert ships no icon element** (no `<svg>`, no icon testid), so the
+    mockup's inline SVG is drawn in CSS as a ring with the "i" dot and stem
+    (background layers on `::before`). Verified computed: bar `3px solid` in the
+    tone colour (`#9A5B00`/`#1D4E89`/`#B42318`), radius `6px`, glyph `15×15`,
+    bold label `font-weight: 600`, no page exception.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` →
+    **8 passed**.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **434 passed**
+    (426 + 8).
+  - `poetry run mypy src dashboard` → **0 errors** (67 source files).
+  - `ruff format` / `ruff check` on the touched files → clean (en dashes replaced
+    with hyphens in the new comments/strings; RUF001/2/3).
+- **Deviations:** (1) `container_key` added to the plan signature (reason above).
+  (2) The callout CSS is scoped to the keyed container rather than applied to
+  `[data-testid="stAlertContainer"]` globally, so the sidebar DB-status
+  `st.success`/`st.error` banner keeps its native look until Wave B rebuilds the
+  sidebar (Task 27). (3) The icon is a CSS-drawn glyph, not the mockup's SVG
+  (SVG is stripped by `st.html`, wave-0-spike §6).
+- **Finding for Task 33:** `tests/unit/dashboard/test_app_overview.py:79` asserts
+  `t("warn.forecasts_indistinguishable") in [warning.value for warning in app.warning]`
+  — an **exact** match. Once Task 33 routes the Overview's first warning through
+  `render_callout(..., label_key="note.methodology_label")` the value becomes
+  `"**یادداشت روش‌شناسی** <body>"`, so that assertion must switch to a
+  `t("note.methodology_label") in value` / substring check. Recorded here, not
+  changed in this wave.
+- **Commit hash:** `PENDING`

@@ -67,6 +67,11 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "dataframe": '[data-testid="stDataFrame"]',
         "plotly_chart": '[data-testid="stPlotlyChart"]',
         "main_block_container": '[data-testid="stMainBlockContainer"]',
+        # Shared-component hooks (Tasks 17-22). These are the keyed-container
+        # classes Streamlit adds for `st.container(key=...)`: the class attribute
+        # carries `st-key-<sanitized key>`, so an attribute substring selector
+        # scopes a rule to one component without a hashed `st-emotion-cache-*`.
+        "callout": '[class*="st-key-callout-"]',
     }
 )
 
@@ -184,14 +189,46 @@ _TABLE_RULES: Final[tuple[str, ...]] = (
     '.tm > span + span::before { content: "·"; margin: 0 7px; }',
 )
 
+#: Shared-component CSS (Tasks 17-22). Hooks are the keyed-container classes
+#: (``.st-key-<key>``) and the stable alert ``data-testid``s, both probed on
+#: Streamlit 1.61.1 and recorded in ``docs/phase-7.2/design-system.md``. Emitted
+#: once by :func:`inject_direction_css`; no component emits its own ``<style>``.
+_COMPONENT_COMMENT: Final[str] = (
+    "/* Shared-component hooks (Tasks 17-22): keyed-container classes "
+    "(.st-key-<key>) + stable alert data-testids, probed on Streamlit 1.61.1 "
+    "(design-system.md). Emitted once by inject_direction_css, never per "
+    "component. */"
+)
+
+#: Component rules as complete CSS strings, in stylesheet order. Each rule's
+#: selector is built from the :data:`CSS_SELECTORS` registry so the hook has one
+#: source (``_TABLE_RULES`` predates the registry and uses plain class selectors).
+_COMPONENT_RULES: Final[tuple[str, ...]] = (
+    # Callout (Task 17). The amber/blue/red tint and the text colour come from the
+    # `[theme]` alert options; this adds only the mockup's left accent bar and the
+    # info glyph. The native alert renders no icon element, so the glyph is a CSS
+    # shape (a ring with the "i" dot and stem drawn as background layers) rather
+    # than the mockup's inline SVG, which DOMPurify strips.
+    f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"] {{ '
+    "border-inline-start: 3px solid currentColor; border-radius: var(--radius); "
+    "display: flex; align-items: flex-start; gap: 10px; }",
+    f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"]::before {{ '
+    'content: ""; flex: none; box-sizing: border-box; width: 15px; height: 15px; '
+    "margin-block-start: 7px; border: 1.5px solid currentColor; border-radius: 50%; "
+    "background: radial-gradient(circle, currentColor 0 1.1px, transparent 1.2px) "
+    "50% 26% / 100% 100% no-repeat, "
+    "linear-gradient(currentColor, currentColor) 50% 74% / 1.5px 5px no-repeat; }",
+)
+
 
 def direction_css() -> str:
     """Return the scoped RTL/typography/chrome/table stylesheet as a string.
 
-    The stylesheet has four sections: the design-token ``:root`` block (the
+    The stylesheet has five sections: the design-token ``:root`` block (the
     single source for the palette/radii/fonts), the RTL typography rules, a
     comment-marked, version-named chrome block for the Streamlit shell selectors,
-    and the RTL HTML-table component rules (emitted once, never per table).
+    the RTL HTML-table component rules, and the shared-component hook rules
+    (emitted once, never per component).
     """
     header = "/* dashboard RTL + Persian typography + chrome: dashboard/components/direction.py */"
     root_block = css_custom_properties()
@@ -200,8 +237,19 @@ def direction_css() -> str:
         f"{CSS_SELECTORS[selector]} {{ {declarations} }}"
         for selector, declarations in _CHROME_RULES
     ]
+    component_rules = list(_COMPONENT_RULES)
     return "\n".join(
-        [header, root_block, *rules, _CHROME_COMMENT, *chrome_rules, _TABLE_COMMENT, *_TABLE_RULES]
+        [
+            header,
+            root_block,
+            *rules,
+            _CHROME_COMMENT,
+            *chrome_rules,
+            _TABLE_COMMENT,
+            *_TABLE_RULES,
+            _COMPONENT_COMMENT,
+            *component_rules,
+        ]
     )
 
 
