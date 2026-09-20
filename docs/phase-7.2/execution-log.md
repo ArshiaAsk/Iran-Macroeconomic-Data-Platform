@@ -601,3 +601,28 @@ were never staged or committed (Task 7 owns them).
   `t("note.methodology_label") in value` / substring check. Recorded here, not
   changed in this wave.
 - **Commit hash:** `924bfa3`
+
+## Task 18 — (A) ADD the page-header component (native, D13, AM-22)
+
+- **Files:** `dashboard/components/layout.py`, `tests/unit/dashboard/test_layout.py`,
+  plan checkboxes.
+- **Build:** `render_page_header(title_key, *, callout_key=None, tone="warn")` calls
+  native `st.title(t(title_key))` and, when `callout_key` is given, delegates to
+  `render_callout(callout_key, tone=tone)` (Task 17). The tone is validated lazily
+  — only when a callout is actually rendered — so a page without a callout is not
+  coupled to the callout tone set. This is the single header shape the D11 contract
+  and the Task 33 guard expect every migrated page to use.
+- **Hook pattern:** **no keyed container and no new CSS.** `st.title` already takes
+  the theme's heading font/size and the callout brings its own hook, so the header
+  has nothing to scope; adding a `st-key-page-header-*` class with no rule would
+  only satisfy the letter of the pattern while `test_every_declared_selector_is_styled`
+  forced a meaningless declaration. Recorded in `design-system.md` as the rule:
+  *a component gets a keyed container only when it has scoped CSS to hang off it.*
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` →
+    **12 passed** (8 + 4).
+  - `poetry run mypy src dashboard` → **0 errors**.
+  - `ruff format` / `ruff check` on the touched files → clean.
+- **Deviations:** none to production. The "every component has a keyed container"
+  pattern is applied where scoped CSS exists (the callout), not mechanically.
+- **Commit hash:** `PENDING`

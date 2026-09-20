@@ -112,3 +112,52 @@ def test_callout_css_hook_is_registered_and_emitted() -> None:
     assert f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"] {{' in css
     assert "border-inline-start: 3px solid currentColor;" in css
     assert f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"]::before' in css
+
+
+# --- Task 18: page header --------------------------------------------------
+
+
+def test_page_header_renders_the_title_natively() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_page_header\n"
+        'render_page_header("page.overview")\n'
+    )
+
+    assert not app.exception
+    assert [title.value for title in app.title] == [t("page.overview")]
+    # No callout asked for, so no alert is rendered.
+    assert not app.warning
+    assert not app.info
+    assert not app.error
+
+
+def test_page_header_renders_the_callout_beneath_the_title() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_page_header\n"
+        'render_page_header("page.overview", callout_key="warn.forecasts_indistinguishable")\n'
+    )
+
+    assert not app.exception
+    assert [title.value for title in app.title] == [t("page.overview")]
+    assert [warning.value for warning in app.warning] == [t("warn.forecasts_indistinguishable")]
+
+
+def test_page_header_honours_the_callout_tone() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_page_header\n"
+        'render_page_header("page.labor", callout_key="warn.labor_publication", tone="info")\n'
+    )
+
+    assert not app.exception
+    assert [info.value for info in app.info] == [t("warn.labor_publication")]
+    assert not app.warning
+
+
+def test_page_header_rejects_an_unknown_callout_tone() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_page_header\n"
+        'render_page_header("page.labor", callout_key="warn.labor_publication", tone="danger")\n'
+    )
+
+    assert app.exception
+    assert "unknown callout tone" in str(app.exception[0].value)

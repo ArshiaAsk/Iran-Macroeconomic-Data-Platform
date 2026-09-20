@@ -35,6 +35,7 @@ from dashboard.i18n import t
 __all__ = [
     "CALLOUT_TONES",
     "render_callout",
+    "render_page_header",
 ]
 
 CALLOUT_TONES: Final[frozenset[str]] = frozenset({"warn", "info", "error"})
@@ -95,3 +96,34 @@ def render_callout(
         body = f"**{t(label_key)}** {body}"
     with st.container(key=f"callout-{container_key if container_key is not None else key}"):
         renderer(body)
+
+
+def render_page_header(
+    title_key: str,
+    *,
+    callout_key: str | None = None,
+    tone: str = "warn",
+) -> None:
+    """Render the dashboard's single page-header pattern (D11, AM-22).
+
+    Every migrated page opens with this call instead of a raw ``st.title``, so the
+    D11 layout contract has one header shape and the AST guard has one thing to
+    check. The title stays native, so ``AppTest`` keeps seeing ``app.title``.
+
+    No scoped CSS is needed: ``st.title`` already takes the theme's heading font and
+    size, and the optional callout brings its own keyed-container hook
+    (:func:`render_callout`). The page header therefore emits no ``st-key-*`` class
+    of its own.
+
+    Args:
+        title_key: Catalog key of the page title (``page.<key>``)
+        callout_key: Optional catalog key of a callout rendered beneath the title
+        tone: Callout tone when ``callout_key`` is given
+
+    Raises:
+        ValueError: When ``tone`` is not a known callout tone and a callout is asked
+            for
+    """
+    st.title(t(title_key))
+    if callout_key is not None:
+        render_callout(callout_key, tone=tone)

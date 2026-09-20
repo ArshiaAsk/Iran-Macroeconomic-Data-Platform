@@ -801,10 +801,10 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none new (the callout's `note.methodology_label` comes from Task 17).
 - **Depends:** Task 17.
 - **Acceptance:**
-  - [ ] `render_page_header` renders the title natively and, with `callout_key`, the callout beneath it.
-  - [ ] AppTest still sees `app.title` (the header is native, not `st.html`).
-  - [ ] The callout remains visible as `app.warning`/`app.info`/`app.error`.
-  - [ ] No literal Persian string outside `i18n.py`.
+  - [x] `render_page_header` renders the title natively and, with `callout_key`, the callout beneath it.
+  - [x] AppTest still sees `app.title` (the header is native, not `st.html`).
+  - [x] The callout remains visible as `app.warning`/`app.info`/`app.error`.
+  - [x] No literal Persian string outside `i18n.py`.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py -q`.
 
 ### 19. (A) ADD the KPI band component
