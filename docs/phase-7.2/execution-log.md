@@ -125,3 +125,24 @@ were never staged or committed (Task 7 owns them).
   `test_direction.py` + `test_tokens.py` → 15 passed.
 - **Deviations:** none.
 - **Commit hash:** `7606c01`
+
+## Task 8 — (A) UPDATE the Streamlit theme to the design tokens
+
+- **Files:** `.streamlit/config.toml`, `tests/unit/dashboard/test_tokens.py`,
+  plan checkboxes.
+- **Build:** set `base="light"`, `primaryColor`, `backgroundColor`,
+  `secondaryBackgroundColor`, `textColor`, `borderColor`, `baseRadius=6px`,
+  `buttonRadius=6px`, `baseFontSize=14`, `dataframeHeaderBackgroundColor`,
+  `showWidgetBorder`, `showSidebarBorder`, `chartCategoricalColors` and the
+  red/orange/yellow/blue/green `{Color,BackgroundColor,TextColor}` keys from
+  the tokens. Semantic mapping: orange=warn, blue=accent/info, red=err,
+  green=ok; **yellow has no mockup token and is folded into the warn palette**
+  (recorded). `font`/`fontFaces` kept from Task 7 (not duplicated). Every
+  listed option name was confirmed to exist via
+  `c.get_config_options()` first.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_tokens.py -q --no-cov`
+  → **10 passed** (token equality + `[theme]`↔token consistency + base size +
+  chart colours + font-owner checks). App started with the new theme, **no
+  config error** in the streamlit log (`curl /` → 200).
+- **Deviations:** none.
+- **Commit hash:** _pending_

@@ -646,9 +646,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 5, 7.
 - **Acceptance:**
-  - [ ] Every colour/radius in the theme matches `tokens.py`.
-  - [ ] `font`/`fontFaces` are not duplicated (Task 7 owns them).
-  - [ ] App starts with the new theme and no config error.
+  - [x] Every colour/radius in the theme matches `tokens.py`.
+  - [x] `font`/`fontFaces` are not duplicated (Task 7 owns them).
+  - [x] App starts with the new theme and no config error.
 - **Verify:** `make dashboard` (manual) + `poetry run python -c "import streamlit.config as c; c.get_config_options()"`.
 
 ### 9. (A) EXTEND the shell CSS owner with tokens and the chrome block

@@ -3,10 +3,13 @@
 The mockup is the design spec, so the test parses its ``:root`` block and asserts
 set equality with :data:`dashboard.components.tokens.TOKENS`. A token that exists
 in the mockup but not in the module (or vice versa) fails here rather than
-showing up as a missing CSS variable at runtime.
+showing up as a missing CSS variable at runtime. A second group of assertions
+parses ``.streamlit/config.toml`` and checks every colour/radius theme value
+equals its declared token, so the theme cannot drift from the tokens (Task 8).
 """
 
 import re
+import tomllib
 from pathlib import Path
 from typing import cast
 
@@ -21,6 +24,37 @@ from dashboard.components.tokens import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 MOCKUP = REPOSITORY_ROOT / "docs" / "design" / "phase-7.2" / "overview-redesign-mockup.html"
+CONFIG = REPOSITORY_ROOT / ".streamlit" / "config.toml"
+
+#: Maps a Streamlit `[theme]` key to the design-token name it must equal. The
+#: alert colours map orange=warn, blue=accent/info, red=err, green=ok; yellow has
+#: no mockup token and is folded into the warn palette. `baseFontSize` and
+#: `chartCategoricalColors` are checked separately (not single :root tokens).
+THEME_TOKEN_MAP: dict[str, str] = {
+    "primaryColor": "accent",
+    "backgroundColor": "bg",
+    "secondaryBackgroundColor": "surface",
+    "textColor": "text-1",
+    "borderColor": "border",
+    "baseRadius": "radius",
+    "buttonRadius": "radius",
+    "dataframeHeaderBackgroundColor": "surface-2",
+    "redColor": "err",
+    "redBackgroundColor": "err-bg",
+    "redTextColor": "err",
+    "orangeColor": "warn",
+    "orangeBackgroundColor": "warn-bg",
+    "orangeTextColor": "warn",
+    "yellowColor": "warn",
+    "yellowBackgroundColor": "warn-bg",
+    "yellowTextColor": "warn",
+    "blueColor": "accent",
+    "blueBackgroundColor": "accent-soft",
+    "blueTextColor": "accent",
+    "greenColor": "ok",
+    "greenBackgroundColor": "ok-bg",
+    "greenTextColor": "ok",
+}
 
 _ROOT_BLOCK = re.compile(r":root\s*\{(?P<body>[^}]*)\}", re.DOTALL)
 
@@ -73,3 +107,38 @@ def test_css_custom_properties_emits_a_root_block() -> None:
     assert css.endswith("}")
     assert "--accent: #1D4E89;" in css
     assert "--radius: 6px;" in css
+
+
+def _theme_section() -> dict[str, object]:
+    data = tomllib.loads(CONFIG.read_text("utf-8"))
+    return data["theme"]
+
+
+def test_theme_colour_and_radius_values_equal_their_tokens() -> None:
+    theme = _theme_section()
+
+    for theme_key, token_name in THEME_TOKEN_MAP.items():
+        assert theme[theme_key] == TOKENS[token_name], theme_key
+
+
+def test_theme_base_font_size_is_the_mockup_body_size() -> None:
+    # The mockup sets body{font-size:14px}; no :root token carries it, so it is
+    # asserted directly against the mockup body rule rather than a token.
+    assert _theme_section()["baseFontSize"] == 14
+
+
+def test_theme_chart_categorical_colours_are_token_colours() -> None:
+    theme = _theme_section()
+    token_values = set(TOKENS.values())
+
+    colours = theme["chartCategoricalColors"]
+    assert isinstance(colours, list)
+    for colour in colours:
+        assert colour in token_values, colour
+
+
+def test_theme_font_keys_are_owned_by_task_seven() -> None:
+    theme = _theme_section()
+
+    assert str(theme["font"]).startswith("Vazirmatn")
+    assert str(theme["headingFont"]).startswith("Vazirmatn")

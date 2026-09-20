@@ -5,19 +5,53 @@
 # serving at `app/static/...` (no CDN, no webfont fetch). The font families are
 # declared here via `[[theme.fontFaces]]` and referenced by name from the theme;
 # `dashboard/components/direction.py` applies the RTL direction and the richer
-# Persian-capable fallback stack as a safety net. Theme colours/radii are pinned
-# to the design tokens by Task 8; see `dashboard/components/tokens.py`.
+# Persian-capable fallback stack as a safety net.
+#
+# Every colour, radius and the 14 px base size below is pinned to a design token
+# from `dashboard/components/tokens.py`; `tests/unit/dashboard/test_tokens.py`
+# asserts the equality so a token change forces a theme change. The alert
+# colours map orange=warn, blue=accent/info, red=err, green=ok; yellow has no
+# mockup token and is folded into the warn palette so a `st.badge(color="yellow")`
+# stays in the warm family. Dark mode is unsupported (D14, light only).
 
 [server]
 enableStaticServing = true
 
 [theme]
 base = "light"
-primaryColor = "#1f6feb"
+primaryColor = "#1D4E89"
+backgroundColor = "#F6F7F9"
+secondaryBackgroundColor = "#fff"
+textColor = "#1B2430"
+borderColor = "#E1E5EB"
+baseRadius = "6px"
+buttonRadius = "6px"
+baseFontSize = 14
+dataframeHeaderBackgroundColor = "#F1F3F6"
+showWidgetBorder = true
+showSidebarBorder = true
+chartCategoricalColors = ["#1D4E89", "#1F7A4D", "#9A5B00", "#B42318", "#667385", "#4A5566", "#C9D0DA"]
 font = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
 headingFont = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
 codeFont = '"DejaVu Sans Mono", "SFMono-Regular", Menlo, Consolas, monospace'
-baseFontSize = 16
+
+# Alert colours (orange=warn, blue=accent/info, red=err, green=ok). Yellow has
+# no mockup token and is folded into the warn palette.
+redColor = "#B42318"
+redBackgroundColor = "#FDECEA"
+redTextColor = "#B42318"
+orangeColor = "#9A5B00"
+orangeBackgroundColor = "#FBF1DC"
+orangeTextColor = "#9A5B00"
+yellowColor = "#9A5B00"
+yellowBackgroundColor = "#FBF1DC"
+yellowTextColor = "#9A5B00"
+blueColor = "#1D4E89"
+blueBackgroundColor = "#E8EFF8"
+blueTextColor = "#1D4E89"
+greenColor = "#1F7A4D"
+greenBackgroundColor = "#E6F3EC"
+greenTextColor = "#1F7A4D"
 
 [[theme.fontFaces]]
 family = "Vazirmatn"
