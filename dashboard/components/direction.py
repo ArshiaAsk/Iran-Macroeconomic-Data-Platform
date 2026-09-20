@@ -11,9 +11,11 @@ rules keep that survivable across Streamlit releases:
   applied later, but column order and the grid itself remain LTR and are
   documented as a known limitation rather than fought).
 
-The dashboard is local-only, so there is no ``@font-face``, no CDN, no downloaded
-font asset and no new dependency: the family stack falls back through whatever the
-analyst's OS provides.
+Phase 7.2 (D4, ratified) vendors Vazirmatn locally: the font is declared in
+``.streamlit/config.toml`` via ``[[theme.fontFaces]]`` and served by Streamlit's
+static serving from ``dashboard/static/`` at ``app/static/Vazirmatn.ttf`` (no CDN,
+no webfont fetch). :data:`FONT_STACK` keeps a Persian-capable OS fallback after
+``Vazirmatn`` so the UI still renders Persian if the vendored file is unavailable.
 
 Nothing here localizes a chart. :func:`plotly_template` is the single helper later
 chart work will inherit from; existing chart builders are untouched.
@@ -37,7 +39,8 @@ __all__ = [
 ]
 
 FONT_STACK: Final[str] = '"Vazirmatn", "IRANSans", "Tahoma", "Segoe UI", sans-serif'
-"""OS-only Persian-capable stack; no webfont is fetched or vendored."""
+"""Persian-capable stack; ``Vazirmatn`` is vendored and served by static serving,
+the rest are OS fallbacks so the UI still renders Persian if the file is absent."""
 
 PLOTLY_FONT_SIZE: Final[int] = 13
 PLOTLY_TITLE_FONT_SIZE: Final[int] = 17

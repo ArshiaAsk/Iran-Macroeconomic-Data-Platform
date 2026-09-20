@@ -1,12 +1,25 @@
 # Theme baseline for the local-only dashboard.
 #
-# RTL direction and the Persian-capable font stack are installed by CSS from
-# dashboard/components/direction.py, not here: Streamlit's theme options only pick
-# a generic font family, and the offline rule (no CDN, no webfont, no vendored
-# font file) means the OS fallback stack is applied from that one owner module.
+# Phase 7.2 (D4, ratified) vendors Vazirmatn locally: the font and its OFL
+# licence live under `dashboard/static/` and are served by Streamlit's static
+# serving at `app/static/...` (no CDN, no webfont fetch). The font families are
+# declared here via `[[theme.fontFaces]]` and referenced by name from the theme;
+# `dashboard/components/direction.py` applies the RTL direction and the richer
+# Persian-capable fallback stack as a safety net. Theme colours/radii are pinned
+# to the design tokens by Task 8; see `dashboard/components/tokens.py`.
+
+[server]
+enableStaticServing = true
 
 [theme]
 base = "light"
 primaryColor = "#1f6feb"
-font = "sans serif"
+font = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
+headingFont = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
+codeFont = '"DejaVu Sans Mono", "SFMono-Regular", Menlo, Consolas, monospace'
 baseFontSize = 16
+
+[[theme.fontFaces]]
+family = "Vazirmatn"
+url = "app/static/Vazirmatn.ttf"
+weight = "100 900"

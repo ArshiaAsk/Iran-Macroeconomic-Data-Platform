@@ -102,3 +102,26 @@ were never staged or committed (Task 7 owns them).
   tracked, so the refreshed lock is not committed; only `pyproject.toml` lands.
   The D9 implication note in the plan records this.
 - **Commit hash:** `7569676`
+
+## Task 7 — (A) VENDOR the Vazirmatn font and wire theme + static serving
+
+- **Files:** `dashboard/static/Vazirmatn.ttf`, `dashboard/static/OFL.txt`
+  (committed by path, unchanged), `.streamlit/config.toml`,
+  `dashboard/components/direction.py`, plan checkboxes.
+- **Build:** `[server] enableStaticServing = true`; `[[theme.fontFaces]]`
+  `family="Vazirmatn"`, `url="app/static/Vazirmatn.ttf"`, `weight="100 900"`;
+  `theme.font`/`headingFont`/`codeFont` set to full fallback stacks. The two
+  stale 7.1 comments in `.streamlit/config.toml` and `direction.py` corrected.
+  `.gitignore` has no `static/`/`*.ttf` rule; there is no Dockerfile and
+  `docker-compose.yml` mounts only the Postgres data volume + `init-db.sql`,
+  so `dashboard/static/` ships in-repo and is served by Streamlit static serving
+  (everything in `dashboard/static/` is publicly served — only the font and
+  licence live there).
+- **Verify:** `curl /app/static/Vazirmatn.ttf` → **200 `font/ttf` 241 328 B**
+  (byte-identical; wrong `app/dashboard/static/...` → SPA shell 200 `text/html`
+  10 951 B, fails silently). Playwright: `document.fonts.check('16px Vazirmatn')`
+  → **true**, Vazirmatn entry **loaded**, computed body family starts with
+  `Vazirmatn`. No config error in the streamlit log. `ruff`/`mypy` clean;
+  `test_direction.py` + `test_tokens.py` → 15 passed.
+- **Deviations:** none.
+- **Commit hash:** _pending_

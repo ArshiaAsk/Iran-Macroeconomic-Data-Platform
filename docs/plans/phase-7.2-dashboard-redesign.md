@@ -633,10 +633,10 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 2, 5.
 - **Acceptance:**
-  - [ ] Font and licence under `dashboard/static/`, tracked in git; `dashboard/static/` ships with the dashboard.
-  - [ ] Theme font options resolve to the vendored family; OS fallback documented.
-  - [ ] `http://localhost:8501/app/static/Vazirmatn.ttf` serves the file and the rendered UI uses Vazirmatn.
-  - [ ] The two stale 7.1 comments corrected.
+  - [x] Font and licence under `dashboard/static/`, tracked in git; `dashboard/static/` ships with the dashboard.
+  - [x] Theme font options resolve to the vendored family; OS fallback documented.
+  - [x] `http://localhost:8501/app/static/Vazirmatn.ttf` serves the file and the rendered UI uses Vazirmatn.
+  - [x] The two stale 7.1 comments corrected.
 - **Verify:** Browser check of `http://localhost:8501/app/static/Vazirmatn.ttf` and that Persian text renders in Vazirmatn + `poetry run python -c "import streamlit.config as c; print([k for k in c.get_config_options() if 'font' in k])"`.
 
 ### 8. (A) UPDATE the Streamlit theme to the design tokens
