@@ -622,8 +622,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Task 1.
 - **Acceptance:**
-  - [ ] Constraint updated; `poetry lock` shows no version deltas.
-  - [ ] `make check` still passes.
+  - [x] Constraint updated; `poetry lock` shows no version deltas.
+  - [x] `make check` still passes.
 - **Verify:** `poetry check && poetry run pytest tests/unit/dashboard -q`.
 
 ### 7. (A) VENDOR the Vazirmatn font and wire theme + static serving
@@ -1223,7 +1223,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 
 - **AGENTS.md boundary is absolute.** Nothing under `src/`, `alembic/` or `airflow/` changes. If a task seems to need it, it belongs in Deferred Scope. This is how the IMF forecast item was deferred in 7.1.
 - **AGENTS.md contains no offline/font/CDN rule (AM-20).** The only relevant line is `AGENTS.md:620` ("Local-only deployment: No cloud infrastructure"). The stricter "no CDN, no webfont, no vendored font file" wording is a **7.1 decision** documented at `.streamlit/config.toml:5-6` and `dashboard/components/direction.py:14-16`. **D4 is ratified:** the owner reverses that 7.1 decision and vendors Vazirmatn locally. **Verified now (Wave 0):** the font and licence are already at `dashboard/static/Vazirmatn.ttf` / `dashboard/static/OFL.txt` (untracked); Task 7 commits them and wires static serving (no relocation). The OS fallback remains a safety net only.
-- **D9 lock-file implication.** Raising the constraint to `>=1.44,<2` should not change any resolved version (1.61.1 is already installed). If `poetry lock` proposes changes, stop and report rather than accepting upgrades silently.
+- **D9 lock-file implication.** Raising the constraint to `>=1.44,<2` should not change any resolved version (1.61.1 is already installed). If `poetry lock` proposes changes, stop and report rather than accepting upgrades silently. **Wave A result (Task 6, 2026-09-21):** `poetry lock` rewrote the lock's content hash but **no package version changed** (219 packages, byte-identical version list before/after; `streamlit` still 1.61.1). `poetry.lock` is **git-ignored** in this repo (`.gitignore:37`), so the refreshed lock is not committed; only `pyproject.toml` is. The lock file remains locally valid for local runs.
 - **Theme lock (D14 addendum, AM-19).** `base="light"` is locked; dark mode is unsupported and deferred. The settings-menu theme toggle is hidden with `client.toolbarMode="viewer"`/`"minimal"` **only if** Task 4 shows that hides the toggle without removing anything the analyst needs; otherwise it is accepted and documented as a limitation. No CSS hacks on the native settings menu. Local development keeps the toolbar via `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` (documented in the README).
 - **Plan-template conflict.** `.agents/commands/plan-feature.md:171-357` prescribes a different skeleton (Phases 1–4, `VALIDATION COMMANDS`, `ACCEPTANCE CRITERIA`) than the 7.1 plan. Per the task instruction, the 7.1 skeleton wins; the extra sections (`VALIDATION COMMANDS`, `ACCEPTANCE CRITERIA`) are folded into `## TESTING & VALIDATION` and the per-task acceptance lists.
 - **`make typecheck` does not cover `dashboard/`.** Run `poetry run mypy src dashboard` in every wave; widening the Makefile target is an open item, not an assumed change.

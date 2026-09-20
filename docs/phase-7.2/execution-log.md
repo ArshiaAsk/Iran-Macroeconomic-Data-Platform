@@ -87,4 +87,18 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** the token↔`[theme]` consistency assertion is deferred to
   Task 8: its premise (the Task 8 theme values) does not exist yet, and a
   failing test must not be committed. Task 8 appends it to `test_tokens.py`.
+- **Commit hash:** `27df2ec`
+
+## Task 6 — (A) RAISE the Streamlit floor and refresh the lock
+
+- **Files:** `pyproject.toml`, `poetry.lock` (git-ignored, not committed).
+- **Build:** `streamlit = "^1.36"` → `">=1.44,<2"`.
+- **Verify:** `poetry check` → exit 0 (pre-existing deprecation warnings only).
+  `poetry lock` → lock content hash rewritten, **no package version deltas**
+  (219 packages before/after; `streamlit` still 1.61.1). `poetry run pytest
+  tests/unit/dashboard -q --no-cov` → **347 passed** (341 baseline + 6 token
+  tests).
+- **Deviations:** `poetry.lock` is git-ignored (`.gitignore:37`) and is not
+  tracked, so the refreshed lock is not committed; only `pyproject.toml` lands.
+  The D9 implication note in the plan records this.
 - **Commit hash:** _pending_
