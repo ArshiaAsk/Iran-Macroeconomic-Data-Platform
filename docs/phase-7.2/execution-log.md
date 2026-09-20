@@ -544,4 +544,4 @@ were never staged or committed (Task 7 owns them).
 - **Verify:** `git diff --stat` shows only the two docs; no checkbox in Tasks
   1–16 changed. No test run needed (no code touched).
 - **Deviations:** none.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `d06f4cd`
