@@ -439,3 +439,56 @@ were never staged or committed (Task 7 owns them).
   `tokens.py` now derives the same palette from token names and a test pins the
   two equal, so there is still exactly one colour source.
 - **Commit hash:** (this commit)
+
+## Task 15 — (A) ADD the escaping helper and the RTL HTML table with the typed cell model
+
+- **Files:** `dashboard/components/escaping.py` (new),
+  `dashboard/components/html_table.py` (new), `dashboard/components/direction.py`
+  (table CSS owner), `tests/unit/dashboard/test_escaping.py` (new),
+  `tests/unit/dashboard/test_html_table.py` (new), plan checkboxes + a Task 32
+  acceptance line.
+- **Build:** `escape_html(value)` escapes `&`, `<`, `>`, `"` and `'` in one pass
+  and coerces with `str`, so it is safe in **both** text and quoted-attribute
+  contexts (escaping quotes in text is redundant but harmless). The typed cell
+  model is `Text`, `Ltr`, `UnitChip`, `StatusChip`, `Dot`, `TwoLine` (the union
+  is `Cell`); `TwoLine.secondary_parts` is a tuple of the text-like variants, so
+  a name can carry a mono `Ltr` id beneath it. `build_html_table` is the pure
+  builder; `render_html_table` wraps it in `st.html`. Markup is semantic
+  (`<table>`, `<th scope="col">`) inside `<div class="dt-wrap" dir="rtl">`.
+  `tone` is validated against the closed set `{ok, warn, err, accent, neutral}`
+  and `density` against `{comfortable, compact}`; an unknown value **raises**, so
+  neither can be interpolated into a class name. `title` tooltips are escaped.
+  No `<svg>`.
+- **CSS ownership:** the table/chip/dot/two-line CSS is emitted **once** by
+  `direction_css()` (`_TABLE_RULES`, after the chrome block) — not a `<style>` per
+  table. Values mirror the mockup's `.dt`/`.chip`/`.dot`/`.unit`/`.ltr`/`.tm`
+  rules and read the design tokens; the wrapper carries `overflow-x: auto` and the
+  `.dt .ltr`/`.unit` cells carry `max-width` + ellipsis. Tone classes are
+  `tone-*` (prefixed to avoid colliding with the mockup's generic `.ok`/`.warn`).
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_html_table.py
+  tests/unit/dashboard/test_escaping.py -q --no-cov` → **35 passed**.
+  `poetry run pytest tests/unit/dashboard -q --no-cov` → **424 passed**
+  (389 + 35). `poetry run mypy src dashboard` → **0 errors**. `ruff format` /
+  `ruff check` on the touched files → clean.
+- **Visual check (throwaway probe, `/tmp/phase72-probe-table/`, not added to the
+  repo):** a probe app imports the real component + `inject_direction_css()` and
+  renders a freshness-like table (dots, status chips, two-line date + time · age)
+  and a coverage-like table (LTR ids, unit chips, em-dashes) in both densities.
+  Screenshotted at **1440 / 1280 / 1024 px** and compared with
+  `docs/design/phase-7.2/overview-redesign-mockup.png`: header background, row
+  borders, hover, tone dots/chips, unit chips, the two-line name + mono id and the
+  em-dash all match. **AM-26 measured in the DOM:** at 1440/1280 px no wrapper
+  scrolls and `document.scrollWidth == clientWidth`; at **1024 px** the two
+  coverage tables scroll **inside** their wrapper (`scrollWidth 981 > clientWidth
+  882`) while `document.scrollWidth == clientWidth == 1024` — the table scrolls in
+  its own box and the page never scrolls sideways.
+- **Deviations:** (1) the plan's last acceptance item (manual check on the real
+  Overview coverage table) cannot be satisfied until Task 32 renders it; it is
+  ticked **"verified on probe"** and a matching acceptance line was added to Task
+  32. (2) The mockup's `.dt.cov` header-wrapping variant is not implemented — the
+  plan specifies only the comfortable/compact density class; Task 32 can add a
+  wrapping variant if the real coverage headers need it. (3) `TwoLine`'s
+  `secondary_parts` is typed as a tuple of text-like **cells** (not raw strings),
+  which is what lets the coverage id render as an isolated mono `Ltr`; the plan
+  left the element type open.
+- **Commit hash:** (this commit)

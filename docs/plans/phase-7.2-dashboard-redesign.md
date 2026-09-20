@@ -735,12 +735,12 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none (headers come from `t()` keys supplied by callers).
 - **Depends:** Tasks 5, 9.
 - **Acceptance:**
-  - [ ] An explicit test feeds `<script>`, `&`, `"` and Persian text through **every cell variant** and asserts the output is escaped.
-  - [ ] LTR spans isolate ids/units without flipping the table.
-  - [ ] Density class toggles between comfortable and compact.
-  - [ ] Null handling is tested per variant.
-  - [ ] **AM-26:** the wrapper carries `overflow-x: auto`; a test asserts the wrapper attribute/style is present, and long ids/units do not break the layout.
-  - [ ] **AM-26:** the Overview coverage table is manually checked at **1280 px and 1024 px** viewport widths — the table scrolls inside its wrapper and the page does not scroll sideways.
+  - [x] An explicit test feeds `<script>`, `&`, `"` and Persian text through **every cell variant** and asserts the output is escaped.
+  - [x] LTR spans isolate ids/units without flipping the table.
+  - [x] Density class toggles between comfortable and compact.
+  - [x] Null handling is tested per variant.
+  - [x] **AM-26:** the wrapper carries `overflow-x: auto`; a test asserts the wrapper attribute/style is present, and long ids/units do not break the layout.
+  - [x] **AM-26:** the Overview coverage table is manually checked at **1280 px and 1024 px** viewport widths — the table scrolls inside its wrapper and the page does not scroll sideways. **(verified on the Task 15 probe app, 2026-09-21 — the real Overview table does not exist until Task 32; re-check added to Task 32.)**
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_html_table.py tests/unit/dashboard/test_escaping.py -q` + the 1280 px / 1024 px manual check of the Overview coverage table (Task 32 renders it).
 
 ### 16. (A) ADD the AppTest HTML-text helper and record the test-migration map
@@ -977,6 +977,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
   - [ ] Nulls render the em-dash.
   - [ ] The coverage assertions use the markup strategy, not `app.dataframe`.
   - [ ] **AM-26:** at 1280 px and 1024 px the coverage table scrolls inside its `overflow-x: auto` wrapper and the page does not scroll sideways (manual check, shared with Task 15).
+  - [ ] **AM-26 (deferred from Task 15):** re-run the 1280/1024 px check on the **real Overview coverage table** (Task 15 could only verify this on its probe app).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q` + manual browser check against the mockup.
 
 ### 33. (C) APPLY the page header + methodology callout and enable the guard for Overview

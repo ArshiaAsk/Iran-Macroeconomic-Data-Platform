@@ -123,13 +123,75 @@ _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
     ("main_block_container", "max-width: 1360px !important;"),
 )
 
+#: Component CSS for the RTL HTML table and its chip/dot/two-line cells (Task
+#: 15). Emitted once by :func:`inject_direction_css` rather than a ``<style>`` per
+#: table. Values mirror ``docs/design/phase-7.2/overview-redesign-mockup.html``
+#: (``.dt``/``.chip``/``.dot``/``.unit``/``.ltr``) and read the design tokens, so
+#: no literal colour appears here. Tone classes are ``tone-*``; the tone is
+#: validated against a closed set in the component before it reaches a class name.
+_TABLE_COMMENT: Final[str] = (
+    "/* RTL HTML table + chip/dot/two-line cells (Task 15). Mirrors the mockup's "
+    ".dt/.chip/.dot rules with design tokens; emitted once by "
+    "inject_direction_css, never per table. */"
+)
+
+#: Table rules as complete CSS strings (class selectors, not data-testid hooks).
+_TABLE_RULES: Final[tuple[str, ...]] = (
+    ".dt-wrap { background: var(--surface); border: 1px solid var(--border); "
+    "border-radius: var(--radius-lg); overflow-x: auto; }",
+    ".dt { width: 100%; border-collapse: separate; border-spacing: 0; }",
+    ".dt th { background: var(--surface-2); color: var(--text-2); "
+    "font-size: 12.5px; font-weight: 600; text-align: start; padding: 9px 14px; "
+    "border-bottom: 1px solid var(--border-strong); white-space: nowrap; "
+    "line-height: 1.6; }",
+    ".dt td { height: 52px; padding: 0 14px; "
+    "border-bottom: 1px solid var(--border); white-space: nowrap; line-height: 1.5; }",
+    ".dt tbody tr:last-child td { border-bottom: 0; }",
+    ".dt tbody tr:hover td { background: var(--hover); }",
+    ".dt.compact td { height: 40px; padding: 0 10px; font-size: 13.5px; " "line-height: 1.45; }",
+    ".dt .num { font-variant-numeric: tabular-nums; }",
+    ".dt .name { font-weight: 600; }",
+    ".dt .sm { font-size: 12px; color: var(--text-3); display: block; }",
+    ".dt .ltr { direction: ltr; unicode-bidi: isolate; "
+    "font-family: var(--font-mono); font-size: 11.5px; display: inline-block; "
+    "max-width: 24ch; overflow: hidden; text-overflow: ellipsis; "
+    "vertical-align: bottom; }",
+    ".dt .idl { display: block; color: var(--text-3); margin-top: 1px; }",
+    ".unit { direction: ltr; unicode-bidi: isolate; display: inline-block; "
+    "font-family: var(--font-mono); font-size: 11.5px; background: var(--neutral-bg); "
+    "color: var(--text-2); padding: 1px 7px; border-radius: 4px; "
+    "max-width: 20ch; overflow: hidden; text-overflow: ellipsis; }",
+    ".na { color: var(--border-strong); }",
+    ".chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; "
+    "border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 22px; }",
+    '.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; '
+    "background: currentColor; }",
+    ".dot { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; "
+    "font-weight: 500; }",
+    '.dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; '
+    "background: currentColor; }",
+    ".tone-ok { color: var(--ok); }",
+    ".tone-warn { color: var(--warn); }",
+    ".tone-err { color: var(--err); }",
+    ".tone-accent { color: var(--accent); }",
+    ".tone-neutral { color: var(--text-2); }",
+    ".chip.tone-ok { background: var(--ok-bg); }",
+    ".chip.tone-warn { background: var(--warn-bg); }",
+    ".chip.tone-err { background: var(--err-bg); }",
+    ".chip.tone-accent { background: var(--accent-soft); }",
+    ".chip.tone-neutral { background: var(--neutral-bg); }",
+    ".tm { display: flex; gap: 0; }",
+    '.tm > span + span::before { content: "·"; margin: 0 7px; }',
+)
+
 
 def direction_css() -> str:
-    """Return the scoped RTL/typography/chrome stylesheet as a string.
+    """Return the scoped RTL/typography/chrome/table stylesheet as a string.
 
-    The stylesheet has three sections: the design-token ``:root`` block (the
-    single source for the palette/radii/fonts), the RTL typography rules, and a
-    comment-marked, version-named chrome block for the Streamlit shell selectors.
+    The stylesheet has four sections: the design-token ``:root`` block (the
+    single source for the palette/radii/fonts), the RTL typography rules, a
+    comment-marked, version-named chrome block for the Streamlit shell selectors,
+    and the RTL HTML-table component rules (emitted once, never per table).
     """
     header = "/* dashboard RTL + Persian typography + chrome: dashboard/components/direction.py */"
     root_block = css_custom_properties()
@@ -138,7 +200,9 @@ def direction_css() -> str:
         f"{CSS_SELECTORS[selector]} {{ {declarations} }}"
         for selector, declarations in _CHROME_RULES
     ]
-    return "\n".join([header, root_block, *rules, _CHROME_COMMENT, *chrome_rules])
+    return "\n".join(
+        [header, root_block, *rules, _CHROME_COMMENT, *chrome_rules, _TABLE_COMMENT, *_TABLE_RULES]
+    )
 
 
 def inject_direction_css() -> None:
