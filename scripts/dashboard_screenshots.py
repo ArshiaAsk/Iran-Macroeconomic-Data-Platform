@@ -39,8 +39,32 @@ def wait_ready(page: Page, timeout_ms: int = 30000) -> None:
         page.wait_for_selector('[data-testid="stSpinner"]', state="detached", timeout=timeout_ms)
     with contextlib.suppress(PlaywrightTimeoutError):
         page.wait_for_selector('[data-testid="stSkeleton"]', state="detached", timeout=timeout_ms)
+    # Wait for the running indicator (the "Stop" status widget) to be gone
+    # so the capture does not freeze mid-run or include a stale toolbar state.
+    with contextlib.suppress(PlaywrightTimeoutError):
+        page.wait_for_selector(
+            '[data-testid="stStatusWidget"]', state="detached", timeout=timeout_ms
+        )
     # A small extra settle helps charts/tables finish rendering.
     page.wait_for_timeout(500)
+
+
+def neutralise(page: Page) -> None:
+    """Close open dropdowns and reset scroll/pointer state before a capture.
+
+    Pressing Escape dismisses any expanded ``st.multiselect`` / dropdown menus
+    so they do not occlude the screenshot. Moving the mouse to a neutral spot
+    (the sidebar top) avoids hover-highlight artifacts, and scrolling the main
+    container to the top ensures a consistent capture starting point.
+    """
+    page.keyboard.press("Escape")
+    # Move the mouse to the sidebar so no chart/table row is accidentally hovered.
+    page.mouse.move(10, 10)
+    # Scroll the main container to the top so each capture starts at the same
+    # vertical position regardless of where the previous page left the scroll.
+    page.evaluate(
+        """document.querySelector('[data-testid="stMainBlockContainer"]')?.scrollTo(0, 0)"""
+    )
 
 
 def capture(base_url: str, out_dir: Path) -> dict[str, Path]:
@@ -67,6 +91,7 @@ def capture(base_url: str, out_dir: Path) -> dict[str, Path]:
                 nav_link.click(timeout=10000)
 
             wait_ready(page)
+            neutralise(page)
             out_path = out_dir / f"{spec.key}.png"
             page.screenshot(path=str(out_path), full_page=False)
             results[spec.key] = out_path
