@@ -124,4 +124,4 @@ were never staged or committed (Task 7 owns them).
   `Vazirmatn`. No config error in the streamlit log. `ruff`/`mypy` clean;
   `test_direction.py` + `test_tokens.py` → 15 passed.
 - **Deviations:** none.
-- **Commit hash:** _pending_
+- **Commit hash:** `7606c01`
