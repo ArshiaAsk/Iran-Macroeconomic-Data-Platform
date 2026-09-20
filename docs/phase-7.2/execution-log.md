@@ -965,4 +965,4 @@ were never staged or committed (Task 7 owns them).
   selector split and the testing rules) because those are the facts later waves
   would otherwise re-derive; the plan calls this a first draft for Task 47 to
   extend.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `e007d5e`
