@@ -524,4 +524,4 @@ were never staged or committed (Task 7 owns them).
     `test_derived_series.py` assert it).
 - **Deviations:** none beyond the map corrections above (the plan explicitly asks
   for drift to be fixed here).
-- **Commit hash:** (this commit)
+- **Commit hash:** `37e26f4`
