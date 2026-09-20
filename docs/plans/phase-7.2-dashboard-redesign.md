@@ -850,8 +850,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `state.loading`="در حال بارگذاری…", `state.error`="خطا در بارگذاری داده.", `state.retry_hint`="برای تلاش دوباره صفحه را بازخوانی کنید.".
 - **Depends:** Task 17.
 - **Acceptance:**
-  - [ ] Existing `empty.*` keys keep working; states are composable.
-  - [ ] States remain visible to AppTest as `app.info`/`app.error`.
+  - [x] Existing `empty.*` keys keep working; states are composable.
+  - [x] States remain visible to AppTest as `app.info`/`app.error`.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_states.py -q`.
 
 ### 23. (A) WRITE the design-system document (first draft)

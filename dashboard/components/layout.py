@@ -155,20 +155,24 @@ def render_callout(
     *,
     tone: str = "warn",
     label_key: str | None = None,
+    detail: str | None = None,
     container_key: str | None = None,
 ) -> None:
     """Render the mockup's callout as a native Streamlit alert.
 
     The amber/blue/red tint comes from the ``[theme]`` alert colour options
-    (Task 8); the left accent bar and the info glyph are the only CSS, scoped to
-    this component's keyed container. The native alert ships **no** icon element
-    (probed on Streamlit 1.61.1) and ``st.html`` strips ``<svg>``
-    (``wave-0-spike.md`` §6), so the mockup's inline SVG is drawn in CSS instead.
+    (Task 8); the accent bar and the info glyph are the only CSS, scoped to
+    this component's keyed container and placed at the RTL start. The native alert
+    ships **no** icon element (probed on Streamlit 1.61.1) and ``st.html`` strips
+    ``<svg>`` (``wave-0-spike.md`` §6), so the mockup's inline SVG is drawn in CSS
+    instead.
 
     Args:
         key: Catalog key of the callout body text
         tone: ``"warn"``, ``"info"`` or ``"error"``
         label_key: Optional catalog key rendered as a bold prefix inside the body
+        detail: Optional **already resolved** extra paragraph appended to the body
+            (``t(...)`` first). Markdown, so keep it to plain text
         container_key: Optional disambiguator for the CSS hook. Defaults to
             ``key``; pass a distinct value when the same callout renders twice in
             one run (a repeated container key raises in Streamlit)
@@ -182,6 +186,8 @@ def render_callout(
         # Markdown emphasis, not markup: st.warning/info/error render markdown, so
         # the label is bold without any HTML (and without an escaping concern).
         body = f"**{t(label_key)}** {body}"
+    if detail is not None:
+        body = f"{body}\n\n{detail}"
     with st.container(key=f"callout-{container_key if container_key is not None else key}"):
         renderer(body)
 

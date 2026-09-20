@@ -856,3 +856,56 @@ were never staged or committed (Task 7 owns them).
   constant (`2.0`) rather than a mockup value: the mockup's `.grow` is `flex: 1`
   over fixed-width controls, which `st.columns` proportions cannot express exactly.
 - **Commit hash:** `f55efaf`
+
+## Task 22 — (A) ADD shared empty / error / loading states
+
+- **Files:** `dashboard/components/states.py` (new),
+  `dashboard/components/layout.py` (`render_callout` gains `detail`),
+  `dashboard/i18n.py` (`state.loading`, `state.error`, `state.retry_hint`),
+  `tests/unit/dashboard/test_states.py` (new), plan checkboxes.
+- **Build:** `render_empty(key)` renders the shared empty state for any existing
+  `empty.*` key; `render_error(key, *, detail=None)` renders the error message, the
+  retry hint and an optional extra paragraph; `render_loading()` renders the
+  loading placeholder. All three route through
+  `render_callout` (Task 17), so they inherit the native alert element, the
+  keyed-container CSS hook and its tone tint, and no state owns any CSS. The tone
+  is fixed **by the state** — empty/loading are informational, error is an error —
+  so no caller can render a failed load in the informational tone.
+- **`render_callout` gained one optional parameter**, `detail`: an
+  **already-resolved** paragraph appended to the body after a blank line. The
+  callout body is markdown (which is how Task 17's bold `label_key` prefix works),
+  so a second paragraph is the natural way to carry the retry hint and a technical
+  detail without a second alert or a second copy of the component. It is not an
+  escaping surface: `st.error`/`st.info`/`st.warning` render markdown with
+  `unsafe_allow_html` off, so HTML in `detail` is never interpreted; the docstring
+  asks callers to keep it to plain text.
+- **Live-DOM verification (Streamlit 1.61.1).** A throwaway Playwright probe
+  (`/tmp/phase72-probe-layout/probe_task22.py`, not added to the repo) rendered all
+  three states with the real `inject_direction_css()`:
+  - empty → `st-key-callout-empty-no_observations`, `stAlertContentInfo`,
+    `direction: rtl`, `border-inline-start` resolved to a 3 px **right** border in
+    `rgb(29,78,137)` (`--accent`), background `rgb(232,239,248)` (`--accent-soft`),
+    glyph 15×15, full width 326–1370;
+  - loading → `st-key-callout-state-loading`, `stAlertContentInfo`, same styling;
+  - error → `st-key-callout-state-error`, `stAlertContentError`, 3 px right border
+    in `rgb(180,35,24)` (`--err`), background `rgb(253,236,234)` (`--err-bg`), body
+    `خطا در بارگذاری داده.` / `برای تلاش دوباره صفحه را بازخوانی کنید.` /
+    `relation gold_analytical does not exist` on three lines;
+  - no page exception.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_states.py -q --no-cov` →
+    **9 passed**.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **481 passed** (472 + 9),
+    no regressions against Task 21.
+  - `poetry run mypy src dashboard` → **0 errors** (68 source files);
+    `ruff check` / `ruff format` clean.
+- **Deviations:** (1) `render_callout` gains `detail` (reason above); the plan's
+  Task 17 signature had none. (2) The states take no `container_key`: the plan's
+  signatures are `render_empty(key)`/`render_error(key, *, detail=None)`/
+  `render_loading()`, and the callout's key already derives from the body key. The
+  consequence — one state key must not render twice in a single run — is documented
+  in the module docstring and pinned by a test; the escape hatch is
+  `render_callout(..., container_key=…)`. (3) `render_loading()` renders a native
+  `st.info`, not `st.spinner`: the plan routes states through the callout and the
+  acceptance requires `app.info`, and a spinner is invisible to `AppTest`.
+- **Commit hash:** `PENDING`

@@ -404,6 +404,12 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "value.status_failed": "ناموفق",
         "value.status_partial": "ناقص",
         "value.status_unknown": "نامشخص",
+        # Shared page states (Task 22). `state.error` is the generic failure body;
+        # `state.retry_hint` is appended beneath it by `render_error`, and
+        # `state.loading` is the placeholder shown while a page waits on a query.
+        "state.loading": "در حال بارگذاری…",
+        "state.error": "خطا در بارگذاری داده.",
+        "state.retry_hint": "برای تلاش دوباره صفحه را بازخوانی کنید.",
         # Relative-time labels (Task 11): coarse Persian granularity for
         # freshness and provenance display. ``{count}`` is filled by the
         # caller with already-digit-converted text.
