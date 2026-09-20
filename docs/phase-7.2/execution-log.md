@@ -966,3 +966,75 @@ were never staged or committed (Task 7 owns them).
   would otherwise re-derive; the plan calls this a first draft for Task 47 to
   extend.
 - **Commit hash:** `e007d5e`
+
+---
+
+## Task 24 — (A) RECORD the Wave A after-screenshots and review them against the baseline (AM-24)
+
+- **Files:** `docs/phase-7.2/wave-0-assets/after/` (new, ten PNGs),
+  `docs/phase-7.2/VALIDATION.md` (new), `docs/phase-7.2/design-system.md`
+  (the validation link is live again), plan checkboxes.
+- **Build:** Launched the app
+  (`poetry run streamlit run dashboard/app.py --server.port 8501 --server.headless true`;
+  the TimescaleDB container was already up and healthy) and ran the Task 10 script
+  against the Task 24 destination:
+  `poetry run python scripts/dashboard_screenshots.py --out-dir docs/phase-7.2/wave-0-assets/after`
+  → **10 PNGs at 1440×900**, one per registered page, captured through the sidebar
+  in registry order. Created `docs/phase-7.2/VALIDATION.md` as the Wave A
+  validation report: environment table, method, per-page comparison, the four
+  regression categories with evidence, the delta against the Tasks 7–10
+  checkpoint, filed defects, and an explicit "not automated in this run" list.
+- **The four regression categories — all PASS, each with evidence rather than an
+  eyeball:**
+  - **Clipped tables (AM-26):** a live DOM probe over seven pages
+    (`/tmp/phase72-probe-charts/probe_tables.py`, throwaway) reports
+    `documentElement.scrollWidth == clientWidth == 1440` and
+    `body` likewise on every page — **no page scrolls sideways**. Wide tables
+    scroll inside their own box: the grid scroller carries `overflow-x: auto` and
+    overflows by 513 px (overview), 1058 px (catalog), 132 px (labor), 27 px
+    (inflation). The Task 15 wrapper is not adopted by pages yet, so the finding is
+    "no regression introduced", recorded as such.
+  - **Chart typography:** a DOM probe on the market chart
+    (`/tmp/phase72-probe-charts/probe_charts.py`) reports tick/legend text at
+    10.5 px and the axis title at 12.25 px, all in
+    `Vazirmatn, IRANSans, Tahoma, "Segoe UI", sans-serif`; Jalali ticks render
+    (`۱۴ آذر ۱۳۸۷`); the time axis flows LTR; grid `--border`, trace `--accent`.
+  - **Font fallback:** `body`, `stMarkdownContainer`, `stMetricValue` and
+    `stSidebarNavLink` all compute to the Vazirmatn stack, and `document.fonts`
+    reports `Vazirmatn` **loaded** — no fallback to Tahoma/Segoe UI.
+  - **Sidebar overlap:** sidebar 0–256 px, `stMainBlockContainer` 256–1440 px
+    (width 1184 px); the DB-status card sits at the sidebar bottom without
+    covering a nav item; nothing crosses the boundary.
+- **Delta against the Tasks 7–10 global-look set (01:29, before Tasks 12–14):**
+  **5 of 10 captures byte-identical**; the other 5 differ by **≤ 0.23 % of pixels**
+  (four are sub-pixel antialiasing; `gdp` is the substantive one). Measured with
+  PIL: `gdp` differs by 2941 px in a single band because **Task 14** moved the
+  chart legend into the template, raising the legend row ~48 px; the filter
+  controls are at identical coordinates in both sets, so the page itself does not
+  shift. Tasks 15–22 add components pages do not adopt, so they are invisible —
+  the intended Wave A outcome.
+- **Defects filed:**
+  1. **Chart legend title reads `label`** on every chart, because the builders
+     pass `color="label"` (`charts.py:163,190,235,326,564`). **Pre-existing**
+     (last changed 2026-09-19, Phase 7.1) and **not a Wave A regression** — it is
+     invisible in the `before` baseline only because the charts sat below the fold
+     there. Needs a chart-builder task; recorded as an open item in
+     `VALIDATION.md`.
+  2. **10 px container overflow around `st.dataframe`** — the outer
+     `stVerticalBlock` chain reports `scrollWidth` 9–10 px above `clientWidth`
+     with `overflow-x: visible`. Streamlit's own padding; it does not reach the
+     document and nothing is cut. Recorded as an observation, not a defect.
+- **Verify:** Manual comparison of `wave-0-assets/before/` vs
+  `wave-0-assets/after/` — per-page table in `VALIDATION.md`, plus the PIL pixel
+  diff and the two DOM probes above. `poetry run pytest tests/unit/dashboard -q
+  --no-cov` → **491 passed** (the new link in `design-system.md` keeps
+  `test_every_relative_link_resolves` green); `poetry run mypy src dashboard` →
+  **0 errors** (68 source files); `ruff check` / `ruff format` clean.
+- **Deviations:** (1) The after-screenshots are committed under
+  `wave-0-assets/after/` as the plan's Files line requires, even though the Task 10
+  script's default output directory is the gitignored
+  `wave-a-assets/after-global-look/`; the script takes `--out-dir`, so no script
+  change was needed. (2) `VALIDATION.md` is created here as a Wave A report rather
+  than a bare stub, because the plan's acceptance requires the four categories to
+  be recorded in it; later tasks append to the same file.
+- **Commit hash:** `PENDING`

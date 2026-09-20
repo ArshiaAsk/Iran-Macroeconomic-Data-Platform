@@ -872,9 +872,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 1, 7, 8, 9, 10.
 - **Acceptance:**
-  - [ ] Ten after-screenshots captured at 1440×900 and compared with the Task 1 baseline.
-  - [ ] Each of the four regression categories (clipped tables, chart typography, font fallback, sidebar overlap) is recorded as pass or filed as a defect.
-  - [ ] The result is recorded in the spike/validation notes.
+  - [x] Ten after-screenshots captured at 1440×900 and compared with the Task 1 baseline.
+  - [x] Each of the four regression categories (clipped tables, chart typography, font fallback, sidebar overlap) is recorded as pass or filed as a defect.
+  - [x] The result is recorded in the spike/validation notes.
 - **Verify:** Manual comparison of `wave-0-assets/before/` vs `wave-0-assets/after/` (Task 10 script).
 
 ---

@@ -13,8 +13,7 @@ screenshot script (Task 10) — and with the per-archetype review outcomes.
 - Plan and decisions: [`docs/plans/phase-7.2-dashboard-redesign.md`](../plans/phase-7.2-dashboard-redesign.md)
 - Wave 0 verification: [`docs/phase-7.2/wave-0-spike.md`](wave-0-spike.md)
 - Per-task record: [`docs/phase-7.2/execution-log.md`](execution-log.md)
-- Wave A review: `docs/phase-7.2/VALIDATION.md` — created by Task 24; linked
-  here once it exists.
+- Wave A validation: [`docs/phase-7.2/VALIDATION.md`](VALIDATION.md)
 
 Everything below was verified against the installed **Streamlit 1.61.1** unless a
 line says otherwise.
