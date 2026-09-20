@@ -226,9 +226,22 @@ class; any width/max-width that needs `!important`; and the native
 `[data-testid="stHeader"]` whose height is **60 px**, not the mockup's 48 px
 (see §8 — Task 28).
 
-## 5. Results — Task 3 (appended in commit 3)
+## 5. Results — Task 3 (page inventory + archetypes)
 
-_Pending._
+Re-verified the PAGE INVENTORY and archetypes against the current tree.
+
+| item | result | evidence | status |
+|---|---|---|---|
+| Page count | **10** page modules under `dashboard/pages/`; **10** `PageSpec` rows in `navigation.py:52-121` | `ls dashboard/pages/`, read `navigation.py` | VERIFIED |
+| `render_*` symbols / line numbers | all match the plan: `render_overview_page:742`, `render_correlation_page:1002`, `render_catalog_page:588`, `render_inflation_page:196`, `render_domain_page:138` / `render_domain_body:155`, `render_fx_gold_page:913`, `render_welfare_page:929`, `render_market_page:413`, `render_labor_page:970` | `grep -n "^def render_\|^def _render_" dashboard/page_view.py` | VERIFIED |
+| Archetype grouping | A1 = overview; A2 = gdp, trade_energy, fx_gold, labor (`render_domain_page` / `render_domain_body`); A3 = inflation, welfare, market (emphasis sections + `render_domain_body`); A4 = correlation; A5 = catalog | read `page_view.py` (`render_fx_gold_page:913`, `render_labor_page:970`, `render_welfare_page:929`, `render_inflation_page:196`) | VERIFIED |
+| `page_for_domain("economy") is None` | true (dead domain) | `navigation.py` docstring + code | VERIFIED |
+| `pytest tests/unit/dashboard/test_navigation.py -q` | **10 passed** | command output | VERIFIED |
+
+**No drift found** in the inventory table or archetypes — every symbol and line
+number matches. No correction was required to the plan's Context. (The font-path
+and Material-icon corrections in §8 come from Tasks 1–2, not from this
+inventory.)
 
 ## 6. Results — Task 4 (appended in commit 4)
 

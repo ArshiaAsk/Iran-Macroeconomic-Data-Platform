@@ -36,7 +36,7 @@ Decisions for Wave A/B live in
   sidebar selectors via `[data-testid]`/`[aria-current="page"]`; brand fallback
   injection. All manual browser checks passed.
 - **Deviations:** none to production.
-- **Commit hash:** _to be filled._
+- **Commit hash:** `834fe38`
 
 ## Task 3 — (0) RECORD verified page inventory and archetypes
 
