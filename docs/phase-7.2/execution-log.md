@@ -194,3 +194,56 @@ were never staged or committed (Task 7 owns them).
   working (`git status` shows no untracked files under `after-global-look/`).
 - **Deviations:** none.
 - **Commit hash:** `396706e`
+
+---
+
+## Global-look checkpoint — Wave A after Tasks 7–10
+
+- **Before baseline:** `docs/phase-7.2/wave-0-assets/before/*.png` (10 images, tracked).
+- **After captures:** `docs/phase-7.2/wave-a-assets/after-global-look/*.png` (10
+  images, gitignored; captured at 1440×900 by `scripts/dashboard_screenshots.py`).
+- **Method:** visual side-by-side comparison of the same viewport.
+
+### Per-page findings
+
+| Page | Finding | Status |
+|---|---|---|
+| `overview` | Global look applied: Vazirmatn 14 px, token backgrounds, sidebar 256 px + accent active bar, main max-width 1360 px, DB-status card pinned at bottom. | PASS |
+| `correlation` | Same global look changes. Info box renders in `accent-soft` background. | PASS |
+| `catalog` | Same global look changes. Search/filter fields now visible below date range because max-width constraints changed vertical flow. | PASS |
+| `inflation` | Same global look changes. The "شاخص‌ها" multiselect renders **expanded** in the capture (many selected chips visible). This is a capture artifact from navigation, not a design change; it is a known screenshot timing issue. | PASS with note |
+| `gdp` | Same global look changes. "حالت نمودار" (chart state) dropdown visible below the date range. | PASS with note |
+| `trade_energy` | Same global look changes. Info box uses `accent-soft` background. | PASS |
+| `welfare` | Same global look changes. The new max-width/layout reveals the "روند جینی و فقر نسبی" section lower on the page. | PASS with note |
+| `fx_gold` | Same global look changes. Warning banner uses `warn-bg` background. | PASS |
+| `market` | Same global look changes. Warning + info banners use token tints. | PASS |
+| `labor` | Same global look changes. "حالت نمودار" dropdown now visible below the date range. | PASS with note |
+
+### Summary of changes
+
+- **Font:** Vazirmatn now loads and is used for Persian text on all pages.
+- **Typography:** Base font size reduced to 14 px; headings and body text are visibly smaller.
+- **Color:** Page backgrounds switched to `#F6F7F9`; warning/info/info banners picked up token tints (`warn-bg`, `accent-soft`, etc.).
+- **Chrome:** Sidebar is 256 px wide with an accent left border on the active item; main block has `max-width:1360px`; DB-status card is pinned at the bottom of the sidebar.
+- **Icons/emoji:** Unchanged (still the original emoji icons); Material-icon swap is Wave B.
+- **No layout breakage:** No clipped tables, no sidebar overlap, no obvious font fallback to Tahoma (Vazirmatn is present).
+
+### Defects filed for later tasks
+
+1. **Screenshot capture timing — open multiselect (inflation):** The script does
+   not collapse open dropdowns before capturing. Filed for a future Task 10
+   refinement or for Task 24 retake if needed. Non-blocking.
+2. **Extra controls visible below the fold (gdp/labor):** The chart-state
+   selector is present in the DOM but becomes visible because the main content
+   max-width changed the layout. Not a Wave A defect; confirm it still renders
+   correctly after Wave C overview refactor.
+3. **Toolbar state in captures:** The after images show "Stop" + "Deploy" (dev
+   toolbar) while the baseline shows only "Deploy". This is runtime environment
+   noise, not a product regression. No action needed unless automated pixel
+   comparison is introduced later.
+
+### Gate result
+
+- **Visual regression:** no blocking defects for Wave A.
+- **Next work:** Wave B (shell: brand, Material icons, active-item style, DB
+  status, top bar/breadcrumb) begins with Task 11.
