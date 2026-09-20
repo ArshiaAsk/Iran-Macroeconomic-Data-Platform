@@ -165,8 +165,9 @@ were never staged or committed (Task 7 owns them).
   errors**. Visual Playwright check: sidebar computed width **256 px**, main
   container `max-width:1360px`, `--accent` token on `:root` equals
   `#1D4E89`, active nav item has the accent bar, DB status pinned at the
-  bottom. Native header computed height **52.5 px** (close to the spike's
-  recorded 60 px; recorded as note).
+  bottom. Native header computed height **52.5 px** at the 14 px base set in Task 8.
+  The header height is **3.75 rem** (60 px at a 16 px base, 52.5 px at the 14 px
+  base), so Task 28 must use rem units, not fixed px.
 - **Deviations:** none.
 - **Commit hash:** `163cb3b`
 
@@ -245,5 +246,7 @@ were never staged or committed (Task 7 owns them).
 ### Gate result
 
 - **Visual regression:** no blocking defects for Wave A.
-- **Next work:** Wave B (shell: brand, Material icons, active-item style, DB
-  status, top bar/breadcrumb) begins with Task 11.
+- **Next work:** Wave A continues with Task 11 (relative-time formatter).
+  Wave B (shell: brand, Material icons, active-item style, DB status, top
+  bar/breadcrumb) begins at Task 25, **not** Task 11 as previously recorded
+  here.
