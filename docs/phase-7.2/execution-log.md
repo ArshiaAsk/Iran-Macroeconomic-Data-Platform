@@ -145,4 +145,4 @@ were never staged or committed (Task 7 owns them).
   chart colours + font-owner checks). App started with the new theme, **no
   config error** in the streamlit log (`curl /` → 200).
 - **Deviations:** none.
-- **Commit hash:** _pending_
+- **Commit hash:** `2bca541`
