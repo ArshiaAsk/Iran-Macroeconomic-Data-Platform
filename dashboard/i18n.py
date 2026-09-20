@@ -361,6 +361,13 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "value.stale": "کهنه",
         "value.yes": "بله",
         "value.no": "خیر",
+        # Relative-time labels (Task 11): coarse Persian granularity for
+        # freshness and provenance display. ``{count}`` is filled by the
+        # caller with already-digit-converted text.
+        "value.relative_today": "امروز",
+        "value.relative_hours_ago": "{count} ساعت پیش",
+        "value.relative_days_ago": "{count} روز پیش",
+        "value.relative_months_ago": "{count} ماه پیش",
         # Gold series classification (repository ``series_kind``), displayed in
         # the observations grid and the exports.
         "value.base": "پایه",

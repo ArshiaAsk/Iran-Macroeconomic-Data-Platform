@@ -29,6 +29,7 @@ from dashboard.formatting import (
     jalali_month_label,
     jalali_period_label,
     jalali_year_label,
+    relative_time_label,
     tehran_day_bounds,
     tehran_timestamp_label,
     to_ascii_digits,
@@ -213,3 +214,43 @@ def test_an_evening_instant_falls_inside_its_jalali_day_bounds() -> None:
 
     assert start <= EVENING_UTC <= end
     assert gregorian_to_jalali(EVENING_UTC) == EVENING_JALALI_DAY
+
+
+# --- relative_time_label (Task 11) -----------------------------------------
+
+_RELATIVE_NOW = datetime(2026, 9, 21, 12, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("delta", "expected"),
+    [
+        (timedelta(0), "امروز"),
+        (timedelta(minutes=30), "امروز"),
+        (timedelta(seconds=3599), "امروز"),
+        (timedelta(hours=1), "۱ ساعت پیش"),
+        (timedelta(hours=5), "۵ ساعت پیش"),
+        (timedelta(hours=23), "۲۳ ساعت پیش"),
+        (timedelta(hours=24), "۱ روز پیش"),
+        (timedelta(days=5), "۵ روز پیش"),
+        (timedelta(days=29), "۲۹ روز پیش"),
+        (timedelta(days=30), "۱ ماه پیش"),
+        (timedelta(days=60), "۲ ماه پیش"),
+        (timedelta(days=365), "۱۲ ماه پیش"),
+    ],
+)
+def test_relative_time_label_boundaries(delta: timedelta, expected: str) -> None:
+    value = _RELATIVE_NOW - delta
+    assert relative_time_label(value, now=_RELATIVE_NOW) == expected
+
+
+def test_relative_time_label_future_clamps_to_today() -> None:
+    future = _RELATIVE_NOW + timedelta(hours=5)
+    assert relative_time_label(future, now=_RELATIVE_NOW) == "امروز"
+
+
+def test_relative_time_label_latin_digits() -> None:
+    value = _RELATIVE_NOW - timedelta(hours=5)
+    assert relative_time_label(value, now=_RELATIVE_NOW, digit_mode="latin") == "5 ساعت پیش"
+
+    value = _RELATIVE_NOW - timedelta(days=10)
+    assert relative_time_label(value, now=_RELATIVE_NOW, digit_mode="latin") == "10 روز پیش"

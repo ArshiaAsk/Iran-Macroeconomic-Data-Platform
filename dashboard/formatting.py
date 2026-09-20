@@ -28,6 +28,7 @@ from typing import Final, Literal, TypeGuard
 
 import jdatetime
 
+from dashboard.i18n import t
 from src.utils.persian import (
     ARABIC_INDIC_TO_ASCII,
     ASCII_DIGITS,
@@ -55,6 +56,7 @@ __all__ = [
     "jalali_month_label",
     "jalali_period_label",
     "jalali_year_label",
+    "relative_time_label",
     "tehran_day_bounds",
     "tehran_timestamp_label",
     "to_ascii_digits",
@@ -419,3 +421,66 @@ def jalali_day_bounds(jalali_date: jdatetime.date) -> tuple[datetime, datetime]:
         True
     """
     return tehran_day_bounds(jalali_date.togregorian())
+
+
+def relative_time_label(value: datetime, *, now: datetime, digit_mode: DigitMode = "fa") -> str:
+    """Label a timestamp relative to ``now`` with coarse Persian granularity.
+
+    Boundaries (all using floor division on the elapsed seconds):
+
+    - less than one hour → ``"امروز"`` (today)
+    - less than 24 hours → ``"{n} ساعت پیش"`` (n hours ago)
+    - less than 30 days → ``"{n} روز پیش"`` (n days ago)
+    - otherwise → ``"{n} ماه پیش"`` (n months ago, ``days // 30``)
+
+    A future instant clamps to ``"امروز"``. ``now`` is required; no wall-clock
+    call is made inside, so the function is fully testable.
+
+    Args:
+        value: The timestamp to label (naive treated as UTC)
+        now: The reference instant (injected for testability)
+        digit_mode: ``"fa"`` for Persian digits, ``"latin"`` for exports
+
+    Returns:
+        Persian relative-time label
+
+    Examples:
+        >>> now = datetime(2026, 9, 21, 12, tzinfo=UTC)
+        >>> relative_time_label(now, now=now)
+        'امروز'
+        >>> relative_time_label(datetime(2026, 9, 21, 7, tzinfo=UTC), now=now)
+        '۵ ساعت پیش'
+        >>> relative_time_label(datetime(2026, 9, 11, 12, tzinfo=UTC), now=now)
+        '۱۰ روز پیش'
+        >>> relative_time_label(datetime(2026, 9, 21, 17, tzinfo=UTC), now=now)
+        'امروز'
+    """
+    # Normalise naive datetimes to UTC (the storage convention).
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+
+    delta = now - value
+    # A future instant clamps to "امروز".
+    if delta.total_seconds() < 0:
+        return t("value.relative_today")
+
+    seconds = delta.total_seconds()
+    if seconds < 3600:
+        return t("value.relative_today")
+
+    def _count(n: int) -> str:
+        text = str(n)
+        return to_persian_digits(text) if digit_mode == "fa" else text
+
+    hours = int(seconds // 3600)
+    if hours < 24:
+        return t("value.relative_hours_ago", count=_count(hours))
+
+    days = int(seconds // 86400)
+    if days < 30:
+        return t("value.relative_days_ago", count=_count(days))
+
+    months = days // 30
+    return t("value.relative_months_ago", count=_count(months))
