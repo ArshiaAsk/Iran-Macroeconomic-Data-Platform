@@ -600,4 +600,4 @@ were never staged or committed (Task 7 owns them).
   `"**یادداشت روش‌شناسی** <body>"`, so that assertion must switch to a
   `t("note.methodology_label") in value` / substring check. Recorded here, not
   changed in this wave.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `924bfa3`
