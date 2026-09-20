@@ -347,3 +347,19 @@ Minimal edits only (no other plan text changed). All are traceable to Tasks 1–
 | Native `title` tooltip on a `<td>` inside `st.html` | Headless Chromium does not render native tooltips; the `title` attribute does survive | Run `make dashboard` (or the probe app), open the `st.html` table, hover the cell, and confirm the browser tooltip appears. If it does not, use `data-` + CSS `::after`. |
 | `client.toolbarMode` exact **introducing** version | Not derivable from the installed package (only the allowed values/default are); no network access for release notes | Check the Streamlit release notes for the first version listing `client.toolbarMode` (docs say the `viewer` fix landed in 1.54.0). This does not affect the D9 floor decision (highest requirement remains 1.44.0). |
 | `[aria-current="page"]` stability across Streamlit upgrades | Verified only at 1.61.1 | Re-run the Task 2 selector probe after any Streamlit bump; keep the chrome selectors in the D6 isolated block. |
+
+---
+
+## 10. Final tree state
+
+`git status --short` after Wave 0 (all four commits landed):
+
+```
+?? dashboard/static/
+```
+
+Only the pre-existing, untracked font directory remains. Every Wave 0 change is
+committed under `docs/phase-7.2/` plus the single plan file
+`docs/plans/phase-7.2-dashboard-redesign.md`; **no production file** was touched
+and the font files under `dashboard/static/` are **untouched and uncommitted**
+(Task 7 owns them). No leftover servers or background processes.

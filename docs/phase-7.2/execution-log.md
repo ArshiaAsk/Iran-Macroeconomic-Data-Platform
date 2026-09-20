@@ -54,4 +54,18 @@ Decisions for Wave A/B live in
   data-/a survive; svg stripped); `st.markdown(unsafe_allow_html=True)` CSS
   applies; custom `[theme]` already hides the theme toggle.
 - **Deviations:** none to production.
-- **Commit hash:** _to be filled._
+- **Commit hash:** `f8bbfcd`
+
+---
+
+## Wave 0 commit summary
+
+| Task | Commit |
+|---|---|
+| 1 — capabilities + baseline | `35ce5f6` |
+| 2 — shell/static/toolbar/brand | `834fe38` |
+| 3 — page inventory | `8a0e245` |
+| 4 — `st.html` + theme switcher + plan corrections | `f8bbfcd` |
+
+All commits are docs-only. The untracked font files under `dashboard/static/`
+were never staged or committed (Task 7 owns them).
