@@ -168,4 +168,4 @@ were never staged or committed (Task 7 owns them).
   bottom. Native header computed height **52.5 px** (close to the spike's
   recorded 60 px; recorded as note).
 - **Deviations:** none.
-- **Commit hash:** _pending_
+- **Commit hash:** `163cb3b`
