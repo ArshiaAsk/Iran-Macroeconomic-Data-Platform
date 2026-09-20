@@ -689,4 +689,4 @@ were never staged or committed (Task 7 owns them).
   the plan did not specify (the plan's signature is `render_kpi_band(cells)`).
   (4) The mockup's exact metric/subheader type scale is **not** applied (theme-layer
   change, out of this task's file scope).
-- **Commit hash:** `PENDING`
+- **Commit hash:** `56a2564`
