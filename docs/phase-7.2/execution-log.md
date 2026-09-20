@@ -908,4 +908,4 @@ were never staged or committed (Task 7 owns them).
   `render_callout(..., container_key=…)`. (3) `render_loading()` renders a native
   `st.info`, not `st.spinner`: the plan routes states through the callout and the
   acceptance requires `app.info`, and a spinner is invisible to `AppTest`.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `a38ce18`
