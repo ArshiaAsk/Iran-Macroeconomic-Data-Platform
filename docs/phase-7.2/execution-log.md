@@ -2326,4 +2326,28 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
      the scroll container (`stMain` is), so its scroll-to-top is a no-op. The
      captures are still correct because each page navigation starts at the top;
      recorded here for the script's owner (Task 47).
-- **Commit:** this entry is committed with the Task 35 commit.
+- **Commit:** `054af58`.
+
+## Wave D part A gate — Step 0 + Task 35 closed
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (new "Wave D part A" section),
+  `docs/phase-7.2/execution-log.md`.
+- **Gate:** `make check` → **1444 passed, 3 skipped**, coverage **89.22 %**
+  (≥ 80 %), `ruff check`/`ruff format --check` clean; `poetry run mypy src
+  dashboard` → **0 errors**, 68 source files; `poetry run pytest
+  tests/unit/dashboard -q --no-cov` → **628 passed** (623 at the Step 0a
+  baseline, +5 new); `poetry run pytest tests/unit/dashboard/test_exports.py -m
+  integration -q --no-cov` → **1 passed**; all-pages smoke
+  (`test_all_pages_smoke.py`, in the dashboard subset) green.
+- **Visual evidence:** the hardened ten-page capture script
+  (`scripts/dashboard_screenshots.py`) wrote `wave-d-assets/partA-all-pages/`
+  (post-Task-35) against `wave-d-assets/partA-all-pages-before/` (pre-Task-35),
+  with four-page scrolled detail crops in `wave-d-assets/task-35/`. A pixel diff
+  of the ten pairs isolates the change exactly: Overview 0 px; the five other
+  non-Wave-D pages 1977–2636 px inside one placeholder strip; the four Wave D
+  pages the full composition change.
+- **Carry into Scope B (Tasks 36–37):** the four pages' titles and the FX/Gold
+  and Labor caveats are still raw (`render_domain_page`'s `st.title`,
+  `render_fx_gold_page`, `render_labor_page`); the D11 guard is not yet enabled
+  for them.
+- **Commit:** this entry is committed with the Wave D part A gate commit.
