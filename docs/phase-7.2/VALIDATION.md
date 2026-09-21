@@ -1176,3 +1176,44 @@ The owner's decisions, recorded verbatim on 2026-09-22:
 
 **Gate.** Documentation-only change: no test run is required (the P1 and gate
 steps re-run the suite). The tree contains only `docs/` edits.
+
+## Wave H — part A (P1–P4, the quality gate and the all-pages capture)
+
+**Scope.** Scope A (the four polish items P1–P4) and the Scope B part-A gate: the
+full quality gate, the ten-page capture, and this record. Presentation-layer only.
+
+### P1–P4
+
+| Item | Commit | Delta |
+|---|---|---|
+| P1 | `996bd0a` | Catalog filter bar hosts only the three simple controls (`weights=[3.0, 2.0, 1.0]`, bar 555 → 61 px); `render_filters` renders full width below it (251 px column → 1044 px). Fixes the Wave G sign-off defect (row 22). |
+| P2 | `d3ee015` | Shell-level `stMainBlockContainer stCaptionContainer { direction: rtl; text-align: start }` makes every main-block caption read RTL; replaces the scoped `coverage_footnote` hook (verified byte-identical on the Overview). |
+| P3 | `31b88b6` | Breadcrumb separator `›` (U+203A) → `/` with `<span class="crumb-sep">`; current crumb bolded (`<b class="crumb-current">`, weight 600). Matches the mockup (`overview-redesign-mockup.html:141`). |
+| P4 | `2c0977c` | `scripts/dashboard_screenshots.py`: `neutralise()` scrolls `stMain` (the real scroll container; the block container it targeted was not scrollable); new optional `--full-height` flag. |
+
+### Quality gate (Wave H part A)
+
+- **`poetry run mypy src dashboard`** → **Success: no issues found in 68 source
+  files** (the gate is "zero errors"; the Task 1 baseline had none).
+- **`make check`** (format + lint + typecheck + full test) → **PASS**, `1468
+  passed, 3 skipped`; coverage **89.22%**. The Wave 0 baseline was 1 158 passed /
+  3 skipped; the count has grown with the waves, no regressions.
+- **Dashboard subset** (`pytest tests/unit/dashboard -q --no-cov`) → **652
+  passed**.
+- **Export smoke** (`pytest tests/unit/dashboard/test_exports.py -m integration
+  -q --no-cov`) → **1 passed** (the Task 14 PNG + SVG render with the new
+  template; re-confirmed in Task 48).
+- **All-pages smoke** — `tests/unit/dashboard/test_all_pages_smoke.py` is inside
+  the 652 above; all ten pages render through the router harness.
+
+### All-pages capture
+
+Ten PNGs, all **1440 x 900**, captured at commit **`2c0977c`** into
+`wave-h-assets/partA-all-pages/` (fresh server, 2026-09-22 02:41:58). The
+per-page pass/defect result and the pixel diff against the Wave G reference
+(`wave-g-assets/partB-all-pages/`) are in
+`wave-h-assets/partA-all-pages/DIFF.md`. **No defects:** the diffs are exactly the
+intended P1 (catalog, 20.4%), P2 (caption strip, ~0.5% on nine pages) and P3
+(breadcrumb, top bar on all ten) changes.
+
+**Boundary.** No file under `src/`, `alembic/` or `airflow/` changed.
