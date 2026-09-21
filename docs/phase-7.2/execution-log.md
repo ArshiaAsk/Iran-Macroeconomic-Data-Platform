@@ -2854,3 +2854,28 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   the heatmap itself is visually identical.
 - **Deviations:** none.
 - **Commit:** Task 42 commit.
+
+## Wave F — Task 43 (correlation owner review, PREPARED — not signed off)
+
+- **Files:** `docs/phase-7.2/validation/archetype-correlation.md` (new),
+  `docs/phase-7.2/README.md` (status → "Wave F awaiting owner review"),
+  `docs/phase-7.2/wave-f-assets/task43/` (empty state, selected top, heatmap,
+  join/overlap tables; viewport + full-page).
+- **Build (documentation only):** the A4 owner review doc, modelled on
+  `validation/archetype-emphasis.md`. It records the inventory (§2), the D11
+  contract matrix (§3), the heatmap readability check and the carried filter-set
+  deviation, cross-page consistency (§4), the changed-assertions list (§5), the
+  pixel-diff evidence (§6), the defects/recommendations (§7) and the owner
+  checklist (§8). The checklist boxes are **unticked** and the doc ends
+  `Owner sign-off: PENDING.` — the task is to **prepare** the review, not to sign
+  it off.
+- **Verdict tally:** 14 MATCH, 1 DEVIATION (the shared `render_filters` set, row 4),
+  3 N/A (no KPI band, no chart legend, no small-static summary table),
+  **0 presentation-layer DEFECT**.
+- **Plan acceptance box:** left unticked — the acceptance is "owner sign-off
+  recorded, or defects filed", and neither has happened.
+- **Verify:** the review cites the committed evidence under
+  `wave-f-assets/task43/` and `wave-f-assets/task-42/`. No test run is needed for a
+  docs-only task; the Scope A gate re-runs the suite.
+- **Deviations:** none.
+- **Commit:** Task 43 commit.

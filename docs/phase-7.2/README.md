@@ -2,7 +2,7 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave E complete; Wave F/G in progress** (Overview reference
+Status: **Wave F awaiting owner review** (Overview reference
 implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
 Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
 deviations A1–A9 approved as recorded; see
@@ -16,7 +16,10 @@ Welfare Task 39, Market Task 40, plus Step 0a/0b) is **complete through Task 41*
 the emphasis owner review is
 [`validation/archetype-emphasis.md`](validation/archetype-emphasis.md),
 **signed off APPROVED on 2026-09-22** (the 15 MATCH rows accepted; the three
-approved deviations are recorded in its §10). Wave 0 is
+approved deviations are recorded in its §10). Wave F (the comparison /
+correlation page, Task 42) is **complete through Task 43**; its owner review is
+[`validation/archetype-correlation.md`](validation/archetype-correlation.md),
+**prepared and awaiting the owner's sign-off**. Wave 0 is
 recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
 [`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual
@@ -51,6 +54,9 @@ Documents:
 - [`validation/archetype-emphasis.md`](validation/archetype-emphasis.md) — the
   Wave E review of the three emphasis-domain pages (Inflation, Welfare, Market)
   against the layout contract (**owner sign-off APPROVED, 2026-09-22**).
+- [`validation/archetype-correlation.md`](validation/archetype-correlation.md) —
+  the Wave F review of the comparison / correlation page against the layout
+  contract (**prepared, awaiting owner sign-off**).
 - [`execution-log.md`](execution-log.md) — per-task execution log (files, Verify
   result, deviations, commit hash).
 - `README.md` — this file, completed in Wave H.
