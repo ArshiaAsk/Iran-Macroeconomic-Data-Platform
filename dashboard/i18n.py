@@ -119,6 +119,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "metric.domains": "حوزه‌ها",
         "metric.sources": "منابع",
         "metric.selected_indicators": "{count} شاخص انتخاب‌شده",
+        # The indicators-by-domain bar list's footer total (Task 31): the mockup's
+        # "۵۰ شاخص". `table.indicator_count` ("تعداد شاخص") is the column/section
+        # label, which is why this is a separate count phrase.
+        "metric.indicator_count": "{count} شاخص",
         "metric.market_sessions": "نشست‌های معاملاتی مشاهده‌شده",
         # Overview series inventory (Task 16): the derived and orphan Gold series
         # that have no catalog row of their own.

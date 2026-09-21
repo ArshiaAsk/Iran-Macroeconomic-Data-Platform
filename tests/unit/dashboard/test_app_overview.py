@@ -6,11 +6,13 @@ the page is rendered through the entrypoint router rather than as a standalone
 page file (``docs/phase-7.1/wave-0-spike.md``).
 """
 
+import re
 from datetime import UTC, datetime
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
+from dashboard.components.direction import CSS_SELECTORS, direction_css
 from dashboard.components.html_table import Dot, StatusChip, Text, TwoLine
 from dashboard.formatting import (
     format_number,
@@ -20,6 +22,7 @@ from dashboard.formatting import (
 )
 from dashboard.i18n import t
 from dashboard.labels import source_label
+from dashboard.navigation import page_for_domain
 from dashboard.page_view import (
     build_freshness_rows,
     freshness_display,
@@ -386,3 +389,67 @@ def test_build_freshness_rows_returns_headers_only_for_an_empty_frame() -> None:
 
     assert table.rows == ()
     assert t("table.run_status") in table.columns
+
+
+# --- Task 31: domain bars + the two-column row ------------------------------
+
+
+def test_overview_domain_bars_link_each_owned_domain(
+    fake_streamlit_connection,
+) -> None:
+    """The bar list keeps one native ``st.page_link`` per owned domain."""
+    app = _overview_app()
+    domain_counts = FakeDashboardRepository().available_domains()
+    total = int(domain_counts["indicator_count"].sum())
+
+    assert not app.exception
+    owned = [
+        str(domain)
+        for domain in domain_counts["domain"]
+        if page_for_domain(str(domain)) is not None
+    ]
+    assert len(owned) == len(domain_counts)
+    # Visible to AppTest as native page links, not raw anchors.
+    assert len(app.get("page_link")) == len(owned)
+
+    bars = [body for body in html_texts(app) if "bar-rail" in body]
+    assert len(bars) == len(domain_counts)
+    # Proportional to the counts: the largest domain fills its rail and every
+    # other rail is that domain's share of it.
+    widths = [float(match) for body in bars for match in re.findall(r"width:([\d.]+)%", body)]
+    largest = int(domain_counts["indicator_count"].max())
+    assert widths.count(100.0) == int((domain_counts["indicator_count"] == largest).sum())
+    for width, count in zip(widths, domain_counts["indicator_count"], strict=True):
+        assert abs(width - int(count) / largest * 100) < 0.05
+
+    footer = next(body for body in html_texts(app) if "bar-list-foot" in body)
+    assert t("section.indicators_by_domain_total") in footer
+    assert t("metric.indicator_count", count=format_number(total)) in footer
+
+
+def test_overview_domain_bars_section_header_carries_the_count_label(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    assert t("table.indicator_count") in [element.value for element in app.markdown]
+
+
+def test_overview_renders_the_two_column_row_with_freshness_first(
+    fake_streamlit_connection,
+) -> None:
+    """The mockup's row: freshness in the wide column, then the domain bars."""
+    app = _overview_app()
+
+    subheaders = [subheader.value for subheader in app.subheader]
+    assert subheaders.index(t("section.source_freshness")) < subheaders.index(
+        t("section.indicators_by_domain")
+    )
+
+
+def test_overview_row_declares_the_rtl_context() -> None:
+    """Task 31: without it the first column would land on the left (LTR main block)."""
+    css = direction_css()
+
+    assert CSS_SELECTORS["overview_row"] in css
+    assert f'{CSS_SELECTORS["overview_row"]} {{ direction: rtl; }}' in css

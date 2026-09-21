@@ -105,6 +105,8 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "section_trailing": '[class*="st-key-section-trailing-"]',
         "filter_bar": '[class*="st-key-filter-bar-"]',
         "top_bar": '[class*="st-key-top-bar"]',
+        # Overview's two-column row (Task 31): the mockup's 7fr/5fr grid.
+        "overview_row": '[class*="st-key-overview-row"]',
     }
 )
 
@@ -440,6 +442,12 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     f'{CSS_SELECTORS["top_bar"]} .top-bar-stamp {{ '
     "font-size: 13px; font-weight: 500; color: var(--text-2); "
     "text-align: left; }",
+    # Overview's two-column row (Task 31). The mockup's `.row` is a 7fr/5fr grid
+    # under `body{direction:rtl}`, so its first item (freshness) sits on the right.
+    # Streamlit's main block is LTR, so without this the first column would land on
+    # the left and the two sections would swap. The column weights themselves come
+    # from `st.columns([7, 5])`.
+    f'{CSS_SELECTORS["overview_row"]} {{ direction: rtl; }}',
 )
 
 

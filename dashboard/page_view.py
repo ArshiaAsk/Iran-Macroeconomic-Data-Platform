@@ -29,7 +29,9 @@ from dashboard.components.html_table import (
     render_html_table,
 )
 from dashboard.components.layout import (
+    BarRow,
     KpiCell,
+    render_bar_list,
     render_kpi_band,
     render_section_header,
     status_chip_cell,
@@ -57,7 +59,6 @@ from dashboard.labels import (
     source_expected_cadence,
     source_label,
 )
-from dashboard.navigation import page_for_domain
 from dashboard.queries import (
     cached_available_domains,
     cached_coverage_summary,
@@ -790,30 +791,39 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
         key="overview",
     )
 
-    st.subheader(t("section.indicators_by_domain"))
-    _render_domain_counts(domain_counts)
-
     # One reference instant for the whole freshness section, so the verdict, the
     # summary and every relative age agree with each other.
     now = datetime.now(UTC)
     fresh, stale = freshness_summary(freshness, now=now)
-    render_section_header(
-        "section.source_freshness",
-        trailing=(
-            None
-            if freshness.empty
-            else t(
-                "section.freshness_summary",
-                fresh=format_number(fresh),
-                stale=format_number(stale),
+    # The mockup's row: freshness in the wide column and the domain bars in the
+    # narrow one. The keyed container declares `direction: rtl`, so the first
+    # column is the rightmost, as in the mockup.
+    with st.container(key="overview-row"):
+        freshness_column, bars_column = st.columns([7, 5])
+        with freshness_column:
+            render_section_header(
+                "section.source_freshness",
+                trailing=(
+                    None
+                    if freshness.empty
+                    else t(
+                        "section.freshness_summary",
+                        fresh=format_number(fresh),
+                        stale=format_number(stale),
+                    )
+                ),
             )
-        ),
-    )
-    if freshness.empty:
-        render_empty("empty.no_collection_runs")
-    else:
-        table = build_freshness_rows(freshness, now=now)
-        render_html_table(table.columns, table.rows)
+            if freshness.empty:
+                render_empty("empty.no_collection_runs")
+            else:
+                table = build_freshness_rows(freshness, now=now)
+                render_html_table(table.columns, table.rows)
+        with bars_column:
+            render_section_header(
+                "section.indicators_by_domain",
+                trailing=t("table.indicator_count"),
+            )
+            _render_domain_counts(domain_counts)
 
     st.subheader(t("section.available_coverage"))
     st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
@@ -890,25 +900,22 @@ def overview_kpi_cells(
 
 
 def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
-    """Render one ``st.page_link`` per domain into the page that owns it.
+    """Render the indicators-by-domain bar list, one row per domain.
 
-    The owner comes from the navigation registry (:func:`page_for_domain`), the
-    single declaration of domain ownership. A domain without an owner is shown as
-    plain text rather than dropped, so an unowned domain stays visible.
+    Rows come from ``available_domains``. :func:`render_bar_list` reads each
+    domain's owner from the navigation registry (:func:`page_for_domain`, the
+    single declaration of domain ownership) and keeps it a native ``st.page_link``
+    beside the bar, so an owned domain stays navigable and visible to ``AppTest``;
+    a domain without an owner stays visible as plain text rather than being
+    dropped. The footer total is the sum of the row counts, computed from the
+    data and formatted with Persian digits.
     """
-    if domain_counts.empty:
-        st.info(t("empty.no_indicators_for_page"))
-        return
+    rows: list[BarRow] = []
     for row in domain_counts.itertuples(index=False):
-        domain = str(row.domain)
         count = row.indicator_count
-        count_text = format_number(count) if isinstance(count, int | float) else format_number(0)
-        label = f"{domain_label(domain)} ({count_text})"
-        owner = page_for_domain(domain)
-        if owner is None:
-            st.markdown(f"- {label}")
-        else:
-            st.page_link(owner.path, label=label)
+        rows.append(BarRow(str(row.domain), int(count) if isinstance(count, int | float) else 0))
+    total = sum(row.indicator_count for row in rows)
+    render_bar_list(rows, t("metric.indicator_count", count=format_number(total)))
 
 
 class FreshnessTable(NamedTuple):

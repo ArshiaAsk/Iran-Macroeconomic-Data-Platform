@@ -963,9 +963,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `section.indicators_by_domain_total` (Task 20).
 - **Depends:** Tasks 20, 29.
 - **Acceptance:**
-  - [ ] Bars are proportional to counts; unowned domains stay visible as plain text.
-  - [ ] Each owned domain's owner link is preserved as a native `st.page_link` and is still visible to AppTest via `app.page_link`.
-  - [ ] No raw `<a href>` to an internal page URL is used (a plain anchor would be a full browser navigation, not the supported in-app switch).
+  - [x] Bars are proportional to counts; unowned domains stay visible as plain text.
+  - [x] Each owned domain's owner link is preserved as a native `st.page_link` and is still visible to AppTest via `app.page_link`.
+  - [x] No raw `<a href>` to an internal page URL is used (a plain anchor would be a full browser navigation, not the supported in-app switch).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q`.
 
 ### 32. (C) REDESIGN the Overview coverage table with filters and calendar opt-in

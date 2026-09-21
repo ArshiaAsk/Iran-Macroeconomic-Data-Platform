@@ -1605,3 +1605,53 @@ were never staged or committed (Task 7 owns them).
   4. **`TwoLine.primary_tone`** was added (an optional trailing field, so existing
      call sites are unchanged) to match the mockup's amber stale date; recorded in
      `design-system.md` §8.
+
+## Task 31 — (C) Overview domain bars + the two-column row
+
+- **Files:** `dashboard/page_view.py` (`_render_domain_counts` now delegates to
+  `render_bar_list`; `render_overview_page` composes the row),
+  `dashboard/components/direction.py` (`overview_row` hook),
+  `dashboard/i18n.py` (`metric.indicator_count`), `tests/unit/dashboard/test_app_overview.py`,
+  `docs/phase-7.2/design-system.md` (§14),
+  `docs/phase-7.2/wave-c-assets/task31/` (`overview.png`, `row-live.png`,
+  `row-mockup.png`).
+- **Build:**
+  - **Bars.** `_render_domain_counts` keeps its name and signature (the Task 20
+    `render_bar_list` owner-link test monkeypatches it) but now builds `BarRow`s
+    from `available_domains` and calls `render_bar_list`. The owner link stays a
+    native `st.page_link` (inside `render_bar_list`, per AM-17); an unowned domain
+    would stay plain text; the footer total is the **sum of the rows**, formatted
+    with Persian digits. The old `st.page_link` list and its bullet markdown are
+    gone, as is the now-unused `page_for_domain` import from `page_view`.
+  - **The row.** `st.container(key="overview-row")` + `st.columns([7, 5])`, with
+    the freshness section in the first column and the domain bars in the second.
+    The new hook declares `direction: rtl` (`direction.py`), so the first column is
+    the **rightmost**, exactly as the mockup's 7fr/5fr grid under
+    `body{direction:rtl}`. Each column opens with its own
+    `render_section_header`: freshness carries the summary trailing text, bars
+    carry `table.indicator_count` (`تعداد شاخص`), matching the mockup's `.sec-h`.
+  - **i18n.** The footer's "N شاخص" needed a count phrase the catalog did not have
+    (`table.indicator_count` is the *label* "تعداد شاخص"), so `metric.indicator_count`
+    = `{count} شاخص` was added — a deviation from the plan's Task 31 key list.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **559 passed** (4 new:
+    one page link per owned domain + proportional bars + footer total, the bars
+    header's count label, freshness-before-bars column order, the row's RTL hook).
+  - `poetry run mypy src dashboard` → 0 errors; ruff check/format clean.
+  - **AppTest visibility.** `app.get("page_link")` returns one entry per owned
+    domain (AppTest exposes the element type through `app.get(...)`; there is no
+    `app.page_link` attribute on `AppTest`). No raw `<a href>` is emitted for an
+    internal page.
+  - **Visual.** `row-live.png` vs `row-mockup.png`: identical column order
+    (freshness right, bars left), identical bar proportions (15/15/8/4/3/2/1/1/1),
+    fills anchored to the rail's right edge, the footer's `جمع` at the RTL start
+    and `۵۰ شاخص` at the far end, and both section headers on one baseline.
+    Measured at 1440 px: row `direction: rtl`, freshness column
+    `x=768, w=602`, bars column `x=326, w=428` — a 1.406 ratio against the
+    mockup's 7:5 = 1.4 (the absolute widths differ only by the main container's
+    70 px side padding, the known Step 0b shell deviation).
+- **Deviations:**
+  1. **Bar order.** Rows keep `available_domains`' alphabetical domain order; the
+     mockup's bars are count-descending. Not specified by the task and not changed
+     (recorded in `design-system.md` §14 for the Task 34 owner review).
+  2. **`metric.indicator_count`** added for the footer's "N شاخص" (see above).
