@@ -63,6 +63,12 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "heading": '[data-testid="stHeading"], h1, h2, h3, h4, h5, h6',
         "metric": '[data-testid="stMetric"]',
         "metric_label": '[data-testid="stMetricLabel"]',
+        # Task 29: the mockup's heading line-heights (h1 1.4, section title 1.5)
+        # are not theme options, and Streamlit's own heading rule (line-height
+        # 1.2) outranks a bare `h1`/`h3`. Scoped to the main block so the
+        # sidebar's own headings are untouched.
+        "main_block_heading_1": '[data-testid="stMainBlockContainer"] h1',
+        "main_block_heading_3": '[data-testid="stMainBlockContainer"] h3',
         "widget_label": '[data-testid="stWidgetLabel"]',
         "form_label": '[data-testid="stForm"] label',
         "dataframe": '[data-testid="stDataFrame"]',
@@ -75,8 +81,11 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "callout": '[class*="st-key-callout-"]',
         "kpi_band": '[class*="st-key-kpi-band-"]',
         "kpi_secondary_group": '[class*="st-key-kpi-"][class*="-secondary-0-tone-"]',
+        # Every secondary cell, not just the boundary one (the value-size rule).
+        "kpi_secondary_cell": '[class*="st-key-kpi-"][class*="-secondary-"]',
         "kpi_column": '[data-testid="stColumn"]',
         "kpi_value": '[data-testid="stMetricValue"]',
+        "kpi_label": '[class*="st-key-kpi-band-"] [data-testid="stMetricLabel"]',
         "kpi_tone_muted": '[class*="st-key-kpi-"][class*="-tone-muted"]',
         "kpi_tone_ok": '[class*="st-key-kpi-"][class*="-tone-ok"]',
         "kpi_tone_warn": '[class*="st-key-kpi-"][class*="-tone-warn"]',
@@ -104,12 +113,21 @@ _RULES: Final[tuple[tuple[str, str], ...]] = (
     ("sidebar", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
     ("sidebar_nav", "direction: rtl; text-align: right;"),
     # Generous line-height keeps Persian ascenders/descenders and the mixed
-    # Persian-digit runs readable in the RTL text blocks (Task 22 polish).
+    # Persian-digit runs readable in the RTL text blocks (Task 22 polish). Task 29
+    # pinned it to the mockup's body line-height (1.85): measured 1.9 before, so
+    # the mockup value was not in effect.
     (
         "markdown",
-        f"direction: rtl; text-align: right; line-height: 1.9; font-family: {FONT_STACK};",
+        f"direction: rtl; text-align: right; line-height: 1.85; font-family: {FONT_STACK};",
     ),
     ("heading", f"direction: rtl; text-align: right; line-height: 1.7; font-family: {FONT_STACK};"),
+    # Task 29: the mockup's heading line-heights, which the theme cannot express.
+    # Measured before: h1 33.6 px (1.2) and h3 21.6 px (1.2) — Streamlit's own
+    # heading rule wins over the bare-element `heading` rule above. The
+    # main-block-scoped selectors are specific enough to take effect (verified
+    # live; see the execution log).
+    ("main_block_heading_1", "line-height: 1.4;"),
+    ("main_block_heading_3", "line-height: 1.5;"),
     ("metric", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
     ("metric_label", "direction: rtl; text-align: right;"),
     ("widget_label", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
@@ -364,6 +382,13 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     f':has({CSS_SELECTORS["kpi_secondary_group"]}) '
     "{ border-inline-start: 1px solid var(--border-strong); }",
     *_KPI_TONE_RULES,
+    # KPI typography the theme cannot express (Task 29, carried from Step 0e).
+    # The theme sets one metric-label size (Streamlit computes 12.25 px / 400) and
+    # one metric-value size (28 px), so the mockup's 13 px / 500 label and 20 px
+    # secondary value are pinned here on the band's own hooks. Primary values keep
+    # the theme's 28 px / 600.
+    f'{CSS_SELECTORS["kpi_label"]} {{ font-size: 13px; font-weight: 500; }}',
+    f'{CSS_SELECTORS["kpi_secondary_cell"]} {CSS_SELECTORS["kpi_value"]} ' "{ font-size: 20px; }",
     # Bar list (Task 20). The panel is a keyed bordered container; each row is a
     # native st.columns trio whose middle column holds the escaped bar fragment.
     # ``direction: rtl`` on the panel is what puts the domain label on the right,

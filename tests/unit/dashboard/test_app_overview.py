@@ -14,7 +14,12 @@ from streamlit.testing.v1 import AppTest
 from dashboard.formatting import format_number
 from dashboard.i18n import t
 from dashboard.labels import source_label
-from dashboard.page_view import freshness_display, freshness_summary
+from dashboard.page_view import (
+    freshness_display,
+    freshness_summary,
+    overview_kpi_cells,
+    series_inventory_counts,
+)
 from dashboard.repository import SERIES_KIND_BASE
 from tests.unit.dashboard.app_smoke import (
     ORPHAN_INDICATOR,
@@ -57,6 +62,79 @@ def test_overview_reports_derived_and_orphan_gold_series(fake_streamlit_connecti
     assert t("metric.derived_series") in labels
     assert t("metric.orphan_series") in labels
     assert t("metric.matching_indicators") not in labels
+
+
+# --- Task 29: the KPI band (six cells) --------------------------------------
+
+
+def test_overview_kpi_band_renders_six_cells_in_mockup_order(
+    fake_streamlit_connection,
+) -> None:
+    """Right to left, the mockup's six cells: sources, domains, active
+    indicators, Gold observations, then the separated derived/orphan pair."""
+    app = _overview_app()
+
+    assert not app.exception
+    assert [metric.label for metric in app.metric] == [
+        t("metric.sources"),
+        t("metric.domains"),
+        t("metric.active_indicators"),
+        t("metric.gold_observations"),
+        t("metric.derived_series"),
+        t("metric.orphan_series"),
+    ]
+
+
+def test_overview_kpi_band_annotates_three_cells_and_tags_the_orphan(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    assert not app.exception
+    assert [metric.help for metric in app.metric] == [
+        "",
+        "",
+        "",
+        t("metric.gold_observations_help"),
+        t("metric.derived_series_help"),
+        t("metric.orphan_series_help"),
+    ]
+    # Exactly one cell carries the "needs review" tag.
+    badges = [element.value for element in app.markdown if "badge" in element.value]
+    assert badges == [f":orange-badge[{t('metric.orphan_series_tag')}]"]
+
+
+def test_overview_kpi_cells_keep_the_derived_and_orphan_counts_separate() -> None:
+    """D2: the two secondary counts are never deduplicated or merged."""
+    repository = FakeDashboardRepository()
+    catalog = repository.list_indicators()
+    inventory = repository.series_inventory()
+
+    cells = overview_kpi_cells(catalog, inventory, total_observations=8_195)
+    derived, orphan = series_inventory_counts(inventory)
+    values = {cell.label_key: cell.value for cell in cells}
+
+    assert values["metric.derived_series"] == format_number(derived)
+    assert values["metric.orphan_series"] == format_number(orphan)
+    assert values["metric.gold_observations"] == format_number(8_195)
+    # The two counts come from separate expressions and stay separate metrics.
+    assert "metric.derived_series" in values
+    assert "metric.orphan_series" in values
+    assert [cell.secondary for cell in cells] == [False, False, False, False, True, True]
+
+
+def test_overview_kpi_cells_are_empty_safe_for_a_missing_inventory_column() -> None:
+    """An inventory frame without the classification columns counts zero."""
+    repository = FakeDashboardRepository()
+    cells = overview_kpi_cells(
+        repository.list_indicators(),
+        pd.DataFrame({"indicator_id": ["x"]}),
+        total_observations=0,
+    )
+
+    values = {cell.label_key: cell.value for cell in cells}
+    assert values["metric.derived_series"] == format_number(0)
+    assert values["metric.orphan_series"] == format_number(0)
 
 
 def test_overview_staleness_verdict_is_rendered(fake_streamlit_connection) -> None:

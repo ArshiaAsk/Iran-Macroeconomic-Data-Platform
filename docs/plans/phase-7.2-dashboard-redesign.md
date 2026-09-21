@@ -936,9 +936,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `metric.sources/domains/active_indicators/gold_observations/derived_series/orphan_series`; new keys from Task 19.
 - **Depends:** Task 19.
 - **Acceptance:**
-  - [ ] Six cells, correct order, tooltips on the three annotated cells.
-  - [ ] Derived and orphan values remain separate metrics.
-  - [ ] No UI string states a specific count or a claim about current data.
+  - [x] Six cells, correct order, tooltips on the three annotated cells.
+  - [x] Derived and orphan values remain separate metrics.
+  - [x] No UI string states a specific count or a claim about current data.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q`.
 
 ### 30. (C) REDESIGN the Overview freshness table

@@ -287,6 +287,27 @@ def test_kpi_band_help_copy_is_data_agnostic() -> None:
         assert not any(character in digits for character in t(key)), key
 
 
+def test_kpi_band_typography_pins_the_scale_the_theme_cannot_express() -> None:
+    """Task 29: the KPI label (13 px/500) and the secondary value (20 px).
+
+    The theme sets one metric-label size and one metric-value size, so the
+    mockup's smaller label and the secondary group's smaller value are pinned on
+    the band's own keyed hooks rather than through the theme.
+    """
+    css = direction_css()
+
+    assert CSS_SELECTORS["kpi_label"] in css
+    assert f'{CSS_SELECTORS["kpi_label"]} {{ font-size: 13px; font-weight: 500; }}' in css
+    assert CSS_SELECTORS["kpi_secondary_cell"] in css
+    assert (
+        f'{CSS_SELECTORS["kpi_secondary_cell"]} {CSS_SELECTORS["kpi_value"]} '
+        "{ font-size: 20px; }" in css
+    )
+    # The boundary hook and the every-secondary-cell hook are distinct selectors:
+    # only the latter may size the value.
+    assert CSS_SELECTORS["kpi_secondary_group"] != CSS_SELECTORS["kpi_secondary_cell"]
+
+
 def test_kpi_band_rejects_an_unknown_tone() -> None:
     app = _run(
         "from dashboard.components.layout import KpiCell, render_kpi_band\n"

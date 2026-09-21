@@ -1475,3 +1475,67 @@ were never staged or committed (Task 7 owns them).
     copied over `docs/phase-7.2/wave-b-assets/all-pages/welfare.png`.
 - **Deviations:** none. The other nine Wave B PNGs are left untouched, so the
   asset diff is exactly the one replaced file.
+
+## Task 29 — (C) Overview KPI band (6 cells)
+
+- **Files:** `dashboard/page_view.py` (new `series_inventory_counts` and
+  `overview_kpi_cells`; `_render_series_inventory` removed),
+  `dashboard/components/direction.py` (KPI label/secondary-value rules, main-block
+  heading line-heights, body line-height), `tests/unit/dashboard/test_app_overview.py`,
+  `tests/unit/dashboard/test_layout.py`, `tests/unit/dashboard/test_direction.py`,
+  `docs/phase-7.2/design-system.md` (§3, §14, §15),
+  `docs/phase-7.2/wave-c-assets/task29/` (`overview.png`, `band-live.png`,
+  `band-mockup.png`).
+- **Build:**
+  - **One band replaces two rows.** The 4-column metric row and the separate
+    `_render_series_inventory` row are replaced by one `render_kpi_band(key="overview")`
+    of six cells in mockup order (right to left): sources, domains, active
+    indicators, Gold observations (tooltip), derived series (tooltip, muted,
+    secondary) and series without a catalog row (tooltip, muted, secondary, tag).
+    `overview_kpi_cells` is a pure builder; `series_inventory_counts` returns the
+    two counts from separate expressions and **does not dedupe** them (D2). The
+    cached `series_inventory` call is kept; `_render_series_inventory` is deleted.
+  - **Typography the theme cannot express** (carried from Step 0e), all as scoped
+    CSS in `direction.py` — never via the theme:
+    - KPI label `13px/500` on `[class*="st-key-kpi-band-"] [data-testid="stMetricLabel"]`
+      (was 12.25 px/400);
+    - secondary-group value `20px` on the new `kpi_secondary_cell` hook
+      (`[class*="st-key-kpi-"][class*="-secondary-"] [data-testid="stMetricValue"]`),
+      distinct from the existing `kpi_secondary_group` boundary hook so only the
+      former sizes the value; primary values keep the theme's 28px/600;
+    - heading line-heights on `[data-testid="stMainBlockContainer"] h1` (1.4) and
+      `h3` (1.5) — the main-block scope and specificity are needed because
+      Streamlit's own heading rule (1.2) outranks a bare `h1`/`h3`;
+    - body line-height **changed 1.9 → 1.85** to match the mockup (measured 1.9
+      before, so the mockup value was not in effect).
+  - **Computed styles, live app (1440×900)** — before → after: h1 line-height
+    33.6 px (1.2) → **39.2 px (1.4)**; `<h3>` 21.6 px (1.2) → **27 px (1.5)**;
+    metric label 12.25 px/400 → **13 px/500**; primary metric value **28 px/600**
+    (unchanged); secondary metric value → **20 px**; body paragraph 26.6 px (1.9)
+    → **25.9 px (1.85)**. Band container `direction: rtl`, **6** cells keyed
+    `kpi-overview-primary-0..3` then `kpi-overview-secondary-0..1`, labels in
+    mockup order.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_app_overview.py test_layout.py
+    test_direction.py -q --no-cov` → **95 passed** (7 new: band order, annotation
+    + tag, separate derived/orphan counts, empty-safe inventory, KPI typography
+    CSS, heading line-heights, body line-height). The pre-existing `app.metric`
+    assertions passed **unchanged** — the new structure still renders the three
+    labels they check.
+  - `poetry run mypy src dashboard` → 0 errors; ruff check/format clean.
+  - **Visual.** `band-live.png` vs `band-mockup.png` (same six cells): order
+    identical; a separator between every pair of cells and a stronger boundary at
+    the start of the secondary group, as the mockup; tooltip markers on exactly
+    the three annotated cells; values right-aligned at the RTL start of each cell;
+    the tag beneath the orphan metric.
+- **Deviations (recorded in `design-system.md` §14):**
+  1. **Tag placement.** The mockup's `نیازمند بررسی` tag is inline in the label
+     row; the shipped band renders a real `st.badge` **beneath** the metric (the
+     pre-existing §14 deviation, now attributed to Task 29).
+  2. **Tooltip glyph.** Streamlit's native `help=` marker (circled `?`) rather
+     than the mockup's circled `i`; the marker is a native element that cannot be
+     restyled without a hashed class.
+  3. **Secondary cell width.** The two secondary cells are equal-width, not the
+     mockup's `flex: 1.35`. This is `render_kpi_band`'s equal-weight `st.columns`
+     row (Task 19 component geometry), so it was **not** changed in Task 29;
+     flagged for the Task 34 owner review.

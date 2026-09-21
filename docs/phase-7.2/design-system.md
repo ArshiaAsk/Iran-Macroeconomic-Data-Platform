@@ -130,8 +130,13 @@ same value so `st.header` would match), `st.metric` values are **28px/600** (the
 mockup's KPI value) and body text is **14px/400**. Before Step 0e the live sizes
 were h1 38.5px, h3 24.5px and metric 31.5px/400, so all three now match the
 mockup. The mockup's `line-height` values (h1 1.4, section 1.5, body 1.85) and
-the KPI label's 13px/500 are **not** theme options; they remain component-level
-gaps (Task 19/29) and are recorded in section 15.
+the KPI label's 13px/500 are **not** theme options, so **Task 29** pins them as
+scoped CSS in `direction.py` (section 14): measured after, h1 **39.2 px**
+(28 × 1.4), section `<h3>` **27 px** (18 × 1.5), body paragraph **25.9 px**
+(14 × 1.85), KPI label **13 px/500** and the secondary KPI value **20 px**. The
+heading overrides are scoped to `[data-testid="stMainBlockContainer"] h1` / `h3`
+because Streamlit's own heading rule (line-height 1.2) outranks a bare element
+selector.
 
 `client.toolbarMode` is set to `"viewer"` (Task 28). The custom `[theme]`
 already hides the theme toggle (section 9), so this suppresses the native Deploy
@@ -617,8 +622,10 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | Callout glyph | A CSS-drawn ring with the "i" dot and stem | The native alert ships no icon element |
 | 48 px top bar | The native header stays 52.5 px; the mockup's bar is a new keyed container | Task 28 — the bar is `st.container(key="top-bar")` with `st.columns`; Step 0b seats it 12 px under the header (`padding-top: 64px`) |
 | Non-bleed top bar | The bar is inside the 1360 px content column, not full-bleed | Step 0b correction — the bar is the main container's first child, so it inherits the container's `max-width` and side padding; not visible at 1440 px (see section 9) |
-| Metric/subheader type scale | **Resolved by Step 0e** — the theme is now pinned to `TYPE_SCALE` (h1 28px/700, section 18px/600, metric value 28px/600); the mockup's line-heights and the KPI label's 13px/500 are not theme options (see section 15) | `tokens.py` now holds `TYPE_SCALE`, so the scale is no longer "the theme's own" |
-| KPI tag placement | A real `st.badge` beneath the metric | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
+| Metric/subheader type scale | **Resolved by Step 0e** — the theme is now pinned to `TYPE_SCALE` (h1 28px/700, section 18px/600, metric value 28px/600); the mockup's line-heights and the KPI label's 13px/500 are not theme options, and **Task 29** pinned them in `direction.py` | `tokens.py` now holds `TYPE_SCALE`, so the scale is no longer "the theme's own"; the remaining three values are scoped CSS |
+| KPI tag placement | A real `st.badge` beneath the metric, not the mockup's inline label tag (Task 29) | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
+| KPI tooltip glyph | Streamlit's native `help=` marker (a circled `?`) rather than the mockup's circled `i` (Task 29) | The tooltip is the native `st.metric(help=…)`; `st.html` strips `<svg>`, and the native marker cannot be restyled without targeting a hashed class |
+| Secondary KPI cell width | The two secondary cells are equal-width, not the mockup's `flex: 1.35` (Task 29) | `render_kpi_band` composes one equal-weight `st.columns` row; the mockup's wider secondary cells are a component-geometry change, recorded for the Task 34 owner review rather than made in Task 29 |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
 | Filter-bar spacer | A `st.columns` weight, not `flex: 1` | `st.columns` expresses fixed proportions, not "absorb the remainder" |
 
@@ -629,12 +636,16 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 - **Task 33** lands the D11 AST guard with its first `MIGRATED_PAGES` entry.
 - **Task 47** extends this document with the top bar, the sidebar shell and the
   screenshot script, plus the per-archetype review outcomes.
-- **Type-scale gaps (Step 0e).** The theme now matches the mockup's font sizes and
-  weights, but three mockup values are not theme options and remain component-level
-  work for Task 19/29: the heading/body **line-heights** (h1 1.4, section 1.5,
-  body 1.85), the **KPI label** (mockup 13px/500; Streamlit's `stMetricLabel`
-  computes 12.25px/400), and the **secondary KPI value** (mockup 20px; the theme
-  sets one metric-value size, 28px).
+- **Type-scale gaps (Step 0e → closed by Task 29).** The theme matches the
+  mockup's font sizes and weights, and Task 29 pinned the three values the theme
+  cannot express as scoped CSS in `direction.py`: the heading/body **line-heights**
+  (h1 1.4, section 1.5, body 1.85 — measured 39.2 / 27 / 25.9 px), the **KPI
+  label** (13px/500, was 12.25px/400) and the **secondary KPI value** (20px, the
+  theme sets one 28px size). All five values are asserted in
+  `test_direction.py`/`test_layout.py` and measured live (section 3).
+- **KPI band fidelity for the Task 34 owner review.** The secondary cells are
+  equal-width rather than the mockup's `flex: 1.35`, and the "نیازمند بررسی" tag
+  renders beneath the metric rather than inline in the label (section 14).
 - **Deferred:** dark mode (D14), the explicit refresh control, indicator search on
   domain pages, the IMF forecast/actual labeling (needs an ETL change), and the
   cache-TTL item.

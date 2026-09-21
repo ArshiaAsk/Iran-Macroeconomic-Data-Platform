@@ -63,6 +63,29 @@ def test_direction_css_pins_the_ltr_grid_and_plotly_canvases() -> None:
     assert f'{CSS_SELECTORS["plotly_chart"]} {{ direction: ltr; }}' in css
 
 
+def test_main_block_heading_line_heights_match_the_mockup() -> None:
+    """Task 29: the mockup's heading line-heights, which the theme cannot express.
+
+    Streamlit's own heading rule (line-height 1.2) outranks a bare ``h1``/``h3``,
+    so the override is scoped to the main block and its specificity is asserted
+    here; the computed effect is recorded in the execution log.
+    """
+    css = direction_css()
+
+    assert CSS_SELECTORS["main_block_heading_1"] == '[data-testid="stMainBlockContainer"] h1'
+    assert CSS_SELECTORS["main_block_heading_3"] == '[data-testid="stMainBlockContainer"] h3'
+    assert f'{CSS_SELECTORS["main_block_heading_1"]} {{ line-height: 1.4; }}' in css
+    assert f'{CSS_SELECTORS["main_block_heading_3"]} {{ line-height: 1.5; }}' in css
+
+
+def test_markdown_body_line_height_matches_the_mockup() -> None:
+    """Task 29: the mockup's body line-height (1.85), measured at 1.9 before."""
+    css = direction_css()
+
+    assert "line-height: 1.85;" in css
+    assert "line-height: 1.9;" not in css
+
+
 def test_plotly_template_typography() -> None:
     """The template supplies the Persian typography the builders rely on."""
     template = plotly_template()

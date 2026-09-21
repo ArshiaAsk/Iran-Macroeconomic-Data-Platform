@@ -20,6 +20,7 @@ from dashboard.components.charts import (
 )
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
 from dashboard.components.filters import FilterState, render_filters
+from dashboard.components.layout import KpiCell, render_kpi_band
 from dashboard.components.quality import render_quality_summary, summarize_quality
 from dashboard.components.tables import cap_table_rows, localize_table_frame
 from dashboard.formatting import (
@@ -768,13 +769,10 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
         total_observations = 0
     else:
         total_observations = int(pd.to_numeric(observation_counts, errors="coerce").fillna(0).sum())
-    columns = st.columns(4)
-    columns[0].metric(t("metric.active_indicators"), format_number(len(catalog)))
-    columns[1].metric(t("metric.gold_observations"), format_number(total_observations))
-    columns[2].metric(t("metric.domains"), format_number(catalog["domain"].nunique()))
-    columns[3].metric(t("metric.sources"), format_number(catalog["source_name"].nunique()))
-
-    _render_series_inventory(inventory)
+    render_kpi_band(
+        overview_kpi_cells(catalog, inventory, total_observations=total_observations),
+        key="overview",
+    )
 
     st.subheader(t("section.indicators_by_domain"))
     _render_domain_counts(domain_counts)
@@ -793,15 +791,74 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
     st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
 
 
-def _render_series_inventory(inventory: pd.DataFrame) -> None:
-    """Show how many Gold series are derived or have no catalog row at all."""
+def series_inventory_counts(inventory: pd.DataFrame) -> tuple[int, int]:
+    """Count the derived and catalog-less Gold series in a series inventory.
+
+    Both are separate counts of the same ``series_inventory`` frame: the derived
+    series are read from the ETL-written ``series_kind`` classification and the
+    catalog-less series from ``has_catalog_metadata``. They are deliberately
+    **not** deduplicated (D2) — a derived series normally has no catalog row, so
+    the two sets overlap, and collapsing them would hide either signal.
+
+    Returns:
+        ``(derived, orphan)`` counts; both zero when the frame lacks the column
+    """
     kinds = inventory.get("series_kind")
     has_catalog = inventory.get("has_catalog_metadata")
     derived = 0 if kinds is None else int((kinds == SERIES_KIND_DERIVED).sum())
     orphan = 0 if has_catalog is None else int((~has_catalog.astype(bool)).sum())
-    columns = st.columns(2)
-    columns[0].metric(t("metric.derived_series"), format_number(derived))
-    columns[1].metric(t("metric.orphan_series"), format_number(orphan))
+    return derived, orphan
+
+
+def overview_kpi_cells(
+    catalog: pd.DataFrame,
+    inventory: pd.DataFrame,
+    *,
+    total_observations: int,
+) -> list[KpiCell]:
+    """The Overview's six KPI cells, in mockup order (right to left).
+
+    Order matches the mockup: sources, domains, active indicators, Gold-layer
+    observations, then the visually separated secondary group (derived series and
+    series without a catalog row). The three annotated cells carry a data-agnostic
+    tooltip, and the catalog-less cell carries the "نیازمند بررسی" tag.
+
+    Args:
+        catalog: The indicator catalog frame (its distinct domains and sources
+            are the first two counts)
+        inventory: The Gold series inventory frame
+        total_observations: Catalog-linked Gold observation count, already summed
+            by the caller
+
+    Returns:
+        One :class:`KpiCell` per band column, in display order
+    """
+    derived, orphan = series_inventory_counts(inventory)
+    return [
+        KpiCell("metric.sources", format_number(catalog["source_name"].nunique())),
+        KpiCell("metric.domains", format_number(catalog["domain"].nunique())),
+        KpiCell("metric.active_indicators", format_number(len(catalog))),
+        KpiCell(
+            "metric.gold_observations",
+            format_number(total_observations),
+            help_key="metric.gold_observations_help",
+        ),
+        KpiCell(
+            "metric.derived_series",
+            format_number(derived),
+            help_key="metric.derived_series_help",
+            tone="muted",
+            secondary=True,
+        ),
+        KpiCell(
+            "metric.orphan_series",
+            format_number(orphan),
+            help_key="metric.orphan_series_help",
+            tone="muted",
+            secondary=True,
+            tag_key="metric.orphan_series_tag",
+        ),
+    ]
 
 
 def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
