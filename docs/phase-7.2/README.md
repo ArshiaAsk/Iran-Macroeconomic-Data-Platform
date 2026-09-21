@@ -2,7 +2,7 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave D complete; Wave E part A complete** (Overview reference
+Status: **Wave D complete; Wave E awaiting owner review** (Overview reference
 implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
 Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
 deviations A1–A9 approved as recorded; see
@@ -11,9 +11,11 @@ the "Wave C part 2c" section of [`VALIDATION.md`](VALIDATION.md)). Wave D (the
 four generic domain-explorer pages: GDP, Trade & Energy, FX & Gold, Labor) is
 complete through Tasks 35–36 and its owner review is
 [`validation/archetype-domain.md`](validation/archetype-domain.md), **signed off
-APPROVED on 2026-09-21**. Wave E part A (Inflation Task 38 + Welfare Task 39,
-plus Step 0a/0b) is complete; part B (Market Task 40 + emphasis owner review
-Task 41) is pending. Wave 0 is
+APPROVED on 2026-09-21**. Wave E (the emphasis-domain pages: Inflation Task 38,
+Welfare Task 39, Market Task 40, plus Step 0a/0b) is **complete through Task 40**;
+the emphasis owner review is
+[`validation/archetype-emphasis.md`](validation/archetype-emphasis.md),
+**prepared and awaiting the owner's sign-off**. Wave 0 is
 recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
 [`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual

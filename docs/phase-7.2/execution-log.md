@@ -2744,3 +2744,31 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   owner). The `render_callout_stack` component and the design-system doc rows are
   new public surface.
 - **Commit:** this entry is committed with the Task 40 commit.
+
+## Wave E — Task 41 (emphasis-domain owner review, PREPARED — not signed off)
+
+- **Files:** `docs/phase-7.2/validation/archetype-emphasis.md` (new),
+  `docs/phase-7.2/README.md` (status → "Wave E awaiting owner review").
+- **Build (documentation only — no code change):** the emphasis owner review doc
+  for the three A3 pages (Inflation, Welfare, Market), modelled on
+  `validation/archetype-domain.md`. It records the inventory, the D11
+  contract matrix (§3), cross-page consistency (§4), the Overview/Wave-D
+  comparison (§5), the pixel-diff evidence and the changed-assertions list (§6),
+  the carried decisions and one cosmetic observation (§7), and the owner
+  checklist (§8). The checklist boxes are **unticked** and the doc ends
+  `Owner sign-off: PENDING.` — the task is to **prepare** the review, not to sign
+  it off.
+- **Verdict tally:** 15 MATCH, 3 DEVIATION (the shared `render_filters` filter set
+  on all three pages; Market's derived-panel subheaders), 1 N/A (no KPI band on
+  Inflation/Welfare), **0 presentation-layer DEFECT**.
+- **Carried for the owner:** row 4 (filter set), row 3 (Market derived-panel
+  titles), §4 (Welfare's two top-level caveats could use `render_callout_stack` —
+  cosmetic, no rendered difference). The Wave D carry list is unchanged.
+- **Plan acceptance box:** left unticked — the acceptance is "owner sign-off
+  recorded, or defects filed", and neither has happened; the doc is prepared and
+  awaiting the owner.
+- **Verify:** the review cites the committed evidence under
+  `wave-e-assets/task-38|39|40/` and `wave-e-assets/partA-all-pages/`; the pixel
+  diffs are inflation 0 %, welfare 30.2 %, market 3.0 % (callout strips only).
+  No test run is needed for a docs-only task; the Scope B gate re-runs the suite.
+- **Commit:** this entry is committed with the Task 41 commit.
