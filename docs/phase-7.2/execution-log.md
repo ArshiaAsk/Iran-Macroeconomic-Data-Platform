@@ -2978,3 +2978,19 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   docs-only task; the Scope B gate re-runs the suite.
 - **Deviations:** none.
 - **Commit:** Task 45 commit.
+
+## Wave G — Scope B gate
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (new "Wave G" section),
+  `docs/phase-7.2/wave-g-assets/partB-all-pages/` (ten-page set).
+- **Gate results:** `make check` → **1461 passed, 3 skipped, 136 deselected**
+  (175.69 s), coverage **89.22 %**, ruff clean; `poetry run mypy src dashboard` →
+  **0 errors, 68 source files**; dashboard subset → **645 passed**; export smoke
+  → **1 passed** (15 deselected); all-pages smoke → **10 passed**.
+- **Baseline accounting:** full suite **+2** over Wave F's 1459 (the two new
+  catalog tests); dashboard subset **+2** over 643. No existing assertion changed.
+- **Pixel diff (vs `wave-f-assets/partA-all-pages/`):** only `catalog` changed
+  (**25.03 %**, x 326–1370, y 200–899 — the Task 44 filter bar, KPI band and grid
+  row height); the other nine pages are byte-identical.
+- **Deviations:** none.
+- **Commit:** Scope B gate commit.

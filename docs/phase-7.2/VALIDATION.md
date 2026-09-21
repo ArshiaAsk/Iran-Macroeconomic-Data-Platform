@@ -1080,3 +1080,60 @@ baseline the subset is **+4** (Step 0b only). **Nothing regressed.**
   shared `render_filters` set) is recorded there; it does not block Wave G.
 - The Wave D carry list (F1, F2, F5, F7, filter-bar shape, Gregorian/Jalali range
   direction, `neutralise()` scroll no-op Task 47) is unchanged.
+
+## Wave G — Step 0c and Tasks 44–45 (catalog)
+
+**Scope.** Wave G proceeds while the Wave F review is pending (Step 0c), migrates
+the A5 data catalog page to the layout contract (Task 44), and prepares its owner
+review (Task 45, not signed off).
+
+| Item | Commit | Delta |
+|---|---|---|
+| Step 0c | `127ce90` | Wave G proceeds while Wave F's review is pending; Task 43 left unticked |
+| Task 44 | `ed2b4a4` | `render_catalog_page` on the layout contract: `render_page_header`, a `render_filter_bar` hosting search + the shared filter set + the inactive toggle + clear, a one-cell `render_kpi_band` count, `render_empty`, the grid with `row_height`; guard covers A5; +2 tests |
+| Task 45 | `0e45d08` | `validation/archetype-catalog.md` prepared (owner sign-off **PENDING**); README → "Waves F and G awaiting owner review" |
+| Evidence fix | `78e4c8d` | the Tasks 42–43 full-page captures replaced with true full-height captures (Streamlit scrolls an inner container, so `full_page=True` returned the 900 px viewport) |
+
+### Per-page pixel diff (wave-g part B vs wave-f part A)
+
+Ten PNGs, 1440×900, viewport-only, captured to
+`docs/phase-7.2/wave-g-assets/partB-all-pages/`.
+
+| Page | Changed | What changed |
+|---|---|---|
+| `catalog` | 25.03 % (x 326–1370, y 200–899) | Task 44: the vertical filter stack became a four-column `render_filter_bar`; the matching count is now a one-cell KPI band; the grid takes the shared `row_height` |
+| the other nine pages | 0.00 % | byte-identical |
+
+**No regressions.** The only viewport change is the catalog page (Task 44); every
+other page is byte-identical to the Wave F part A set.
+
+### Wave G gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1461 passed, 3 skipped, 136 deselected** in 175.69 s; ruff format/lint and mypy clean; coverage **89.22 %** |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **645 passed** |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed**, 15 deselected |
+| All-pages smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed** |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+| Working tree | `git status --short` | clean (assets committed) |
+
+**Against the Scope B baseline.** The full suite ends at **1461**, **+2** over the
+Wave F **1459** — the two new catalog tests (`test_catalog_matching_count_is_a_kpi_band_cell`,
+`test_catalog_hosts_every_control_in_the_filter_bar`). The dashboard subset ends at
+**645**, **+2** over the Wave F **643**. No existing assertion changed. **Nothing
+regressed.**
+
+### Carry-forward items for Wave H
+
+- The correlation (Task 43) and catalog (Task 45) owner reviews are **prepared,
+  awaiting sign-off** (`validation/archetype-correlation.md`,
+  `validation/archetype-catalog.md`). Task 43's plan box and Task 45's plan box
+  stay open.
+- Two recorded layout deviations: the shared filter set is the bar on the catalog
+  page (Task 45 row 22 — a tall narrow column) and is *not* the bar on the
+  domain/emphasis/correlation pages (the Wave D/E/F carry item). A single bar
+  shape is the Wave H candidate.
+- The Wave D carry list (F1, F2, F5, F7, filter-bar shape, Gregorian/Jalali range
+  direction, `neutralise()` scroll no-op Task 47) is unchanged.
