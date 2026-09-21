@@ -173,7 +173,7 @@ needs no `unsafe_allow_html`.
 | `status_chip_cell` | `(status)` | The same slug → (label, tone) mapping as `render_status_chip`, as an RTL-table `StatusChip` cell (Task 30). Not a renderer: it returns a cell. |
 | `render_status_dot` | `(label, tone)` | A standalone coloured dot with a label; the one escaped fragment here. |
 | `render_bar_list` | `(rows, total_label, *, key="default")` | The indicators-by-domain bar panel. |
-| `render_top_bar` | `(group_label, page_label, *, key="top-bar")` | The shell top bar: breadcrumb (root › group › page) and last-collection stamp (Jalali date · clock · Tehran zone). The stamp reads `cached_source_freshness()` and formats the latest `collection_timestamp` through the Tehran/Jalali helpers; an empty or unparseable frame falls back to `t("value.unknown")`. |
+| `render_top_bar` | `(group_label, page_label, *, key="top-bar")` | The shell top bar: breadcrumb (root / group / page, with the mockup's `/` separator hidden from assistive tech and the current page bold at weight 600 — Wave H P3) and last-collection stamp (Jalali date · clock · Tehran zone). The stamp reads `cached_source_freshness()` and formats the latest `collection_timestamp` through the Tehran/Jalali helpers; an empty or unparseable frame falls back to `t("value.unknown")`. |
 | `render_empty` | `(key)` | The shared empty state for any `empty.*` message. |
 | `render_error` | `(key, *, detail=None)` | The shared error state: message, retry hint, optional detail. |
 | `render_loading` | `()` | The shared loading placeholder. |

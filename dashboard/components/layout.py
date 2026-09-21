@@ -317,14 +317,39 @@ def render_top_bar(
     if stamp is None:
         stamp = t("value.unknown")
 
-    breadcrumb = f"{t('shell.breadcrumb_root')} › {group_label} › {page_label}"
+    breadcrumb = _breadcrumb_markup(group_label, page_label)
 
     with st.container(key=key):
         breadcrumb_col, stamp_col = st.columns([1, 1])
         with breadcrumb_col:
-            st.html(f'<div class="top-bar-breadcrumb">{escape_html(breadcrumb)}</div>')
+            st.html(f'<div class="top-bar-breadcrumb">{breadcrumb}</div>')
         with stamp_col:
             st.html(f'<div class="top-bar-stamp">{escape_html(stamp)}</div>')
+
+
+def _breadcrumb_markup(group_label: str, page_label: str) -> str:
+    """Build the top bar's breadcrumb markup (root / group / page).
+
+    The mockup writes the trail with a **slash** separator and the current page
+    in ``<b>``. Each separator is its own ``<span aria-hidden="true">``, so a
+    screen reader announces the trail as words rather than reading the slash
+    aloud. Every label is escaped before interpolation, and the labels stay
+    **registry-derived** (the caller resolves them from ``group.<key>`` /
+    ``page.<key>``), so a translated label cannot break the markup (Wave H P3).
+
+    Args:
+        group_label: Already-resolved sidebar group label
+        page_label: Already-resolved page title
+
+    Returns:
+        The escaped breadcrumb markup, ready to interpolate into the top bar
+    """
+    separator = '<span class="crumb-sep" aria-hidden="true">/</span>'
+    return (
+        f'{escape_html(t("shell.breadcrumb_root"))} {separator} '
+        f"{escape_html(group_label)} {separator} "
+        f'<b class="crumb-current">{escape_html(page_label)}</b>'
+    )
 
 
 def _render_kpi_cell(cell: KpiCell) -> None:

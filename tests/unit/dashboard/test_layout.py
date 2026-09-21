@@ -927,7 +927,7 @@ def test_top_bar_selector_is_registered_and_styled() -> None:
 def test_top_bar_renders_breadcrumb_and_stamp(
     fake_streamlit_connection: None,
 ) -> None:
-    """The breadcrumb carries the root › group › page, and the stamp carries the
+    """The breadcrumb carries the root / group / page, and the stamp carries the
     last-collection date through the Tehran/Jalali helpers."""
     app = _run(
         "from dashboard.components.layout import render_top_bar\n"
@@ -946,6 +946,55 @@ def test_top_bar_renders_breadcrumb_and_stamp(
     # last-collection prefix (present when freshness has data).
     assert t("shell.timezone") in stamp
     assert t("shell.last_collection", date="")[:10] in stamp
+
+
+def test_top_bar_breadcrumb_uses_the_mockup_separator_and_bolds_the_current_page(
+    fake_streamlit_connection: None,
+) -> None:
+    """P3 (F2): the mockup's `/` separator (hidden from assistive tech) + a bold
+    current crumb, replacing the old `›` separator and the unbolded page label.
+
+    The separator is its own ``aria-hidden`` span, so a screen reader reads the
+    trail as words rather than announcing the slash; the current page is a
+    ``<b class="crumb-current">`` whose weight the scoped CSS pins to 600.
+    """
+    app = _run(
+        "from dashboard.components.layout import render_top_bar\n"
+        'render_top_bar("مرور و تحلیل", "مرور کلی")\n'
+    )
+
+    assert not app.exception
+    breadcrumb = next(f for f in html_texts(app) if "top-bar-breadcrumb" in f)
+    # The mockup's slash, not the old single-angle-quote separator.
+    assert '<span class="crumb-sep" aria-hidden="true">/</span>' in breadcrumb
+    assert "›" not in breadcrumb
+    # Exactly two separators (root/group and group/page).
+    assert breadcrumb.count('class="crumb-sep"') == 2
+    # The current page is a bold crumb, and the page label is inside it.
+    assert '<b class="crumb-current">مرور کلی</b>' in breadcrumb
+    # The root and group labels are NOT bold.
+    assert f"<b>{t('shell.breadcrumb_root')}</b>" not in breadcrumb
+
+    css = direction_css()
+    assert f'{CSS_SELECTORS["top_bar"]} .crumb-sep {{' in css
+    assert f'{CSS_SELECTORS["top_bar"]} .crumb-current {{ font-weight: 600;' in css
+
+
+def test_top_bar_breadcrumb_escapes_the_registry_labels(
+    fake_streamlit_connection: None,
+) -> None:
+    """A registry-derived label is escaped, so it cannot break the markup."""
+    app = _run(
+        "from dashboard.components.layout import render_top_bar\n"
+        'render_top_bar("<img src=x onerror=alert(1)>", "<script>x</script>")\n'
+    )
+
+    assert not app.exception
+    breadcrumb = next(f for f in html_texts(app) if "top-bar-breadcrumb" in f)
+    assert "<img" not in breadcrumb
+    assert "<script>" not in breadcrumb
+    assert "&lt;img src=x onerror=alert(1)&gt;" in breadcrumb
+    assert "&lt;script&gt;" in breadcrumb
 
 
 def test_top_bar_renders_unknown_placeholder_when_freshness_is_empty(

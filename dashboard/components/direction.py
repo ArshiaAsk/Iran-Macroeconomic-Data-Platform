@@ -496,6 +496,11 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     f'{CSS_SELECTORS["top_bar"]} .top-bar-stamp {{ '
     "font-size: 13px; font-weight: 500; color: var(--text-2); "
     "text-align: left; }",
+    # Breadcrumb trail (Wave H P3, finding F2). The mockup writes the trail with
+    # a slash separator and the current page in bold; the separator span is
+    # `aria-hidden` in the markup, so it is only styled here.
+    f'{CSS_SELECTORS["top_bar"]} .crumb-sep {{ color: var(--border-strong); margin: 0 8px; }}',
+    f'{CSS_SELECTORS["top_bar"]} .crumb-current {{ font-weight: 600; color: var(--text-1); }}',
     # Overview's two-column row (Task 31). The mockup's `.row` is a 7fr/5fr grid
     # under `body{direction:rtl}`, so its first item (freshness) sits on the right.
     # Streamlit's main block is LTR, so without this the first column would land on

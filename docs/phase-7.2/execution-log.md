@@ -3089,3 +3089,36 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** the `coverage_footnote` selector was **removed** (P2 says to
   remove it only if the shell rule fully covers it — verified byte-identical).
 - **Commit:** P2 commit.
+
+## Wave H — P3 (breadcrumb separator + bold current crumb, F2; own commit)
+
+- **Files:** `dashboard/components/layout.py` (new private `_breadcrumb_markup`;
+  `render_top_bar` uses it), `dashboard/components/direction.py` (two scoped
+  breadcrumb rules), `tests/unit/dashboard/test_layout.py` (+2 tests),
+  `docs/phase-7.2/design-system.md` (§4.1 `render_top_bar` row),
+  `docs/phase-7.2/wave-h-assets/p3/` (live + mockup top-bar crops).
+- **DOM finding (recorded before the change):** the rendered separator glyph was
+  **U+203A** (`›`, SINGLE RIGHT-POINTING ANGLE QUOTATION MARK) — the bar read
+  `سامانه › مرور و تحلیل › مقایسه و همبستگی`, with no bold on the current crumb.
+- **Build:** the breadcrumb now uses the mockup's **`/`** separator, each in its
+  own `<span class="crumb-sep" aria-hidden="true">`, and the current page in
+  `<b class="crumb-current">` with `font-weight: 600` (the mockup's
+  `.top b{font-weight:600}`). The separator styling mirrors the mockup's
+  `.top .sl{color:var(--border-strong);margin:0 8px}`. The breadcrumb stays
+  **registry-derived** (labels resolved from `group.<key>`/`page.<key>`) and every
+  label is `escape_html`-escaped.
+- **Live DOM after:** `سامانه <span class="crumb-sep" aria-hidden="true">/</span>
+  مرور و تحلیل <span class="crumb-sep" aria-hidden="true">/</span>
+  <b class="crumb-current">مرور کلی</b>`; `aria-hidden="true"` present, computed
+  current weight **600**.
+- **Mockup comparison:** the mockup's `.top` element renders
+  `سامانه<span class="sl">/</span>مرور و تحلیل<span class="sl">/</span><b>مرور کلی</b>`
+  (`overview-redesign-mockup.html:141`, `.top b{font-weight:600}` /
+  `.top .sl{color:var(--border-strong);margin:0 8px}` at line 36). The live crop
+  (`top-bar-live.png`) matches the mockup crop (`top-bar-mockup.png`).
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py
+  tests/unit/dashboard/test_app_router.py tests/unit/dashboard/test_literal_guard.py
+  tests/unit/dashboard/test_design_system_doc.py -q --no-cov` → **94 passed**.
+- **Deviations:** none (the two new tests pin the separator, the `aria-hidden`,
+  the bold crumb and the label escaping).
+- **Commit:** P3 commit.
