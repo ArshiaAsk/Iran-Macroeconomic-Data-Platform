@@ -1246,4 +1246,4 @@ were never staged or committed (Task 7 owns them).
   - The breadcrumb separator is `›` (single right-pointing angle quotation
     mark), the RTL-appropriate separator; the LTR `>` was not used because it
     would render incorrectly in the RTL context.
-- **Commit hash:** _pending_
+- **Commit hash:** `715712c`
