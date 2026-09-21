@@ -120,3 +120,41 @@ the shared components staged for the waves that adopt them.
 - **Native alert icon** — the native `stAlertContainer` ships no icon element, so
   the Wave A callout draws its glyph in CSS; the banners in these captures have no
   icon by design (see `design-system.md` §6).
+
+---
+
+## Wave A gate
+
+Run after Task 24, against the Wave 0 pre-change baseline recorded in
+`wave-0-spike.md`. The per-wave rule is **no new errors and no regressions**, not
+an absolute count.
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1307 passed, 3 skipped, 136 deselected** in 141.5 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **491 passed** |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** (PNG + SVG render through Kaleido 1.4.0) |
+| Ten-page AppTest smoke | Throwaway pytest file (not committed) parametrized over every `PageSpec`, rendered through the router with the repository's fake repository | **11 passed** (10 pages + the registry count), no page raises |
+| Working tree | `git status --short` | clean |
+
+**Against the baseline.** The recorded Wave 0 pre-change counts
+(`wave-0-spike.md` §3) are **1158 passed / 3 skipped / 135 deselected** for the
+full suite and **341 passed** for the dashboard subset. Nothing regressed, and the
+increase is the Wave A test suites:
+
+| | Wave 0 | Start of A-3 (after Task 16) | After Wave A | Wave 0 → now |
+|---|---|---|---|---|
+| Full suite (`make check`) | 1158 passed, 3 skipped, 135 deselected | — | **1307 passed, 3 skipped, 136 deselected** | **+149 passed, +1 deselected** |
+| Dashboard subset | 341 passed | **426 passed** | **491 passed** | **+150** |
+
+The full-suite delta (+149) and the subset delta (+150) differ by exactly the one
+new integration test — the export PNG/SVG smoke in `test_exports.py`, which
+`make check` deselects (hence the deselected count 135 → 136) but a plain subset
+run collects. The dashboard subset grew **+65** across this stretch (Tasks 17–24:
+426 → 491).
+
+**Not covered by the gate.** The dashboard subset runs with `--no-cov` by design
+(coverage is measured on `src`, so a dashboard-only run would fail the gate for
+the wrong reason); the export smoke is deselected by `make check` because it needs
+a Chromium binary, which is why it is run explicitly above.

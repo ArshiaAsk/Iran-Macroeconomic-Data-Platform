@@ -1038,3 +1038,39 @@ were never staged or committed (Task 7 owns them).
   than a bare stub, because the plan's acceptance requires the four categories to
   be recorded in it; later tasks append to the same file.
 - **Commit hash:** `081e227`
+
+---
+
+## Wave A gate — after Tasks 1–24
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (gate section),
+  `docs/phase-7.2/README.md` (status), this entry.
+- **Build:** Ran the per-wave gate recorded in `wave-0-spike.md` §3 and recorded
+  it in `VALIDATION.md`, against the Wave 0 pre-change baseline.
+- **Results:**
+  - `make check` → **PASS**. `ruff format` + `ruff check` clean; `mypy src/`
+    clean; `pytest -m "not integration"` → **1307 passed, 3 skipped, 136
+    deselected** in 141.53 s; coverage **89.22 %** (≥ 80 % gate).
+  - `poetry run mypy src dashboard` → **0 errors** (68 source files).
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **491 passed**.
+  - Export smoke (deselected by `make check`):
+    `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q
+    --no-cov` → **1 passed** (PNG + SVG through Kaleido 1.4.0).
+  - Ten-page AppTest smoke: a throwaway pytest file (not committed, in `/tmp`)
+    parametrized over every `PageSpec` and rendered through the router with the
+    repository's fake repository → **11 passed** (10 pages + the registry count),
+    no page raises.
+  - `git status --short` → clean after the Task 24 commits.
+- **Baseline comparison.** Wave 0 recorded **1158 passed / 3 skipped / 135
+  deselected** (full suite) and **341 passed** (dashboard subset). The dashboard
+  subset was **426 passed** after Task 16, i.e. immediately before this stretch.
+  So the stretch (Tasks 17–24) added **+65** dashboard tests (426 → 491) and the
+  full suite moved **+149** (1158 → 1307); the one-test gap between those deltas
+  is the new integration export smoke, which `make check` deselects (135 → 136
+  deselected) and a plain subset run collects. **No failures and no regressions**;
+  the skipped count is unchanged at 3.
+- **Verify:** the commands above; `docs/phase-7.2/README.md` now reads
+  "Wave A complete".
+- **Deviations:** none. The gate is "no new errors / no regressions" against the
+  recorded counts, as AM-21 requires, not an absolute test count.
+- **Commit hash:** `PENDING`
