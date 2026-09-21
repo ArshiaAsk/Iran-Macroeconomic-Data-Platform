@@ -836,9 +836,20 @@ four A2 pages against the layout contract (§11–§12) and the Overview:
 - **1 N/A** — no KPI band on a domain page (no aggregate metric to band).
 - **0 layout defects.** One **content** defect is filed: `warn.single_observation`
   names TGJU but fires on the Labor page (SCI's lone quarterly observation).
-  Recommended as a later-wave string fix; it does not block Wave E.
-- **Owner sign-off: PENDING.** The plan's Task 37 acceptance box stays unticked
-  until the decision is recorded; Wave E does not start before then.
+  **Fixed now** in Wave E Step 0b as a source-neutral string.
+- **Owner sign-off: APPROVED** (2026-09-21). The owner keeps the shared
+  `render_filters` filter set (aligning it with `render_filter_bar` is an optional
+  Wave H polish candidate, not scheduled), approves the 24-character quality-table
+  id cap (full id in the `title`) and approves the absence of a KPI band on domain
+  pages (N/A). The plan's Task 37 acceptance box is ticked. The decision is
+  recorded in [`validation/archetype-domain.md`](validation/archetype-domain.md).
+- **Carry-forward list for Wave H:** the filter-bar shape; optional polish **F1**
+  (content padding 70 vs 40 px), **F2** (breadcrumb separator and bold current
+  crumb), **F5** (shell-wide caption direction), **F7** (no-wrap short coverage
+  columns); the Gregorian(LTR)/Jalali(RTL) range direction; and
+  `scripts/dashboard_screenshots.py` `neutralise()` scrolls `stMainBlockContainer`
+  (not the real scroll container `stMain`), so its scroll-to-top is a no-op
+  (**Task 47**).
 
 The ten-page 1440×900 captures after Task 36 are in
 `docs/phase-7.2/wave-d-assets/partB-all-pages/`, with the four-page scroll crops

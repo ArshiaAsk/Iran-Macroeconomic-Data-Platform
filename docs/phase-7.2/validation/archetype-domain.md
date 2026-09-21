@@ -1,7 +1,28 @@
 # Generic domain-explorer review — GDP, Trade & Energy, FX & Gold, Labor (Wave D)
 
-**Status: AWAITING OWNER REVIEW.**
-**Owner sign-off: PENDING.**
+**Status: OWNER REVIEW COMPLETE.**
+**Owner sign-off: APPROVED.**
+
+## Owner decision (recorded 2026-09-21)
+
+The owner reviewed the four 1440×900 captures and the scroll crops and recorded:
+
+- **Owner sign-off: APPROVED.**
+- The domain pages **keep the shared `render_filters` filter set**; aligning it
+  with `render_filter_bar` is an **optional Wave H polish candidate**, not
+  scheduled.
+- The **24-character id cap** in the quality table (full id in the `title`) is
+  **approved**; the **absence of a KPI band** on domain pages is **approved**
+  (N/A).
+- **DEFECT 1** (`warn.single_observation` names TGJU while shown on the Labor
+  page) is **fixed now** in Step 0b.
+- **Carry-forward list for Wave H** (also added to the execution log): the
+  filter-bar shape; optional polish **F1** (content padding 70 vs 40 px), **F2**
+  (breadcrumb separator and bold current crumb), **F5** (shell-wide caption
+  direction), **F7** (no-wrap short coverage columns); the Gregorian(LTR)/Jalali(RTL)
+  range direction; and `scripts/dashboard_screenshots.py` `neutralise()` scrolls
+  `stMainBlockContainer` (not the real scroll container `stMain`), so its
+  scroll-to-top is a no-op (**Task 47**).
 
 This is the Wave D owner visual review (Task 37). It walks the four A2
 generic domain-explorer pages — GDP & Economy, Trade & Energy, FX & Gold, and
@@ -231,12 +252,11 @@ series is not TGJU. The migration did not introduce the string — it was alread
 used by `render_quality_summary` — but the migration is what surfaced it on the
 Labor page.
 
-**Recommendation: FIX in a later wave (not Wave D).** Make the sentence
+**Recommendation (owner decision): FIX NOW in Step 0b.** The sentence is made
 source-neutral (drop the TGJU clause, keep the "daily collection accumulates the
-series" half), or key a TGJU-specific variant. This is a **string-catalog** change
-plus a test, so it fits the Wave H consistency audit or the ETL/catalog side; it
-is not a domain-page layout change and must not be slipped into Wave D. Filed
-here for the owner.
+series" half). This is a **string-catalog** change plus a test; it is applied in
+Wave E Step 0b, ahead of the emphasis-domain migrations, so no page shows the
+inaccurate sentence.
 
 ### Carried items for the owner (no new defect)
 
@@ -256,29 +276,30 @@ scroll crops in
 [`wave-d-assets/task-36/after-scroll/`](../wave-d-assets/task-36/after-scroll/),
 then works down this list.
 
-- [ ] The four pages share one header shape: the Persian title at the RTL start,
+- [x] The four pages share one header shape: the Persian title at the RTL start,
       aligned with the top bar's breadcrumb.
-- [ ] FX & Gold carries the amber TGJU snapshot caveat and Labor the blue SCI
+- [x] FX & Gold carries the amber TGJU snapshot caveat and Labor the blue SCI
       publication caveat — one callout slot each; GDP and Trade & Energy carry
       none.
-- [ ] Every filter widget shows `انتخاب کنید`, not Streamlit's English
+- [x] Every filter widget shows `انتخاب کنید`, not Streamlit's English
       "Choose options" (**F4**).
-- [ ] No chart legend carries a `label` heading (**F3**).
-- [ ] The quality summary is the shared RTL HTML table: eleven columns, Persian
+- [x] No chart legend carries a `label` heading (**F3**).
+- [x] The quality summary is the shared RTL HTML table: eleven columns, Persian
       digits, LTR mono ids, em-dash nulls, no sideways scroll.
-- [ ] The observations expander is a native grid with the documented row height
+- [x] The observations expander is a native grid with the documented row height
       and the row-cap notice.
-- [ ] Empty states read as the shared callout (`render_empty`), not a hand-rolled
+- [x] Empty states read as the shared callout (`render_empty`), not a hand-rolled
       alert.
-- [ ] **Row 4** — the shared filter set is `render_filters`, not the Overview's
-      `render_filter_bar` — accept, or schedule one bar shape for Wave H.
-- [ ] The 24ch quality-table id cap with the `title` tooltip is acceptable.
-- [ ] **DEFECT 1** — the single-observation warning names TGJU on the Labor page —
-      accepted as a later-wave string fix, or escalated.
-- [ ] No element of the archetype is missing, and no page silently differs from
+- [x] **Row 4** — the shared filter set is `render_filters`, not the Overview's
+      `render_filter_bar` — **accepted as-is**; aligning it is an optional Wave H
+      polish candidate.
+- [x] The 24ch quality-table id cap with the `title` tooltip is acceptable.
+- [x] **DEFECT 1** — the single-observation warning names TGJU on the Labor page —
+      **fixed now** in Step 0b (source-neutral string).
+- [x] No element of the archetype is missing, and no page silently differs from
       the others.
 
-**Owner sign-off: PENDING.**
+**Owner sign-off: APPROVED.**
 
 ## 9. What this gate unblocks
 

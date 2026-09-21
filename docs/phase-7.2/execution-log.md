@@ -2466,3 +2466,34 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   document is delivered for the owner's review; Wave E does not start until the
   decision is recorded.
 - **Commit:** this entry is committed with the Task 37 commit.
+
+---
+
+## Wave E — Step 0a (record the Wave D owner sign-off)
+
+- **Files:** `docs/phase-7.2/validation/archetype-domain.md` (status →
+  OWNER REVIEW COMPLETE / APPROVED; new "Owner decision" block; §7 DEFECT 1
+  recommendation → fix now in Step 0b; §8 checklist ticked; final line →
+  `Owner sign-off: APPROVED`), `docs/phase-7.2/VALIDATION.md` (Task 37 bullets →
+  sign-off APPROVED + the Wave H carry-forward list), `docs/phase-7.2/README.md`
+  (status → "Wave D complete; Wave E in progress"; archetype-domain bullet →
+  APPROVED), `docs/plans/phase-7.2-dashboard-redesign.md` (Task 37 acceptance box
+  ticked).
+- **Build (docs only, no code):** recorded the owner's Wave D decision verbatim —
+  **APPROVED**; the domain pages **keep the shared `render_filters` filter set**
+  (aligning it with `render_filter_bar` is an **optional Wave H polish candidate**,
+  not scheduled); the **24-character** quality-table id cap (full id in the
+  `title`) is **approved**; the **absence of a KPI band** on domain pages is
+  **approved (N/A)**; **DEFECT 1** (`warn.single_observation` names TGJU while
+  shown on the Labor page) is **fixed now** in Step 0b.
+- **Carry-forward list for Wave H:** the filter-bar shape; optional polish **F1**
+  (content padding 70 vs 40 px), **F2** (breadcrumb separator and bold current
+  crumb), **F5** (shell-wide caption direction), **F7** (no-wrap short coverage
+  columns); the Gregorian(LTR)/Jalali(RTL) range direction; and
+  `scripts/dashboard_screenshots.py` `neutralise()` scrolls
+  `stMainBlockContainer` (not the real scroll container `stMain`), so its
+  scroll-to-top is a no-op (**Task 47**).
+- **Verify:** docs-only change; `git status --short` staged by explicit path and
+  committed. No code touched.
+- **Deviations:** none.
+- **Commit:** this entry is committed with the Step 0a commit.

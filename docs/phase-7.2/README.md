@@ -2,16 +2,17 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave C complete; Wave D awaiting owner review** (Overview reference
+Status: **Wave D complete; Wave E in progress** (Overview reference
 implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
 Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
 deviations A1–A9 approved as recorded; see
 [`validation/reference-overview.md`](validation/reference-overview.md) §6a and
 the "Wave C part 2c" section of [`VALIDATION.md`](VALIDATION.md)). Wave D (the
 four generic domain-explorer pages: GDP, Trade & Energy, FX & Gold, Labor) is
-complete through Tasks 35–36; its owner review is
-[`validation/archetype-domain.md`](validation/archetype-domain.md), where
-**Owner sign-off is PENDING**. Wave 0 is
+complete through Tasks 35–36 and its owner review is
+[`validation/archetype-domain.md`](validation/archetype-domain.md), **signed off
+APPROVED on 2026-09-21**. Wave E (the emphasis-domain pages: Inflation, Welfare,
+Market) is in progress. Wave 0 is
 recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
 [`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual
@@ -42,7 +43,7 @@ Documents:
   off APPROVED, 2026-09-21).
 - [`validation/archetype-domain.md`](validation/archetype-domain.md) — the Wave D
   review of the four generic domain-explorer pages against the layout contract
-  (**owner sign-off pending**).
+  (**owner sign-off APPROVED, 2026-09-21**).
 - [`execution-log.md`](execution-log.md) — per-task execution log (files, Verify
   result, deviations, commit hash).
 - `README.md` — this file, completed in Wave H.

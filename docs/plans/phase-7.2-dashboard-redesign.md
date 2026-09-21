@@ -1056,7 +1056,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 34, 36.
 - **Acceptance:**
-  - [ ] Owner sign-off recorded, or defects filed as tasks.
+  - [x] Owner sign-off recorded, or defects filed as tasks. — **APPROVED** 2026-09-21 (recorded in `validation/archetype-domain.md`); DEFECT 1 fixed in Wave E Step 0b.
 - **Verify:** Manual browser checklist.
 
 ---
