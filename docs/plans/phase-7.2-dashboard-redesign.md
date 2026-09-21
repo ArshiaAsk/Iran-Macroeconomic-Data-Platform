@@ -1209,7 +1209,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 
 ### Gate (every wave)
 
-`make check` (format + lint + typecheck + test) and the router smoke of all ten pages. Because `make typecheck` covers `src/` only, waves must also run `poetry run mypy src dashboard`. **AM-21:** the per-wave `mypy` gate is **"zero errors"** if the Task 1 baseline had none, otherwise **"no new errors"** against the recorded baseline error count; the baseline `make check`/`pytest` results are the reference for "no regressions". **Wave 0 baseline (2026-09-20):** `mypy src dashboard` → **0 errors**, so the gate is **"zero errors"**; `make check` PASS (1 158 passed, 3 skipped), dashboard subset 341 passed — "no regressions" against those.
+`make check` (format + lint + typecheck + test) and the router smoke of all ten pages. Because `make typecheck` covers `src/` only, waves must also run `poetry run mypy src dashboard`. The ten-page router smoke is `tests/unit/dashboard/test_all_pages_smoke.py` (parametrized over the registry, Step 0) and must pass every wave. **AM-21:** the per-wave `mypy` gate is **"zero errors"** if the Task 1 baseline had none, otherwise **"no new errors"** against the recorded baseline error count; the baseline `make check`/`pytest` results are the reference for "no regressions". **Wave 0 baseline (2026-09-20):** `mypy src dashboard` → **0 errors**, so the gate is **"zero errors"**; `make check` PASS (1 158 passed, 3 skipped), dashboard subset 341 passed — "no regressions" against those.
 
 ---
 
