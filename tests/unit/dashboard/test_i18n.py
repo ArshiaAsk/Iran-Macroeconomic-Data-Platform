@@ -18,6 +18,7 @@ from dashboard.i18n import (
     string_keys,
     t,
 )
+from dashboard.labels import SOURCE_LABELS
 from dashboard.navigation import GROUPS, PAGES
 from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT
 
@@ -76,6 +77,23 @@ def test_catalog_is_persian_and_non_empty() -> None:
 def test_catalog_keys_use_a_declared_namespace() -> None:
     for key in STRING_CATALOG:
         assert key.startswith(KEY_PREFIXES), key
+
+
+def test_single_observation_notice_is_source_neutral() -> None:
+    """The single-observation notice must not name a data source.
+
+    It fires from the shared quality summary on any page whose selection has a
+    lone observation, so naming one source (as the string once named TGJU) is
+    inaccurate off that source's page (Wave D DEFECT 1). The check covers the
+    Persian display names *and* the ``source_name`` slugs, case-insensitively, so
+    the original Latin ``TGJU`` leak is caught too.
+    """
+    notice = t("warn.single_observation").casefold()
+    tokens = [*SOURCE_LABELS.values(), *SOURCE_LABELS.keys()]
+
+    leaked = sorted(token for token in tokens if token.casefold() in notice)
+
+    assert leaked == []
 
 
 def test_catalog_alignment_with_the_page_registry() -> None:

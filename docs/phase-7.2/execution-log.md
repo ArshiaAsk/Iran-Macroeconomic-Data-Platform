@@ -2497,3 +2497,31 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   committed. No code touched.
 - **Deviations:** none.
 - **Commit:** this entry is committed with the Step 0a commit.
+
+---
+
+## Wave E — Step 0b (source-neutral single-observation notice)
+
+- **Files:** `dashboard/i18n.py` (`warn.single_observation`), 
+  `tests/unit/dashboard/test_i18n.py` (new
+  `test_single_observation_notice_is_source_neutral`).
+- **Build:** grepped every use of `warn.single_observation`. There is exactly one
+  code use — `dashboard/components/quality.py:511`
+  (`st.warning(t("warn.single_observation"))` in `render_quality_summary`); no
+  call-site logic changed and no other string touched. The notice fires on any
+  page whose selection contains a lone observation, so it must not name a source.
+- **Old wording (owner-visible):**
+  «یک یا چند سری انتخاب‌شده تنها یک مشاهده دارد. **TGJU** منبعی لحظه‌ای است و
+  تاریخچه از طریق گردآوری روزانه انباشته می‌شود.»
+- **New wording (source-neutral):**
+  «یک یا چند سری انتخاب‌شده تنها یک مشاهده دارد. این سری‌ها به‌صورت دوره‌ای
+  گردآوری می‌شوند و تاریخچه‌شان به‌تدریج انباشته می‌شود.»
+- **Test:** the new test asserts the string contains none of the source display
+  names in `labels.SOURCE_LABELS` **nor** any `source_name` slug,
+  case-insensitively (so the original Latin `TGJU` leak is caught as well as a
+  future Persian-name leak).
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_i18n.py -q --no-cov`
+  → **15 passed** (was 14). `grep` for the old clause returns nothing under
+  `dashboard/`/`tests/`.
+- **Deviations:** none. This closes Wave D DEFECT 1.
+- **Commit:** this entry is committed with the Step 0b commit.
