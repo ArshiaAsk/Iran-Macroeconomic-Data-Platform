@@ -706,7 +706,10 @@ against the list above by its own test, so the two cannot drift.
 - **Task 28** ships the top bar/breadcrumb and the last-collection stamp (done).
 - **Task 33** landed the D11 AST guard with its first `MIGRATED_PAGES` entry (done).
 - **Task 47** extends this document with the top bar, the sidebar shell and the
-  screenshot script, plus the per-archetype review outcomes.
+  screenshot script, plus the per-archetype review outcomes. **Done (Wave H):**
+  the top bar and page header are in §4.1, the sidebar shell in §6, and the
+  dev-only screenshot script in §16; the per-archetype outcomes are recorded in
+  the five `validation/archetype-*.md` files and `VALIDATION.md`.
 - **Type-scale gaps (Step 0e → closed by Task 29).** The theme matches the
   mockup's font sizes and weights, and Task 29 pinned the three values the theme
   cannot express as scoped CSS in `direction.py`: the heading/body **line-heights**

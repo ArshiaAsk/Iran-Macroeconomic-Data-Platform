@@ -3211,3 +3211,37 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** none. The function-scoped design and its justification are
   recorded in the guard module's docstring.
 - **Commit:** Task 46 commit.
+
+## Task 47 — (H) WRITE the validation record and refresh the README
+
+- **Files:** `docs/phase-7.2/README.md`, `docs/phase-7.2/VALIDATION.md`,
+  `docs/phase-7.2/design-system.md`, `docs/phase-7.2/PR-DESCRIPTION.md` (new),
+  `AGENTS.md`, `docs/plans/phase-7.2-dashboard-redesign.md` (Task 47 boxes ticked).
+- **README runbook.** Added a **Runbook** section (the ten pages with their
+  archetype and owned domains; the three presentation modules; the verify
+  commands, including the dev-only screenshot script and its two capture modes)
+  and a **"How to add or change a page"** checklist (nine steps: register the
+  `PageSpec`, add the i18n keys, write the thin delegate, compose in
+  `page_view.py`, register the guard coverage, style only through the system,
+  test, verify, and the `src/`/`alembic/`/`airflow/` boundary). Removed the stale
+  Wave-A "components staged but not adopted" paragraph and the duplicate D14 note.
+- **VALIDATION.md.** Status header updated to "Phase 7.2 complete through Wave H,
+  pending owner acceptance"; the "verified vs not automated" split is now explicit.
+  Added the **Wave H part B** section: the Task 46 guard decision and result, the
+  Task 47 doc summary, the ten-page browser checklist, the five archetype review
+  outcomes, the Task 4 `st.html`/theme-switcher findings, the chosen brand/toolbar
+  fallbacks, and a **Not automated in this run** list (the `<td title>` hover
+  tooltip, the chrome selectors, font rendering, F1/F7, D1/D2, the cache-TTL item).
+- **design-system.md.** §15's Task-47 open item is closed (top bar and page header
+  in §4.1, sidebar shell in §6, screenshot script in §16 were already documented
+  across the waves).
+- **AGENTS.md.** New **Dashboard UI conventions (Phase 7.2)** section: layering,
+  the D11 contract and its guard, `t()` for every string, CSS ownership and tokens,
+  the chart template, the screenshot script, the per-wave gate, and the boundary.
+- **PR-DESCRIPTION.md.** A pull-request summary (what landed, verification, docs,
+  accepted deviations, deferred scope, "no merge/push").
+- **Verify:** `pytest tests/unit/dashboard/test_design_system_doc.py
+  test_literal_guard.py test_layout_guard.py` → **35 passed** (the design-system
+  doc test scans the component package and stays green).
+- **Deviations:** none.
+- **Commit:** Task 47 commit.

@@ -1,17 +1,20 @@
 # Phase 7.2 Validation Report
 
-**Status:** Wave D complete (owner sign-off APPROVED); **Wave E complete through
-Task 40**, with the emphasis owner review **prepared and awaiting sign-off**
-(`validation/archetype-emphasis.md`). Wave F is next.
-The visual review recorded here is 2026-09-21 against a populated local database.
+**Status:** Phase 7.2 **complete through Wave H**, pending owner acceptance. All
+five archetype reviews are **signed off APPROVED** (Overview, the four generic
+domain pages, the three emphasis pages, the correlation page, and the catalog page
+conditional on Wave H P1 — verified). Wave H added the four polish items P1–P4, the
+completed consistency guard (Task 46), this record (Task 47) and the cross-page
+audit (Task 48).
+The visual review recorded here is 2026-09-21/22 against a populated local database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
 **Wave 0 evidence:** [wave-0-spike.md](wave-0-spike.md) ·
 **Per-task record:** [execution-log.md](execution-log.md)
 
 This report separates **verified in this run** from **not automated in this run**.
-Wave A is the token/typography/CSS foundation plus the shared components; the
-per-archetype owner reviews are a later wave and are **not** covered here.
+The per-wave sections below are the "verified" record; the explicit
+"not automated" list is at the end of the report (§ *Not automated in this run*).
 
 **Scope note (important).** The shared components added by Tasks 17–22
 (`render_callout`, `render_page_header`, `render_kpi_band`, `render_status_chip`,
@@ -1217,3 +1220,101 @@ intended P1 (catalog, 20.4%), P2 (caption strip, ~0.5% on nine pages) and P3
 (breadcrumb, top bar on all ten) changes.
 
 **Boundary.** No file under `src/`, `alembic/` or `airflow/` changed.
+
+## Wave H — part B (Task 46 guard, Task 47 documentation)
+
+**Scope.** Close the consistency guard (Task 46) and write the phase record and
+runbook (Task 47). Docs and tests only; no presentation change.
+
+### Task 46 — the consistency guard, verified
+
+- **Decision:** the guard stays **function-scoped** (`MIGRATED_PAGES` maps module →
+  migrated function names). Widening to file scope would report the shared
+  components' own implementation (`render_callout` *is* a `st.warning`). The
+  coverage gap the function scope leaves open is closed by two completeness tests
+  instead:
+  - `test_every_registered_page_delegates_to_a_migrated_function` — each of the
+    ten `PAGES` rows delegates to exactly one listed composition.
+  - `test_the_mapping_covers_every_render_function` — `MIGRATED_PAGES` **equals**
+    `page_view.py`'s render functions (23 = 23; verified no gap, no stale entry).
+- A deliberate raw `st.title` now fails whether it lands in a listed function, in
+  a new render function, or in a page module.
+- **Verified:** `pytest tests/unit/dashboard/test_layout_guard.py` → 17 passed;
+  dashboard subset → 657 passed.
+
+### Task 47 — runbook and this record
+
+- `README.md` now carries the **runbook** (pages table, layering, how to verify)
+  and the **"How to add or change a page"** checklist.
+- `design-system.md` §16 documents the dev-only screenshot script; §4.1 the top
+  bar and page header; §6 the sidebar shell. §15's Task-47 open item is closed.
+- `AGENTS.md` gained a **Dashboard UI conventions (Phase 7.2)** section.
+- `PR-DESCRIPTION.md` is the pull-request summary.
+
+### Ten-page browser checklist (Wave H part A capture)
+
+Ten PNGs at 1440x900, commit **`2c0977c`**, in
+`wave-h-assets/partA-all-pages/`; per-page result and pixel diff in
+`wave-h-assets/partA-all-pages/DIFF.md`.
+
+| Page | Renders | Header / KPI / sections | Notes |
+|---|---|---|---|
+| overview | yes | yes | reference page |
+| correlation | yes | yes | empty-state (no pair selected) |
+| catalog | yes | yes | P1 filter bar (3 controls + full-width filter set) |
+| inflation | yes | yes | emphasis (CPI decile + canonical + chain-linking) |
+| gdp | yes | yes | generic domain (empty state in the capture) |
+| trade_energy | yes | yes | generic domain |
+| welfare | yes | yes | emphasis (HBSIR survey panel) |
+| fx_gold | yes | yes | generic domain, own header |
+| market | yes | yes | emphasis (TSETMC notes) |
+| labor | yes | yes | generic domain, own header |
+
+**No defects.** Every pixel diff is an intended Wave H change (P1 catalog, P2
+caption RTL on nine pages, P3 breadcrumb on all ten).
+
+### Archetype review outcomes
+
+All five reviews are **signed off APPROVED** (2026-09-21/22):
+
+| Review | File | Result |
+|---|---|---|
+| Shell + Overview (AM-23) | `validation/reference-overview.md` | APPROVED (deviations A1–A9 accepted) |
+| Generic domain pages (A2) | `validation/archetype-domain.md` | APPROVED |
+| Emphasis pages (A3) | `validation/archetype-emphasis.md` | APPROVED (15 MATCH; 3 deviations) |
+| Correlation (A4) | `validation/archetype-correlation.md` | APPROVED (14 MATCH; shared `render_filters` deviation accepted) |
+| Catalog (A5) | `validation/archetype-catalog.md` | APPROVED **conditional on P1**; P1 verified |
+
+### Wave 0 findings carried into this record (Task 4)
+
+- **`st.html` survival:** `<style>`, `class`, inline `style`, `title`,
+  `dir="rtl"`, `<bdi>`, `data-*` and `<a href>` survive; **`<svg>` is stripped**.
+  The callout glyph is a CSS shape; the sidebar brand mark is a CSS square.
+- **Theme switcher:** the custom `[theme]` already hides the settings-menu theme
+  toggle; no toolbar-mode change was needed to hide it.
+- **Brand fallback:** CSS-pinned brand block above the nav (fallback **2**), via
+  `[data-testid="stSidebarHeader"]` pseudo-elements + the `stSidebarUserContent`
+  flex pin for the DB status.
+- **Toolbar fallback:** shipped `client.toolbarMode="viewer"` (hides Deploy and
+  the developer options, keeps Print/Record); `STREAMLIT_CLIENT_TOOLBAR_MODE=developer`
+  restores the developer toolbar locally.
+
+### Not automated in this run
+
+These are **not** covered by the automated suite and rely on the owner checklist /
+manual review; they are recorded as open, not as verified:
+
+- **Native hover tooltip on a `<td title>`** — not rendered by headless Chromium;
+  unverified in a real browser (an owner checklist item).
+- **Streamlit-chrome selectors** (`direction.py` §6) — `AppTest` cannot see chrome;
+  only the manual browser walk (and the screenshot set) catches a break. The block
+  is version-named (1.61.1) and must be re-probed before extending.
+- **Font rendering** (Vazirmatn) and **OS-stack fallback** — visual only.
+- **The two recorded accepted deviations** that the owner chose not to fix: **F1**
+  content padding 70 px vs the mockup's 40 px; **F7** no-wrap of the short
+  categorical coverage columns. Plus the D3 bidi direction for Gregorian vs Jalali
+  ranges.
+- **ETL/catalog findings D1 and D2** — handed to the ETL/catalog side; out of the
+  dashboard's boundary.
+- **Cache-TTL item** and Phase 7.1 Tasks 27–28 (extended suite + analyst
+  acceptance) — deferred (plan Deferred Scope).

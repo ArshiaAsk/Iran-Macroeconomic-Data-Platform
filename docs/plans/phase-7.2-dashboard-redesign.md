@@ -1190,8 +1190,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 10, 34, 46.
 - **Acceptance:**
-  - [ ] Every page's migration is recorded with its evidence.
-  - [ ] Open items are listed as open, not implied done.
+  - [x] Every page's migration is recorded with its evidence.
+  - [x] Open items are listed as open, not implied done.
 - **Verify:** Manual review; `make check` passes.
 
 ### 48. (H) RUN the cross-page consistency audit

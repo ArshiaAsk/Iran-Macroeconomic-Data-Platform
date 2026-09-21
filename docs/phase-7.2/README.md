@@ -77,20 +77,109 @@ Documents:
   result, deviations, commit hash).
 - `README.md` — this file, completed in Wave H.
 
-Wave A left the shared components (`render_callout`, `render_page_header`,
-`render_kpi_band`, `render_status_chip`, `render_status_dot`, `render_bar_list`,
-`render_section_header`, `render_filter_bar`, the states module and the typed-cell
-HTML table) **staged but not adopted by any page** — page composition is Waves
-C–G, so the Wave A screenshots show only the global look and the chart template.
+## Runbook
+
+### Pages
+
+Ten pages, declared once in `dashboard/navigation.py` (`PAGES`). Each is a **thin
+delegate** under `dashboard/pages/` that calls exactly one composition function in
+`dashboard/page_view.py`; the sidebar label is `nav.<key>` and the in-page title
+`page.<key>`, both from `dashboard/i18n.py`.
+
+| Key | Path | Archetype | Owns domains |
+|---|---|---|---|
+| `overview` | `pages/1_Overview.py` | A1 — reference (all-domain) | — (default page) |
+| `correlation` | `pages/6_Correlation.py` | A4 — comparison | — |
+| `catalog` | `pages/7_Data_Catalog.py` | A5 — catalog | — |
+| `inflation` | `pages/2_Inflation.py` | A3 — emphasis | `inflation` |
+| `gdp` | `pages/3_GDP_Economy.py` | A2 — generic domain | `gdp` |
+| `trade_energy` | `pages/4_Trade_Welfare_Energy.py` | A2 — generic domain | `trade`, `energy` |
+| `welfare` | `pages/8_Welfare_Survey.py` | A3 — emphasis | `welfare` |
+| `fx_gold` | `pages/5_FX_Gold.py` | A2 — generic domain | `fx`, `gold` |
+| `market` | `pages/9_Market.py` | A3 — emphasis | `market` |
+| `labor` | `pages/10_Labor.py` | A2 — generic domain | `labor` |
+
+### Layering
+
+Three presentation modules own the display layer and are the only places their
+kind of value may live:
+
+- `dashboard/i18n.py` — every Persian UI-chrome string, keyed; `t()` raises on a
+  missing key. One locale, no runtime switcher.
+- `dashboard/labels.py` — indicator/domain/source/frequency display names, the
+  derived-suffix map, and the expected collection cadence map.
+- `dashboard/formatting.py` — Persian digits/separators, Jalali dates and periods,
+  and the `Asia/Tehran` day-bounds constructors.
+
+CSS lives only in `dashboard/components/direction.py` (scoped, with stable hooks).
+Tokens live in `dashboard/components/tokens.py`; the theme in
+`.streamlit/config.toml` reads them.
+
+### How to verify
+
+```bash
+make check                                                        # format + lint + typecheck + full test
+poetry run mypy src dashboard                                     # 68 files, zero errors
+poetry run pytest tests/unit/dashboard -q --no-cov                # dashboard subset
+poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov
+poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov
+poetry run pytest tests/unit/dashboard/test_layout_guard.py tests/unit/dashboard/test_literal_guard.py -q --no-cov
+```
+
+The dev-only screenshot script is **not** a CI gate:
+
+```bash
+poetry run streamlit run dashboard/app.py            # in one shell
+poetry run python scripts/dashboard_screenshots.py --out-dir /tmp/screens
+poetry run python scripts/dashboard_screenshots.py --full-height --out-dir /tmp/screens
+```
+
+Restart the dev server before a capture set and record the commit under capture.
+
+### How to add or change a page
+
+1. **Register it.** Add a `PageSpec` row to `PAGES` in `dashboard/navigation.py`
+   (`key`, `path`, `icon`, `group`, `domains`, `is_default`). A page must claim
+   exactly the domains it renders — `page_for_domain()` reads this declaration.
+2. **Add the strings.** Add `nav.<key>` and `page.<key>` to `dashboard/i18n.py`,
+   plus any `group.<key>`. Never hardcode a user-visible literal; `labels.py` is
+   the only place for a name map.
+3. **Write the thin delegate.** Create `dashboard/pages/<N>_<Name>.py` with a
+   one-line docstring, one `from dashboard.page_view import render_*` and one
+   call. It must not call `st.*` or define a function — the layout guard enforces
+   this (`test_all_page_modules_are_thin_delegates`).
+4. **Compose in `page_view.py`.** Add a `render_<key>_page` (or reuse
+   `render_domain_page`) that opens with `render_page_header`, uses
+   `render_kpi_band` / `render_section_header` / `render_filter_bar`, and renders
+   empty/error/loading through `components/states.py`. Do **not** call raw
+   `st.title`/`st.metric`/`st.warning`/`st.info`/`st.error` or pass
+   `unsafe_allow_html` — the layout guard rejects it.
+5. **Register the guard coverage.** Add every new render function to
+   `MIGRATED_PAGES` in `tests/unit/dashboard/test_layout_guard.py`. The
+   completeness tests fail until you do (`test_the_mapping_covers_every_render_function`,
+   `test_every_registered_page_delegates_to_a_migrated_function`).
+6. **Style only through the system.** Add a selector to `direction.py` (and its
+   registry) if the native element cannot express it; add a token to `tokens.py`
+   if it is a new colour/radius/size. A new container that renders RTL text must
+   declare `direction: rtl`.
+7. **Test it.** Add an `AppTest` test (see `tests/unit/dashboard/test_app_*.py`)
+   and a router smoke row; keep `test_literal_guard.py` and `test_layout_guard.py`
+   green.
+8. **Verify.** `make check`, then the screenshot script and a browser walk. Record
+   the result in `VALIDATION.md` and the per-task detail in `execution-log.md`.
+9. **Do not touch `src/`, `alembic/` or `airflow/`.** A presentation change never
+   needs an ETL change; if it seems to, that is a new phase.
+
+### Local development
 
 Local-development note (D14): the settings-menu theme toggle is already absent
 because the app defines a custom `[theme]`; the toolbar can be restored for
-development with `STREAMLIT_CLIENT_TOOLBAR_MODE=developer`.
+development with `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` (the shipped value is
+`viewer`, which hides Deploy and the developer options while keeping Print/Record).
 
 Screenshot capture (dev-only): `scripts/dashboard_screenshots.py` writes one PNG
 per registered page. The default run captures the shipped **1440x900** viewport;
 `--full-height` captures each page at its own content height (bounded to 12000 px)
 for a whole-page view. Restart the dev server before a capture set and record the
-commit under capture; see
-[`design-system.md`](design-system.md) §16 and
+commit under capture; see [`design-system.md`](design-system.md) §16 and
 [`wave-h-assets/p4/heights.txt`](wave-h-assets/p4/heights.txt).
