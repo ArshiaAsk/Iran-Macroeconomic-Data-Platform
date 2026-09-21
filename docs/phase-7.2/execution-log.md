@@ -1732,7 +1732,7 @@ were never staged or committed (Task 7 owns them).
   `st.columns(kpi_column_weights(cells))` instead of an equal-weight row. The
   ratio lives in the component (not CSS) because `st.columns` owns the geometry.
 - **Verify:**
-  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` → 44
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` → 55
     passed (3 new: the 1.35/1.0 spec on a mixed band, all-primary default, and a
     mixed 6-cell band still rendering every cell).
   - **Measured (live DOM, 1440 px):** the four primary cells render
@@ -1745,4 +1745,22 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. The `1.378` rendered ratio (vs the spec's exact `1.35`) is
   an artifact of Streamlit's `calc(% - gap)` column basis, recorded here rather
   than worked around.
+- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+
+### P3 — last-collection column header
+
+- **Files:** `dashboard/i18n.py` (new `table.last_collection` = `آخرین گردآوری`),
+  `dashboard/page_view.py` (`build_freshness_rows` uses the new key for its third
+  column), `tests/unit/dashboard/test_app_overview.py`.
+- **Build:** the Overview freshness table's header is now the mockup's
+  `آخرین گردآوری`. The generic `table.collection_timestamp` (`زمان گردآوری`) is
+  deliberately **not** changed: `freshness_display` and the exports keep it, so
+  the two headers no longer share one wording.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py
+  test_i18n.py -q --no-cov` → **44 passed** (1 new: the table uses the new key,
+  the generic key is absent from its columns, and `freshness_display` still
+  carries `table.collection_timestamp`). The two existing header assertions were
+  updated to the new key.
+- **Deviations:** none. This resolves the §14 "Freshness last-collection header"
+  row (the plan's "reuse the existing key" instruction is superseded by P3).
 - **Commit:** recorded in the "Wave C part 2a gate" entry below.

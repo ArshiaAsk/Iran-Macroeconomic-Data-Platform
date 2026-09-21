@@ -242,6 +242,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.expected_is_estimated": "برآوردی",
         "table.missing_periods": "دوره‌های مفقود",
         "table.collection_timestamp": "زمان گردآوری",
+        # The Overview freshness table's own header (P3). The mockup reads
+        # "آخرین گردآوری" for that column; `table.collection_timestamp` stays the
+        # generic header for every other table (the freshness display frame and
+        # the exports), so the two do not share one wording.
+        "table.last_collection": "آخرین گردآوری",
         "table.status": "وضعیت",
         "table.records_collected": "رکوردهای گردآوری‌شده",
         "table.error_message": "پیام خطا",

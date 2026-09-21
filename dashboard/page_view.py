@@ -1008,7 +1008,7 @@ def build_freshness_rows(frame: pd.DataFrame, *, now: datetime) -> FreshnessTabl
     columns = (
         t("table.source_name"),
         t("table.staleness"),
-        t("table.collection_timestamp"),
+        t("table.last_collection"),
         t("table.records_collected"),
         t("table.run_status"),
     )

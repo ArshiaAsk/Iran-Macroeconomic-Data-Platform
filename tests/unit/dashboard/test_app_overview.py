@@ -160,7 +160,7 @@ def test_overview_staleness_verdict_is_rendered(fake_streamlit_connection) -> No
     for header in (
         t("table.source_name"),
         t("table.staleness"),
-        t("table.collection_timestamp"),
+        t("table.last_collection"),
         t("table.records_collected"),
         t("table.run_status"),
     ):
@@ -326,7 +326,7 @@ def test_build_freshness_rows_orders_stale_first_with_typed_cells() -> None:
     assert table.columns == (
         t("table.source_name"),
         t("table.staleness"),
-        t("table.collection_timestamp"),
+        t("table.last_collection"),
         t("table.records_collected"),
         t("table.run_status"),
     )
@@ -391,6 +391,20 @@ def test_build_freshness_rows_returns_headers_only_for_an_empty_frame() -> None:
 
     assert table.rows == ()
     assert t("table.run_status") in table.columns
+
+
+def test_freshness_table_uses_its_own_last_collection_header() -> None:
+    """P3: the Overview table's header is `آخرین گردآوری`, the generic key stays."""
+    assert t("table.last_collection") != t("table.collection_timestamp")
+    table = build_freshness_rows(_ordering_frame(), now=datetime(2026, 1, 3, tzinfo=UTC))
+
+    assert t("table.last_collection") in table.columns
+    assert t("table.collection_timestamp") not in table.columns
+    # The generic header is unchanged for every other surface.
+    assert (
+        t("table.collection_timestamp")
+        in freshness_display(_ordering_frame(), now=datetime(2026, 1, 3, tzinfo=UTC)).columns
+    )
 
 
 # --- Task 31: domain bars + the two-column row ------------------------------
