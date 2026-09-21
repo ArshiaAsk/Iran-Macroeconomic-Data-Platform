@@ -189,7 +189,7 @@ def test_chrome_block_raises_main_container_top_padding_for_top_bar() -> None:
 
 # --- Task 27: sidebar brand (fallback 2) — CSS-pinned mark + text ---
 
-BRAND = "داده‌های اقتصاد کلان ایران"
+BRAND = "سامانهٔ داده‌ها"
 
 
 def test_escape_css_string_doubles_backslashes() -> None:
@@ -221,6 +221,23 @@ def test_brand_css_emits_before_mark_and_after_text() -> None:
     assert f'content: "{BRAND}"' in css
     assert "var(--accent)" in css  # mark fill
     assert "font-weight: 700" in css  # brand text
+
+
+def test_brand_text_is_pinned_to_a_single_line() -> None:
+    """Step 0a: the brand ellipsizes instead of wrapping into the navigation."""
+    css = brand_sidebar_css(BRAND)
+
+    assert "white-space: nowrap;" in css
+    assert "overflow: hidden;" in css
+    assert "text-overflow: ellipsis;" in css
+    # The ::after text is the flexible child that may shrink (min-width: 0).
+    assert "flex: 1 1 auto; min-width: 0;" in css
+
+
+def test_sidebar_header_does_not_wrap() -> None:
+    css = direction_css()
+
+    assert "flex-wrap: nowrap;" in css
 
 
 def test_brand_css_escapes_the_brand_text() -> None:

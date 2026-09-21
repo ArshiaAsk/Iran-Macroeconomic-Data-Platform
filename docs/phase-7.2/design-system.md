@@ -337,14 +337,20 @@ DB-status indicator are CSS-pinned, not rendered by `st.logo` or
 
 - **Brand:** `[data-testid="stSidebarHeader"]` is empty chrome when no `st.logo`
   is used, so the mark and the brand text are CSS pseudo-elements:
-  `::before` is a CSS-drawn accent square (no SVG — `st.html` strips `<svg>`),
-  and `::after` carries the escaped brand text from `t("app.brand")`. The header
-  is a flex row (`display: flex; align-items: center; gap: 10px`) so the mark
-  and text line up at the RTL start. The brand text is escaped by
-  `_escape_css_string` (backslashes, double quotes and control characters) before
-  interpolation into the `content` declaration. The pure builder is
-  `brand_sidebar_css(brand_text)` in `direction.py`; the text is resolved by the
-  entrypoint (`t("app.brand")`) and passed to `inject_direction_css(brand_text=…)`.
+  `::before` is a CSS-drawn accent square (24 px, no SVG — `st.html` strips
+  `<svg>`), and `::after` carries the escaped brand text from `t("app.brand")`.
+  The header is a flex row (`display: flex; align-items: center; gap: 8px;
+  flex-wrap: nowrap`) so the mark and text line up at the RTL start. The text
+  stays on **one line**: `::after` is the flexible child
+  (`flex: 1 1 auto; min-width: 0`) with `white-space: nowrap` and
+  `overflow: hidden; text-overflow: ellipsis`, so a longer brand ellipsizes
+  instead of wrapping into the navigation below (Step 0a). The brand value is
+  the short plan string `سامانهٔ داده‌ها`, which fits the 256 px sidebar in full.
+  The text is escaped by `_escape_css_string` (backslashes, double quotes and
+  control characters) before interpolation into the `content` declaration. The
+  pure builder is `brand_sidebar_css(brand_text)` in `direction.py`; the text is
+  resolved by the entrypoint (`t("app.brand")`) and passed to
+  `inject_direction_css(brand_text=…)`.
 - **DB status:** `[data-testid="stSidebarUserContent"]` is pinned to the sidebar
   bottom by `order: 2; margin-top: auto` (the spike's corrected recipe). The
   status is the shared `render_status_dot` component (Task 11), not a native

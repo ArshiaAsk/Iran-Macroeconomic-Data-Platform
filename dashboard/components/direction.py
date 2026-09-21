@@ -143,8 +143,8 @@ _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
     ("sidebar_content", "display: flex !important; flex-direction: column;"),
     (
         "sidebar_header",
-        "order: 0; display: flex; align-items: center; gap: 10px; "
-        "padding: 1.25rem 1rem 0.75rem;",
+        "order: 0; display: flex; align-items: center; gap: 8px; "
+        "flex-wrap: nowrap; padding: 1.25rem 0.75rem 0.75rem;",
     ),
     ("sidebar_nav", "order: 1;"),
     ("sidebar_user_content", "order: 2; margin-top: auto;"),
@@ -199,6 +199,12 @@ def brand_sidebar_css(brand_text: str) -> str:
     ``::after`` carries the escaped brand text. The header's own flex rule
     (in :data:`_CHROME_RULES`) lays them out side by side at the RTL start.
 
+    The text stays on **one line**: ``::after`` is the flexible flex child
+    (``flex: 1 1 auto; min-width: 0``) with ``white-space: nowrap`` and
+    ``overflow: hidden; text-overflow: ellipsis``, so a brand longer than the
+    256 px sidebar ellipsizes instead of wrapping into the navigation below
+    (Step 0a).
+
     Args:
         brand_text: The already-resolved brand string (call ``t("app.brand")``
             first). It is escaped before interpolation so it cannot break the
@@ -212,13 +218,15 @@ def brand_sidebar_css(brand_text: str) -> str:
     header = CSS_SELECTORS["sidebar_header"]
     before = (
         f'{header}::before {{ content: ""; flex: none; box-sizing: border-box; '
-        f"width: 26px; height: 26px; border-radius: 7px; "
+        f"width: 24px; height: 24px; border-radius: 7px; "
         f"background: var(--accent); }} "
     )
     after = (
         f'{header}::after {{ content: "{escaped}"; '
         f"font-family: {FONT_STACK}; font-weight: 700; font-size: 15px; "
-        f"line-height: 1.4; color: var(--text-1); }} "
+        f"line-height: 1.4; color: var(--text-1); "
+        f"flex: 1 1 auto; min-width: 0; white-space: nowrap; "
+        f"overflow: hidden; text-overflow: ellipsis; }} "
     )
     return _BRAND_COMMENT + "\n" + before + after
 

@@ -53,7 +53,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
     {
         # Shell chrome.
         "app.title": "سامانه داده‌های اقتصاد کلان ایران",
-        "app.brand": "داده‌های اقتصاد کلان ایران",
+        "app.brand": "سامانهٔ داده‌ها",
         "app.db_status_label": "وضعیت پایگاه داده",
         "app.db_status_online": "متصل",
         "app.db_status_offline": "قطع",

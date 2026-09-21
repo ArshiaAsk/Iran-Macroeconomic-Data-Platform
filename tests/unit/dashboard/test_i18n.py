@@ -31,6 +31,8 @@ def _has_persian_char(value: str) -> bool:
 def test_known_key_resolves() -> None:
     assert t("nav.inflation") == "تورم"
     assert t("app.title") == "سامانه داده‌های اقتصاد کلان ایران"
+    # The sidebar brand is the short plan value (Step 0a), not the full app title.
+    assert t("app.brand") == "سامانهٔ داده‌ها"
 
 
 def test_has_string_reports_catalog_membership() -> None:

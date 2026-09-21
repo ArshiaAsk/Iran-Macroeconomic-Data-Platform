@@ -1247,3 +1247,48 @@ were never staged or committed (Task 7 owns them).
     mark), the RTL-appropriate separator; the LTR `>` was not used because it
     would render incorrectly in the RTL context.
 - **Commit hash:** `715712c`
+
+## Step 0a — brand text + single-line sidebar brand
+
+- **Files:** `dashboard/i18n.py`, `dashboard/components/direction.py`,
+  `pyproject.toml`, `tests/unit/dashboard/test_i18n.py`,
+  `tests/unit/dashboard/test_direction.py`,
+  `docs/phase-7.2/wave-b-assets/step-0a-brand/` (3 PNGs).
+- **`pyproject.toml`:** added `tests/unit/dashboard/test_direction.py` to
+  `per-file-ignores` for `RUF001`/`RUF002`/`RUF003` — the new brand literal
+  `سامانهٔ داده‌ها` contains the combining-hamza sequence `هٔ` (HEH U+0647 +
+  HAMZA ABOVE U+0654), which ruff flags as an ambiguous character, and the
+  file now carries a Persian fixture like the other Persian-fixture test files
+  already listed there.
+- **Build:** `app.brand` changed from the full app title
+  (`داده‌های اقتصاد کلان ایران`) to the plan/mockup value (`سامانهٔ داده‌ها`).
+  In `brand_sidebar_css` the `::after` text is now the flexible flex child
+  (`flex: 1 1 auto; min-width: 0`) carrying
+  `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`, and the
+  `sidebar_header` chrome rule gained `flex-wrap: nowrap`. A brand wider than
+  the 256 px sidebar therefore ellipsizes on one line instead of wrapping into
+  the navigation below.
+- **Measured (Step 0b probe, 1440×900):** sidebar 256 px; `stSidebarHeader`
+  **201 px** wide, inset **27.5 px** each side by `stSidebarContent`'s
+  `padding: 0 17.5px`; header padding `17.5px 10.5px 10.5px`, `gap: 8px`;
+  `stSidebarCollapseButton` 28 px. The `::after` text box is **97 px** and the
+  string's natural width at 15px/700 is **84 px**, so the full brand fits on
+  one line and the ellipsis is defensive only — it never triggers at this
+  length.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_direction.py
+    tests/unit/dashboard/test_i18n.py tests/unit/dashboard/test_app_router.py
+    -q --no-cov` → 45 passed (2 new in `test_direction.py`:
+    `test_brand_text_is_pinned_to_a_single_line`,
+    `test_sidebar_header_does_not_wrap`; 1 new assertion in `test_i18n.py`).
+  - `poetry run ruff check dashboard tests` → clean;
+    `ruff format --check dashboard tests` → 119 files already formatted.
+  - `poetry run mypy dashboard` → 0 errors.
+  - A 4× DPI clip of `stSidebarHeader`
+    (`wave-b-assets/step-0a-brand/brand-after.png`, with
+    `brand-before.png` cropped from the pre-0a baseline for contrast) shows the
+    full brand on one line, the accent mark at the RTL start (right) and the
+    text beside it — no wrap, no truncation.
+- **Deviations:** none. The 15 px / 700 brand typography is unchanged from the
+  mockup; no font-size reduction was needed once the natural width was
+  measured.

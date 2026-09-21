@@ -108,6 +108,7 @@ ignore = [
 "tests/unit/dashboard/test_labels.py" = ["RUF001", "RUF002", "RUF003"]  # Persian fixtures
 "tests/unit/dashboard/test_formatting.py" = ["RUF001", "RUF002", "RUF003"]  # Persian fixtures
 "tests/unit/dashboard/test_layout.py" = ["RUF001", "RUF002", "RUF003"]  # Persian fixtures
+"tests/unit/dashboard/test_direction.py" = ["RUF001", "RUF002", "RUF003"]  # Persian brand fixture
 "tests/unit/dashboard/test_app_welfare.py" = ["RUF001", "RUF002", "RUF003"]  # Persian fixtures
 "tests/unit/connectors/test_tgju_parser.py" = ["RUF001", "RUF002", "RUF003"]  # Allow Persian test data
 "tests/unit/connectors/test_sci_parser.py" = ["RUF001", "RUF002", "RUF003"]  # Allow Persian test data
