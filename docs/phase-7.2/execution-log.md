@@ -1445,3 +1445,33 @@ were never staged or committed (Task 7 owns them).
   computes 12.25px/400) and the secondary KPI value's 20px (the theme sets one
   metric-value size, 28px) cannot be expressed by the theme; they are recorded in
   `design-system.md` §15 as Task 19/29 component work.
+
+## Step 0f — screenshot-script reliability
+
+- **Files:** `scripts/dashboard_screenshots.py`,
+  `docs/phase-7.2/wave-b-assets/all-pages/welfare.png` (replaced).
+- **Build:**
+  - **Why.** The Wave B `welfare.png` was captured mid-run and froze the
+    transient running indicator (the toolbar's "Stop" button) into the frame.
+  - **Change.** `_TRANSIENT_SELECTORS` now lists the three transient states —
+    `[data-testid="stStatusWidget"]` (the running indicator), `stSpinner` and
+    `stSkeleton`. `transient_selectors(page)` returns those present in the DOM;
+    `wait_until_settled(page, page_key)` polls them clear, re-checks once more
+    after a 500 ms quiet delay (a rerun can start during the delay) and, after
+    `_SETTLE_RETRIES = 20` polls at 250 ms, raises `ScreenshotNotReadyError`
+    naming the page instead of writing a bad image. `capture` calls it twice per
+    page: inside `wait_ready` (after the app root and main block exist) and again
+    **immediately before** `page.screenshot`, because `neutralise` can trigger a
+    rerun. `main` already catches the exception, prints it and returns 1, so a
+    page that never settles fails the run loudly.
+- **Verify:**
+  - `poetry run ruff check` / `ruff format --check` / `mypy scripts/dashboard_screenshots.py`
+    → clean (1 file, no issues).
+  - Full capture against the running app (1440×900): `poetry run python
+    scripts/dashboard_screenshots.py --out-dir /tmp/wave-c-step0f` → **10 PNGs**,
+    every page settled on the first pass. The new `welfare.png` no longer shows
+    the "Stop" widget (top-right carries only the kebab and the expand control);
+    the captured frame is byte-different from the flawed Wave B file and was
+    copied over `docs/phase-7.2/wave-b-assets/all-pages/welfare.png`.
+- **Deviations:** none. The other nine Wave B PNGs are left untouched, so the
+  asset diff is exactly the one replaced file.

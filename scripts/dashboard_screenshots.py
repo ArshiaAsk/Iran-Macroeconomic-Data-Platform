@@ -8,16 +8,20 @@ Usage::
 The script navigates through the sidebar (not by guessing URLs) so it works
 regardless of Streamlit's URL-slug behaviour. It is intentionally **not**
 invoked by ``make check``.
+
+A capture is taken only once the page has **fully settled**: the running
+indicator (the toolbar's "Stop" button) and the spinner/skeleton are asserted
+absent immediately before every screenshot, retried a bounded number of times,
+and the page fails loudly rather than writing a mid-run image (Step 0f — a Wave B
+``welfare.png`` froze the transient "Stop" widget into the frame).
 """
 
 import argparse
-import contextlib
 import sys
 from pathlib import Path
 from typing import Final
 
 from playwright.sync_api import Page, sync_playwright
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from dashboard.i18n import t
 from dashboard.navigation import PAGES
@@ -28,25 +32,68 @@ DEFAULT_OUT_DIR: Final[Path] = Path("docs/phase-7.2/wave-a-assets/after-global-l
 _VIEWPORT_WIDTH: Final[int] = 1440
 _VIEWPORT_HEIGHT: Final[int] = 900
 
+#: Elements that mean the app is still running or has not finished painting.
+#: ``stStatusWidget`` is the transient running indicator (the toolbar's "Stop"
+#: button) that a Wave B capture froze into ``welfare.png`` mid-run; the spinner
+#: and skeleton are the other two transient paint states. A capture is only
+#: taken once every one of them is absent from the DOM.
+_TRANSIENT_SELECTORS: Final[tuple[str, ...]] = (
+    '[data-testid="stStatusWidget"]',
+    '[data-testid="stSpinner"]',
+    '[data-testid="stSkeleton"]',
+)
 
-def wait_ready(page: Page, timeout_ms: int = 30000) -> None:
-    """Wait for the app root, main block and spinners/skeletons to settle."""
+#: Bounded settle loop: poll for the transients to clear, re-check after a short
+#: quiet delay, and give up loudly rather than saving a mid-run image.
+_SETTLE_RETRIES: Final[int] = 20
+_SETTLE_POLL_MS: Final[int] = 250
+_SETTLE_QUIET_MS: Final[int] = 500
+
+
+class ScreenshotNotReadyError(RuntimeError):
+    """Raised when a page still shows transient elements at capture time."""
+
+
+def transient_selectors(page: Page) -> list[str]:
+    """Return the transient selectors currently present in the DOM."""
+    return [selector for selector in _TRANSIENT_SELECTORS if page.locator(selector).count() > 0]
+
+
+def wait_until_settled(page: Page, page_key: str) -> None:
+    """Block until no transient element is present, then let the paint settle.
+
+    The running indicator and the spinner/skeleton are asserted absent
+    **immediately before** the capture. A run that is still in flight is waited
+    for (bounded), then the check is repeated once more after a short quiet
+    delay, because a rerun can start a new run during that delay.
+
+    Args:
+        page: The Playwright page holding the rendered dashboard
+        page_key: Registry key of the page, used in the failure message
+
+    Raises:
+        ScreenshotNotReadyError: When a transient element is still present after
+            the bounded retries, so a bad image is never written.
+    """
+    for _ in range(_SETTLE_RETRIES):
+        if not transient_selectors(page):
+            page.wait_for_timeout(_SETTLE_QUIET_MS)
+            if not transient_selectors(page):
+                return
+        page.wait_for_timeout(_SETTLE_POLL_MS)
+    present = transient_selectors(page)
+    message = (
+        f"page {page_key!r} still shows transient elements after "
+        f"{_SETTLE_RETRIES} retries: {present}; refusing to save a mid-run image"
+    )
+    raise ScreenshotNotReadyError(message)
+
+
+def wait_ready(page: Page, page_key: str, timeout_ms: int = 30000) -> None:
+    """Wait for the app root and main block, then for a fully settled page."""
     page.wait_for_selector('[data-testid="stApp"]', timeout=timeout_ms)
     page.wait_for_selector('[data-testid="stMainBlockContainer"]', timeout=timeout_ms)
-    # Wait for any transient spinners/skeletons to disappear. If none are
-    # present, the "detached" state resolves immediately.
-    with contextlib.suppress(PlaywrightTimeoutError):
-        page.wait_for_selector('[data-testid="stSpinner"]', state="detached", timeout=timeout_ms)
-    with contextlib.suppress(PlaywrightTimeoutError):
-        page.wait_for_selector('[data-testid="stSkeleton"]', state="detached", timeout=timeout_ms)
-    # Wait for the running indicator (the "Stop" status widget) to be gone
-    # so the capture does not freeze mid-run or include a stale toolbar state.
-    with contextlib.suppress(PlaywrightTimeoutError):
-        page.wait_for_selector(
-            '[data-testid="stStatusWidget"]', state="detached", timeout=timeout_ms
-        )
-    # A small extra settle helps charts/tables finish rendering.
-    page.wait_for_timeout(500)
+    wait_until_settled(page, page_key)
 
 
 def neutralise(page: Page) -> None:
@@ -72,6 +119,10 @@ def capture(base_url: str, out_dir: Path) -> dict[str, Path]:
 
     Returns:
         Mapping of page key to the written PNG path.
+
+    Raises:
+        ScreenshotNotReadyError: When a page is still running at capture time, so
+            no bad image is written for it.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     results: dict[str, Path] = {}
@@ -90,8 +141,12 @@ def capture(base_url: str, out_dir: Path) -> dict[str, Path]:
                 nav_link = page.locator(f'[data-testid="stSidebarNavLink"]:has-text("{label}")')
                 nav_link.click(timeout=10000)
 
-            wait_ready(page)
+            wait_ready(page, spec.key)
             neutralise(page)
+            # Re-assert immediately before the capture: `neutralise` can trigger
+            # a rerun, and a rerun that is still in flight must not be frozen
+            # into the frame.
+            wait_until_settled(page, spec.key)
             out_path = out_dir / f"{spec.key}.png"
             page.screenshot(path=str(out_path), full_page=False)
             results[spec.key] = out_path
