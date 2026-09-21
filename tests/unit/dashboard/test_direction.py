@@ -212,6 +212,28 @@ def test_chrome_block_seats_the_top_bar_under_the_native_header() -> None:
     assert "padding-top: 120px" not in css
 
 
+def test_top_bar_full_bleed_reads_the_main_container_padding_property() -> None:
+    """P5: the main container owns ``--main-pad-x``; the top bar reads the same
+    property for its negative inline margin and its matching inline padding, so
+    the two values cannot drift."""
+    css = direction_css()
+    main = CSS_SELECTORS["main_block_container"]
+    top = CSS_SELECTORS["top_bar"]
+
+    # Declared once, on the main container.
+    assert f"{main} {{" in css
+    assert "--main-pad-x: 70px;" in css
+    assert css.count("--main-pad-x:") == 1
+    # Both sides of the full-bleed trick use the property, never a literal.
+    assert "padding-left: var(--main-pad-x) !important;" in css
+    assert "padding-right: var(--main-pad-x) !important;" in css
+    assert f"{top} {{ direction: rtl; background: var(--surface);" in css
+    assert "width: calc(100% + 2 * var(--main-pad-x));" in css
+    assert "max-width: calc(100% + 2 * var(--main-pad-x));" in css
+    assert "margin-inline: calc(-1 * var(--main-pad-x));" in css
+    assert "padding-inline: var(--main-pad-x);" in css
+
+
 # --- Task 27: sidebar brand (fallback 2) — CSS-pinned mark + text ---
 
 BRAND = "سامانهٔ داده‌ها"

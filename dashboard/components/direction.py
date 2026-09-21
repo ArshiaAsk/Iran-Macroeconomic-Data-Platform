@@ -176,7 +176,18 @@ _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
         "background: var(--accent-soft); color: var(--accent); "
         "font-weight: 600; border-inline-start: 3px solid var(--accent);",
     ),
-    ("main_block_container", "max-width: 1360px !important; padding-top: 64px !important;"),
+    # The main container owns the horizontal padding as one custom property
+    # (P5): the top bar's full-bleed rule reads the same `--main-pad-x` for its
+    # negative inline margin and its matching inline padding, so the two values
+    # live in one place and cannot drift. Streamlit's own padding is restated
+    # explicitly so the negative margin is guaranteed to match it.
+    (
+        "main_block_container",
+        "max-width: 1360px !important; padding-top: 64px !important; "
+        "--main-pad-x: 70px; "
+        "padding-left: var(--main-pad-x) !important; "
+        "padding-right: var(--main-pad-x) !important;",
+    ),
 )
 
 #: Brand block (Task 27, brand fallback 2). The sidebar header is empty chrome
@@ -424,16 +435,34 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     # Filter bar (Task 21): only the reading direction is ours; the columns, their
     # weights and their centre alignment come from `st.columns`.
     f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}',
-    # Top bar (Task 28; Step 0b). The container is a keyed vertical block; the
-    # columns row inside it carries the mockup's 48 px height. The row must use
-    # `min-height`, not `height`: Streamlit's own `.stHorizontalBlock` rule sets
-    # `flex: 1 1 0%` and the keyed container is a column flex parent, so the main
-    # axis is vertical and `flex-basis: 0%` overrides a plain `height` — measured
-    # 20.8 px with `height: 48px`, 48 px with `min-height: 48px`. Breadcrumb on the
-    # RTL start and the last-collection stamp on the RTL end. The main container
-    # padding-top is 64 px = the native header (52.5 px) + a 12 px gap, so the bar
-    # sits directly under the header instead of 67.5 px below it (Step 0b).
-    f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}',
+    # Top bar (Task 28; Step 0b; surface/border + full-bleed in P5). The container
+    # is a keyed vertical block; the columns row inside it carries the mockup's
+    # 48 px height. The row must use `min-height`, not `height`: Streamlit's own
+    # `.stHorizontalBlock` rule sets `flex: 1 1 0%` and the keyed container is a
+    # column flex parent, so the main axis is vertical and `flex-basis: 0%`
+    # overrides a plain `height` — measured 20.8 px with `height: 48px`, 48 px
+    # with `min-height: 48px`. Breadcrumb on the RTL start and the last-collection
+    # stamp on the RTL end. The main container padding-top is 64 px = the native
+    # header (52.5 px) + a 12 px gap, so the bar sits directly under the header
+    # instead of 67.5 px below it (Step 0b).
+    #
+    # P5 gives the bar the mockup's white surface and bottom border, and makes it
+    # full-bleed. The bar's containing block is Streamlit's inner
+    # `stLayoutWrapper` (already inside the main container's padding), not the
+    # main container itself, so a negative margin alone would shift the bar left
+    # without widening it (Streamlit sets `max-width: 100%`). The width is
+    # therefore grown by the same `--main-pad-x` on both sides and the negative
+    # inline margin pulls the wider box back out to the main container's edges;
+    # the matching inline padding puts the bar's content back in line with the
+    # page content. Every value reads the one `--main-pad-x` property the main
+    # container declares, so they cannot drift. Measured: no horizontal page
+    # scroll at 1440 px or 1280 px (see the execution log).
+    f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; background: var(--surface); '
+    "border-bottom: 1px solid var(--border); "
+    "width: calc(100% + 2 * var(--main-pad-x)); "
+    "max-width: calc(100% + 2 * var(--main-pad-x)); "
+    "margin-inline: calc(-1 * var(--main-pad-x)); "
+    "padding-inline: var(--main-pad-x); }",
     f'{CSS_SELECTORS["top_bar"]} [data-testid="stHorizontalBlock"] {{ '
     "align-items: center; min-height: 48px; }",
     f'{CSS_SELECTORS["top_bar"]} .top-bar-breadcrumb {{ '

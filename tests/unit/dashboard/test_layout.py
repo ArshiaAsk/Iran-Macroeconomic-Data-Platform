@@ -765,11 +765,19 @@ def test_top_bar_selector_is_registered_and_styled() -> None:
     """The top bar's keyed-container hook is declared in ``CSS_SELECTORS`` and
     emitted by ``direction_css()``, with the columns row held to the mockup's
     48 px via ``min-height`` (a plain ``height`` is inert on this flex item —
-    see the Step 0b note in ``direction.py``)."""
+    see the Step 0b note in ``direction.py``). P5 adds the mockup's surface and
+    bottom border and the full-bleed inline margin/padding pair."""
     assert "top_bar" in CSS_SELECTORS
     css = direction_css()
     assert CSS_SELECTORS["top_bar"] in css
-    assert f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}' in css
+    assert (
+        f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; background: var(--surface); '
+        "border-bottom: 1px solid var(--border); "
+        "width: calc(100% + 2 * var(--main-pad-x)); "
+        "max-width: calc(100% + 2 * var(--main-pad-x)); "
+        "margin-inline: calc(-1 * var(--main-pad-x)); "
+        "padding-inline: var(--main-pad-x); }" in css
+    )
     assert "min-height: 48px" in css
     assert "top-bar-breadcrumb" in css
     assert "top-bar-stamp" in css
@@ -826,4 +834,4 @@ def test_top_bar_renders_unknown_placeholder_when_freshness_is_empty(
 def test_top_bar_container_declares_the_rtl_context() -> None:
     css = direction_css()
 
-    assert f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}' in css
+    assert f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl;' in css

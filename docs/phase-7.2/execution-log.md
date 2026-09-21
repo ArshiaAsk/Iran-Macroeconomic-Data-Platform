@@ -1764,3 +1764,46 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. This resolves the §14 "Freshness last-collection header"
   row (the plan's "reuse the existing key" instruction is superseded by P3).
 - **Commit:** recorded in the "Wave C part 2a gate" entry below.
+
+### P5 — top bar surface, border and full-bleed
+
+- **Files:** `dashboard/components/direction.py` (main container declares
+  `--main-pad-x` and reads it for its horizontal padding; top bar gains the
+  surface, bottom border and the full-bleed width/margin/padding triple),
+  `tests/unit/dashboard/test_layout.py`, `tests/unit/dashboard/test_direction.py`,
+  `docs/phase-7.2/design-system.md` (§9 paragraph rewritten, §14 non-bleed row
+  resolved), `docs/phase-7.2/wave-c-assets/p5/` (`overview.png`,
+  `topbar-live.png`, `topbar-mockup.png`, `kpi-live.png`, `kpi-mockup.png`).
+- **Build:** the bar gets `background: var(--surface)` and
+  `border-bottom: 1px solid var(--border)`. For the full-bleed variant the main
+  container now declares `--main-pad-x: 70px` and reads it for
+  `padding-left`/`padding-right`; the top bar reads the same property for
+  `width`, `max-width`, `margin-inline` and `padding-inline`. The `width`/
+  `max-width` pair is needed because the bar's containing block is Streamlit's
+  inner `stLayoutWrapper` (already inside the main padding) and Streamlit sets
+  `max-width: 100%`, so a negative margin alone shifts the bar left without
+  widening it — measured `x=256, width=1044` before the width pair, i.e. an
+  asymmetric bar. All four values read the one property, so they cannot drift.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_direction.py test_layout.py
+    -q --no-cov` → **84 passed** (1 new: the `--main-pad-x` one-place guarantee,
+    including `css.count("--main-pad-x:") == 1`; the two top-bar chrome
+    assertions were updated to the new rule).
+  - **Measured (live DOM).** 1440 px: bar `x=256, width=1184` (right edge 1440),
+    `background: rgb(255,255,255)` (= `--surface`), `border-bottom: 1px solid
+    rgb(225,229,235)` (= `--border`); `scrollWidth == clientWidth == 1440`. Bar
+    content stays aligned with the page content — `breadcrumb right = 1370 =
+    h1 right`, `stamp left = 326 = h1 left`. 1280 px: bar `x=256, width=1024`,
+    `scrollWidth == clientWidth == 1280`. No horizontal page scroll at either
+    width, so the **full-bleed variant shipped**.
+  - **Visual.** `topbar-live.png` (1184×49) vs `topbar-mockup.png` (1184×48):
+    both white with a bottom hairline, breadcrumb at the RTL start and the stamp
+    at the far end, content aligned to the page column. Differences (all
+    pre-existing, outside P5, carried to the Task 34 review): the breadcrumb
+    separator is `›` live vs `/` in the mockup, the current-page crumb is not
+    bold live, and the live bar is 49 px (48 px row + 1 px border) vs the
+    mockup's 48 px box. `kpi-live.png` (1044×104) vs `kpi-mockup.png`
+    (1104×101) re-confirm P2's wider secondary cells.
+- **Deviations:** the three breadcrumb/height differences above are recorded for
+  the Task 34 owner review; the surface, border and full-bleed themselves match.
+- **Commit:** recorded in the "Wave C part 2a gate" entry below.

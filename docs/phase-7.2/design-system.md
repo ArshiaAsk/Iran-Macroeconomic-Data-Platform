@@ -502,16 +502,22 @@ overrides a plain `height`. Measured: the row computed **20.8 px** with
 `height: 48px` and **48 px** with `min-height: 48px`; `align-items: center` was
 unaffected. Task 28's `height: 48px` was therefore inert.
 
-**The bar is contained in the 1360 px column, not full-bleed (Step 0b
-correction).** The bar is the first child of `stMainBlockContainer`, so it
-inherits the container's `max-width: 1360px` and its 70 px side padding — its
-content column is `x = 326, width = 1044` at 1440 px, identical to the page
-title's column. This **corrects the Task 28 "no non-bleed deviation"
-statement**: there *is* a non-bleed deviation from the mockup (whose top bar
-spans the full main width). It is **not visible at 1440 px**, because the main
-area is 1184 px — narrower than the 1360 px cap, so the cap does not bind; the
-difference only becomes visible at viewports wider than **1616 px**
-(1360 + 256 sidebar). The max content width stays 1360 px.
+**The bar is full-bleed (P5; Step 0b recorded it as contained).** The bar's
+containing block is Streamlit's inner `stLayoutWrapper`, which sits *inside*
+`stMainBlockContainer`'s 70 px side padding, so Step 0b's plain bar inherited
+that padding and its content column was `x = 326, width = 1044` at 1440 px —
+the same column as the page title, but not the mockup's full-width bar. P5
+makes it full-bleed without letting the two numbers drift: the main container
+declares `--main-pad-x: 70px` and its horizontal padding reads that property,
+and the bar's `width`, `max-width`, negative inline margin and matching inline
+padding all read the same property. Measured at 1440 px: the bar spans
+`x = 256, width = 1184` (right edge 1440), its content stays aligned with the
+page content (`breadcrumb right = 1370 = h1 right`, `stamp left = 326 =
+h1 left`), and `scrollWidth == clientWidth == 1440`. At 1280 px: the bar spans
+`x = 256, width = 1024` and `scrollWidth == clientWidth == 1280`. No
+horizontal page scroll at either width, so the full-bleed variant is kept. The
+max content width stays 1360 px, so above 1616 px the bar tracks the capped
+container.
 
 ## 10. Charts and exports
 
@@ -622,13 +628,13 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | Inline-SVG nav and brand glyphs | A CSS-drawn shape or a Material/Unicode glyph | DOMPurify strips `<svg>` (`st.html` HTML profile) |
 | Callout glyph | A CSS-drawn ring with the "i" dot and stem | The native alert ships no icon element |
 | 48 px top bar | The native header stays 52.5 px; the mockup's bar is a new keyed container | Task 28 — the bar is `st.container(key="top-bar")` with `st.columns`; Step 0b seats it 12 px under the header (`padding-top: 64px`) |
-| Non-bleed top bar | The bar is inside the 1360 px content column, not full-bleed | Step 0b correction — the bar is the main container's first child, so it inherits the container's `max-width` and side padding; not visible at 1440 px (see section 9) |
+| Non-bleed top bar | **Resolved by P5 (Wave C part 2)** — the top bar is full-bleed: the main container declares `--main-pad-x: 70px` and the bar's width, negative inline margin and matching inline padding all read that one property | Step 0b recorded the bar as contained; P5 measured the full-bleed variant at 1440 px and 1280 px with `scrollWidth == clientWidth` and kept it |
 | Metric/subheader type scale | **Resolved by Step 0e** — the theme is now pinned to `TYPE_SCALE` (h1 28px/700, section 18px/600, metric value 28px/600); the mockup's line-heights and the KPI label's 13px/500 are not theme options, and **Task 29** pinned them in `direction.py` | `tokens.py` now holds `TYPE_SCALE`, so the scale is no longer "the theme's own"; the remaining three values are scoped CSS |
 | KPI tag placement | A real `st.badge` beneath the metric, not the mockup's inline label tag (Task 29) | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
 | KPI tooltip glyph | Streamlit's native `help=` marker (a circled `?`) rather than the mockup's circled `i` (Task 29) | The tooltip is the native `st.metric(help=…)`; `st.html` strips `<svg>`, and the native marker cannot be restyled without targeting a hashed class |
 | Secondary KPI cell width | **Resolved by P2 (Wave C part 2)** — `kpi_column_weights` gives each secondary cell weight `1.35` against `1` for a primary cell, matching the mockup's `.kpi.sec{flex:1.35}` | `st.columns` owns the geometry and takes the ratio as weights; Task 29 left the cells equal-width and flagged it, and P2 made the ratio explicit and unit-tested |
 | Freshness last-collection header | **Resolved by P3 (Wave C part 2)** — the Overview freshness table uses the new `table.last_collection` (`آخرین گردآوری`); the generic `table.collection_timestamp` (`زمان گردآوری`) stays for every other surface | The mockup's header is `آخرین گردآوری`; Task 30 reused the generic key and flagged it, and P3 added the dedicated key without changing the shared one |
-| Freshness section summary | The `{fresh} بهروز · {stale} کهنه` trailing text is one muted run, not the mockup's amber stale count (Task 30) | The section header's trailing slot is markdown; colouring one number inside it would need HTML the component does not emit |
+| Freshness section summary | **Resolved by P4 (Wave C part 2)** — the stale count carries the markdown orange directive (`:orange[۲]`), which the theme maps to the warn palette (`orangeColor = #9A5B00`); the fresh count stays uncoloured | Task 30 left the summary one muted run; the section header's trailing slot is markdown, so the colour directive is the native route and needs no HTML fragment |
 | Bar-list domain order | **Resolved by P1 (Wave C part 2)** — `ordered_domain_rows` sorts the rows count-descending, ties by the domain's Persian display name ascending, so the bars match the mockup's order | The mockup's bars are count-descending; Task 31 left `available_domains`'s order and flagged it here, and P1 made the sort explicit and unit-tested |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
 | Filter-bar spacer | A `st.columns` weight, not `flex: 1` | `st.columns` expresses fixed proportions, not "absorb the remainder" |
