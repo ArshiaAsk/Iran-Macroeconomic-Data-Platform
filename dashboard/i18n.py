@@ -91,7 +91,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.indicators_by_domain_total": "جمع",
         "section.available_coverage": "پوشش موجود",
         "section.source_freshness": "تازگی داده‌های هر منبع",
-        "section.freshness_summary": "{fresh} به‌روز · {stale} کهنه",
+        # The stale count is coloured with the markdown orange directive (P4): the
+        # theme maps orange to the warn palette (`orangeColor = #9A5B00`), so the
+        # mockup's amber stale count renders without an HTML fragment. The section
+        # header's trailing slot is markdown, so the directive is the native route.
+        "section.freshness_summary": "{fresh} به‌روز · :orange[{stale}] کهنه",
         "section.key_indicators": "شاخص‌های کلیدی",
         "section.exact_join_counts": "تعداد تطابق‌های دقیق زمانی",
         "section.observations": "مشاهدات",

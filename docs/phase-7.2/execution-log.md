@@ -1765,6 +1765,37 @@ were never staged or committed (Task 7 owns them).
   row (the plan's "reuse the existing key" instruction is superseded by P3).
 - **Commit:** recorded in the "Wave C part 2a gate" entry below.
 
+### P4 — amber stale count in the freshness summary
+
+- **Files:** `dashboard/i18n.py` (`section.freshness_summary` becomes
+  `{fresh} بهروز · :orange[{stale}] کهنه`), `tests/unit/dashboard/test_app_overview.py`
+  (new `test_freshness_summary_string_colours_only_the_stale_count`),
+  `docs/phase-7.2/design-system.md` (§14 "Freshness section summary" row).
+- **Build:** only the stale count is wrapped in the markdown orange directive.
+  The section header's trailing slot is a markdown string (`render_section_header`
+  `trailing=`), so the directive is the native route to the mockup's amber
+  number — no HTML fragment, no CSS hook. The theme maps `orange` to the warn
+  palette (`orangeColor = #9A5B00`), so `:orange[…]` renders the mockup's amber.
+  The fresh count stays uncoloured. The tuple return of `freshness_summary` and
+  the empty-log behaviour are untouched: `page_view.py` still passes
+  `trailing=None` when `freshness.empty`, so the empty state keeps its
+  `render_empty` branch with no summary.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_app_overview.py
+    tests/unit/dashboard/test_i18n.py -q --no-cov` → **45 passed** (1 new; the
+    new test asserts the directive wraps the stale number only, that the fresh
+    number is not wrapped, and that the string still ends with `value.stale`).
+    `dashboard/page_view.py` needed no change for P4 — the summary string is the
+    whole edit.
+  - **Measured (live DOM).** The summary renders three runs; the `کهنه` count's
+    span computes `color: rgb(154, 91, 0)` (= `--warn` / `orangeColor`), and its
+    text is `۳` — the fresh count's span is the muted body colour.
+- **Deviations:** the §14 doc row was written during P4 but landed in the P5
+  commit (`4a5995f`) because P5's `design-system.md` edit was staged after it;
+  the row is present and correct, so P4's own commit carries only the i18n key
+  and the test.
+- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+
 ### P5 — top bar surface, border and full-bleed
 
 - **Files:** `dashboard/components/direction.py` (main container declares

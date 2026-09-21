@@ -187,6 +187,15 @@ def test_overview_freshness_section_header_carries_the_summary(
     assert expected in [element.value for element in app.markdown]
 
 
+def test_freshness_summary_string_colours_only_the_stale_count() -> None:
+    """P4: the stale count carries the markdown orange directive (theme warn)."""
+    summary = t("section.freshness_summary", fresh=format_number(5), stale=format_number(2))
+
+    assert f":orange[{format_number(2)}]" in summary
+    assert f":orange[{format_number(5)}]" not in summary
+    assert summary.endswith(t("value.stale"))
+
+
 def test_overview_freshness_uses_the_markup_strategy_not_a_dataframe(
     fake_streamlit_connection,
 ) -> None:
