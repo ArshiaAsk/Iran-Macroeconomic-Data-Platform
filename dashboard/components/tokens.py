@@ -20,6 +20,7 @@ __all__ = [
     "CHART_CATEGORICAL_COLORS",
     "CHART_CATEGORICAL_COLOR_TOKENS",
     "TOKENS",
+    "TYPE_SCALE",
     "css_custom_properties",
     "custom_properties",
     "token",
@@ -76,6 +77,33 @@ CHART_CATEGORICAL_COLORS: Final[tuple[str, ...]] = tuple(
 No literal colour lives here: the values are token lookups, so the palette
 cannot drift from the theme. ``tests/unit/dashboard/test_tokens.py`` asserts the
 ``config.toml`` list equals this tuple, order included.
+"""
+
+TYPE_SCALE: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "h1-size": "28px",
+        "h1-weight": "700",
+        "h2-size": "18px",
+        "h2-weight": "600",
+        "h3-size": "18px",
+        "h3-weight": "600",
+        "metric-value-size": "28px",
+        "metric-value-weight": "600",
+        "body-size": "14px",
+        "body-weight": "400",
+    }
+)
+"""The mockup's type scale, keyed ``<element>-<property>``.
+
+Sizes are plain px strings and weights are integer strings, so every value
+round-trips through TOML (which stores the theme's weights as ints). The mockup
+declares h1 28px/700 (the page title, ``st.title``), an 18px/600 section title,
+a 28px/600 KPI value and a 14px/400 body. Streamlit renders the section header
+(``st.subheader``) as ``<h3>``, so the 18px/600 section scale is carried on both
+``h2`` and ``h3``. ``tests/unit/dashboard/test_tokens.py`` asserts the theme's
+``headingFontSizes``/``headingFontWeights``/``metricValueFontSize``/
+``metricValueFontWeight``/``baseFontSize``/``baseFontWeight`` equal these values,
+so the scale cannot drift from the theme.
 """
 
 

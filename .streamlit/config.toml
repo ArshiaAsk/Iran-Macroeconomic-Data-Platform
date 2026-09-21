@@ -42,6 +42,20 @@ font = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
 headingFont = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
 codeFont = '"DejaVu Sans Mono", "SFMono-Regular", Menlo, Consolas, monospace'
 
+# Type scale (Step 0e). Pinned to `TYPE_SCALE` in `dashboard/components/tokens.py`
+# and asserted by `tests/unit/dashboard/test_tokens.py`. The mockup declares
+# h1 28px/700 (page title, `st.title`), a section title 18px/600, and a KPI value
+# 28px/600; body is 14px/400. Streamlit's `st.subheader` (the section header)
+# renders `<h3>`, so the 18px/600 section scale is carried on both h2 and h3.
+# Sizes are px (not rem) so the values equal the mockup exactly regardless of the
+# themed root size. Values left at Streamlit's defaults are still written out so
+# the token/theme equality test covers the whole scale.
+headingFontSizes = ["28px", "18px", "18px"]
+headingFontWeights = [700, 600, 600]
+metricValueFontSize = "28px"
+metricValueFontWeight = 600
+baseFontWeight = 400
+
 # Alert colours (orange=warn, blue=accent/info, red=err, green=ok). Yellow has
 # no mockup token and is folded into the warn palette.
 redColor = "#B42318"

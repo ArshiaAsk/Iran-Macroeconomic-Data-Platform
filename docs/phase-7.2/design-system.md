@@ -101,7 +101,12 @@ the tests can compare — `test_tokens.py` asserts the chart palette equals
 | `textColor` | `text-1` |
 | `borderColor` | `border` |
 | `baseRadius` / `buttonRadius` | `radius` |
-| `baseFontSize` | `14` |
+| `baseFontSize` | `14` (`TYPE_SCALE["body-size"]`) |
+| `baseFontWeight` | `400` (`TYPE_SCALE["body-weight"]`) |
+| `headingFontSizes` | `["28px", "18px", "18px"]` (`TYPE_SCALE` h1/h2/h3 sizes) |
+| `headingFontWeights` | `[700, 600, 600]` (`TYPE_SCALE` h1/h2/h3 weights) |
+| `metricValueFontSize` | `"28px"` (`TYPE_SCALE["metric-value-size"]`) |
+| `metricValueFontWeight` | `600` (`TYPE_SCALE["metric-value-weight"]`) |
 | `font` / `headingFont` | The Persian-first family list with an OS fallback tail (`Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif`) |
 | `codeFont` | The mono list (`"DejaVu Sans Mono", "SFMono-Regular", Menlo, Consolas, monospace`) |
 | `[[theme.fontFaces]]` | `Vazirmatn`, `app/static/Vazirmatn.ttf`, weight `100 900` |
@@ -114,8 +119,19 @@ the tests can compare — `test_tokens.py` asserts the chart palette equals
 The `font`/`codeFont` values are **not** the `font-ui`/`font-mono` token
 strings: the theme takes a richer family list (with `IRANSans`/`Menlo` before the
 generic tail), while `direction.py` repeats the token stack as `FONT_STACK` for
-the CSS that must not depend on the theme. Only the palette, the radii and the
-base size are asserted token-equal (`test_tokens.py`).
+the CSS that must not depend on the theme. The palette, the radii, the base size
+and the **type scale** are asserted token-equal (`test_tokens.py`).
+
+**Type scale (Step 0e).** `tokens.py` holds `TYPE_SCALE` (sizes in px, weights as
+integer strings) and the theme is pinned to it. Measured on the live app:
+`st.title` (h1) is **28px/700** (the mockup's page title), `st.subheader` (h3 —
+the section header) is **18px/600** (the mockup's section title; `h2` carries the
+same value so `st.header` would match), `st.metric` values are **28px/600** (the
+mockup's KPI value) and body text is **14px/400**. Before Step 0e the live sizes
+were h1 38.5px, h3 24.5px and metric 31.5px/400, so all three now match the
+mockup. The mockup's `line-height` values (h1 1.4, section 1.5, body 1.85) and
+the KPI label's 13px/500 are **not** theme options; they remain component-level
+gaps (Task 19/29) and are recorded in section 15.
 
 `client.toolbarMode` is set to `"viewer"` (Task 28). The custom `[theme]`
 already hides the theme toggle (section 9), so this suppresses the native Deploy
@@ -601,7 +617,7 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | Callout glyph | A CSS-drawn ring with the "i" dot and stem | The native alert ships no icon element |
 | 48 px top bar | The native header stays 52.5 px; the mockup's bar is a new keyed container | Task 28 — the bar is `st.container(key="top-bar")` with `st.columns`; Step 0b seats it 12 px under the header (`padding-top: 64px`) |
 | Non-bleed top bar | The bar is inside the 1360 px content column, not full-bleed | Step 0b correction — the bar is the main container's first child, so it inherits the container's `max-width` and side padding; not visible at 1440 px (see section 9) |
-| Metric/subheader type scale | The theme's own scale | `tokens.py` holds no type-scale tokens; the scale belongs to the `[theme]` layer |
+| Metric/subheader type scale | **Resolved by Step 0e** — the theme is now pinned to `TYPE_SCALE` (h1 28px/700, section 18px/600, metric value 28px/600); the mockup's line-heights and the KPI label's 13px/500 are not theme options (see section 15) | `tokens.py` now holds `TYPE_SCALE`, so the scale is no longer "the theme's own" |
 | KPI tag placement | A real `st.badge` beneath the metric | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
 | Filter-bar spacer | A `st.columns` weight, not `flex: 1` | `st.columns` expresses fixed proportions, not "absorb the remainder" |
@@ -613,6 +629,12 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 - **Task 33** lands the D11 AST guard with its first `MIGRATED_PAGES` entry.
 - **Task 47** extends this document with the top bar, the sidebar shell and the
   screenshot script, plus the per-archetype review outcomes.
+- **Type-scale gaps (Step 0e).** The theme now matches the mockup's font sizes and
+  weights, but three mockup values are not theme options and remain component-level
+  work for Task 19/29: the heading/body **line-heights** (h1 1.4, section 1.5,
+  body 1.85), the **KPI label** (mockup 13px/500; Streamlit's `stMetricLabel`
+  computes 12.25px/400), and the **secondary KPI value** (mockup 20px; the theme
+  sets one metric-value size, 28px).
 - **Deferred:** dark mode (D14), the explicit refresh control, indicator search on
   domain pages, the IMF forecast/actual labeling (needs an ETL change), and the
   cache-TTL item.

@@ -166,9 +166,10 @@ a Chromium binary, which is why it is run explicitly above.
 
 Wave B adds the sidebar shell (brand, DB status, active item), the nav icon map,
 the freshness TTL fix and the top bar/breadcrumb with the last-collection stamp.
-Step 0 then closed three shell defects found in review: the brand wrapped to two
-lines (0a), the top bar sat 67.5 px below the native header (0b), and the
-page-spec lookup depended on display text (0c).
+Step 0 then closed four shell defects found in review: the brand wrapped to two
+lines (0a), the top bar sat 67.5 px below the native header (0b), the page-spec
+lookup depended on display text (0c), and the heading/metric type scale was
+Streamlit's default rather than the mockup's (0e).
 
 ### Method
 
@@ -228,18 +229,18 @@ per-wave rule is **no new errors and no regressions**.
 
 | Gate | Command | Result |
 |---|---|---|
-| Full quality gate | `make check` | **1347 passed, 3 skipped, 136 deselected** in 167.4 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Full quality gate | `make check` | **1351 passed, 3 skipped, 136 deselected** in 152.8 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
 | Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
-| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **531 passed** |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **535 passed** |
 | Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** (PNG + SVG render through Kaleido 1.4.0) |
 | Ten-page AppTest smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed**, no page raises |
 | Working tree | `git status --short` | clean |
 
 **Against the baseline.** The Wave B start-of-wave baseline was **1341 passed /
 3 skipped** (full) and **525 passed** (dashboard subset); after Step 0 the counts
-are **1347 / 3 skipped** and **531**. The +6 is the Step 0 tests (0a: brand
+are **1351 / 3 skipped** and **535**. The +10 is the Step 0 tests (0a: brand
 single-line + no-wrap; 0b: top-bar row `min-height`; 0c: four page-spec-lookup
-tests), so **nothing regressed**.
+tests; 0e: four type-scale tests), so **nothing regressed**.
 
 ### Accepted deviations carried in Wave B
 

@@ -1404,3 +1404,44 @@ were never staged or committed (Task 7 owns them).
   from the new assets/docs being committed.
 - **Deviations:** none new. The Wave B accepted deviations (48 px non-bleed top
   bar; CSS-pinned text brand) are restated in `VALIDATION.md`.
+
+## Step 0e — type scale pinned to the mockup
+
+- **Files:** `.streamlit/config.toml`, `dashboard/components/tokens.py`,
+  `tests/unit/dashboard/test_tokens.py`, `docs/phase-7.2/design-system.md`
+  (§3, §14, §15), `docs/phase-7.2/wave-c-assets/type-scale/` (10 PNGs).
+- **Build:**
+  - **Mockup scale read.** `overview-redesign-mockup.html`: h1 `28px/700`
+    (line-height 1.4), section title `18px/600` (h2, line-height 1.5), KPI value
+    `28px/600`, KPI label `13px/500`, body `14px/400` (line-height 1.85).
+  - **Option names confirmed** via `streamlit.config.get_config_options()`:
+    `theme.headingFontSizes` (h1–h6 array), `theme.headingFontWeights`,
+    `theme.metricValueFontSize`, `theme.metricValueFontWeight`,
+    `theme.baseFontWeight`. `headingFontSizes`/`headingFontWeights` are arrays of
+    up to six; `metricValueFontWeight`/`baseFontWeight` are ints.
+  - **Measured before (live, 1440×900):** h1 **38.5px/700** (2.75rem × 14px root),
+    section header — `st.subheader`, rendered as `<h3>` — **24.5px/600**,
+    `st.metric` value **31.5px/400**, metric label 12.25px/400, body 14px/400.
+  - **Change.** Added `TYPE_SCALE` to `tokens.py` (sizes as px strings, weights as
+    integer strings) and pinned the theme to it: `headingFontSizes = ["28px",
+    "18px", "18px"]`, `headingFontWeights = [700, 600, 600]`,
+    `metricValueFontSize = "28px"`, `metricValueFontWeight = 600`,
+    `baseFontWeight = 400`. The section header renders as `<h3>`, so the mockup's
+    18px/600 section scale is carried on both `h2` and `h3`.
+  - **Measured after:** h1 **28px/700**, `<h3>` **18px/600**, `st.metric` value
+    **28px/600**, body 14px/400 — all three match the mockup exactly.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_tokens.py -q --no-cov` → 16
+    passed (4 new: heading sizes, heading weights, metric value, body weight).
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **535 passed**;
+    `make check` → **1351 passed, 3 skipped, 136 deselected**, coverage 89.22 %;
+    `poetry run mypy src dashboard` → 0 errors; ruff check/format clean.
+  - Screenshots (`wave-c-assets/type-scale/`): 10 pages at 1440×900; the page
+    title, section headings and KPI values are visibly smaller and the KPI values
+    bolder, and more content fits above the fold (e.g. the Overview freshness
+    table now reaches it) — the intended effect of the smaller heading scale.
+- **Deviations / remaining gaps (not theme options).** The mockup's line-heights
+  (h1 1.4, section 1.5, body 1.85), the KPI label's 13px/500 (`stMetricLabel`
+  computes 12.25px/400) and the secondary KPI value's 20px (the theme sets one
+  metric-value size, 28px) cannot be expressed by the theme; they are recorded in
+  `design-system.md` §15 as Task 19/29 component work.

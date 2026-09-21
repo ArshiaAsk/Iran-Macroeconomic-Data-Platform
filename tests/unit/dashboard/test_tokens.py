@@ -18,6 +18,7 @@ import pytest
 from dashboard.components.tokens import (
     CHART_CATEGORICAL_COLORS,
     TOKENS,
+    TYPE_SCALE,
     css_custom_properties,
     custom_properties,
     token,
@@ -125,7 +126,40 @@ def test_theme_colour_and_radius_values_equal_their_tokens() -> None:
 def test_theme_base_font_size_is_the_mockup_body_size() -> None:
     # The mockup sets body{font-size:14px}; no :root token carries it, so it is
     # asserted directly against the mockup body rule rather than a token.
-    assert _theme_section()["baseFontSize"] == 14
+    assert _theme_section()["baseFontSize"] == int(TYPE_SCALE["body-size"].removesuffix("px"))
+
+
+# --- Step 0e: the theme's type scale equals TYPE_SCALE ---
+
+
+def test_theme_heading_font_sizes_match_the_type_scale() -> None:
+    # `st.title` -> h1, `st.subheader` (the section header) -> h3; h2 carries the
+    # same 18px section scale so `st.header` would match too.
+    theme = _theme_section()
+    assert theme["headingFontSizes"] == [
+        TYPE_SCALE["h1-size"],
+        TYPE_SCALE["h2-size"],
+        TYPE_SCALE["h3-size"],
+    ]
+
+
+def test_theme_heading_font_weights_match_the_type_scale() -> None:
+    theme = _theme_section()
+    assert theme["headingFontWeights"] == [
+        int(TYPE_SCALE["h1-weight"]),
+        int(TYPE_SCALE["h2-weight"]),
+        int(TYPE_SCALE["h3-weight"]),
+    ]
+
+
+def test_theme_metric_value_matches_the_type_scale() -> None:
+    theme = _theme_section()
+    assert theme["metricValueFontSize"] == TYPE_SCALE["metric-value-size"]
+    assert theme["metricValueFontWeight"] == int(TYPE_SCALE["metric-value-weight"])
+
+
+def test_theme_body_weight_matches_the_type_scale() -> None:
+    assert _theme_section()["baseFontWeight"] == int(TYPE_SCALE["body-weight"])
 
 
 def test_theme_chart_categorical_colours_are_token_colours() -> None:
