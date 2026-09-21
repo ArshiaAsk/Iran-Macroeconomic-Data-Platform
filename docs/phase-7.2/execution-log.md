@@ -2114,3 +2114,58 @@ were never staged or committed (Task 7 owns them).
 
 **Wave C is complete except for the AM-23 owner sign-off. Per the execution rules,
 this session stops here and does not start Task 35.**
+
+---
+
+## Wave D — generic domain explorer (A2)
+
+Wave D covers the four A2 pages (`gdp`, `trade_energy`, `fx_gold`, `labor`):
+Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
+
+## Step 0a — Gregorian range cells take the table body font
+
+- **Files:** `dashboard/components/direction.py` (`_TABLE_RULES`: the `.dt .ltr`
+  rule split into `.dt .ltr` + `.dt .ltr.idl`), `tests/unit/dashboard/test_direction.py`
+  (new `test_ltr_range_cells_inherit_the_body_font_but_ids_stay_mono`),
+  `docs/phase-7.2/design-system.md` (§8 typed-cell model),
+  `docs/phase-7.2/wave-d-assets/step-0a/{before,after}/*.png` (4 new).
+- **Build:** the Overview coverage table renders a Gregorian range
+  (World Bank / IMF / EIA) as an `Ltr(num=True)` cell — `<bdi class="ltr num">` —
+  and a Jalali range as a `Text(num=True)` cell. The bare `.dt .ltr` rule carried
+  the mockup's **id** style (`font-family: var(--font-mono); font-size: 11.5px`),
+  so the Gregorian ranges rendered smaller than the Jalali ranges and the count
+  cells. The mockup renders those ranges as a plain `td.num`
+  (`overview-redesign-mockup.html:215`: `<td class="num">۱۹۶۰ – ۲۰۲۵</td>`) and
+  reserves `.ltr` for the id (`<bdi class="ltr idl">`), so the mono/11.5 px style
+  now hangs off `.dt .ltr.idl` and the bare rule keeps only the LTR direction,
+  `unicode-bidi: isolate`, the inline-block box and the 24ch ellipsis. Direction,
+  ordering, tooltips and every other column are unchanged; the unit chip keeps
+  its own mono 11.5 px rule.
+- **Measured (live app, 1440 px, coverage table, `getComputedStyle`)**
+  — identical for the Gregorian range, the Jalali range and the count cell after
+  the fix:
+
+  | Cell | `font-family` | `font-size` | `font-weight` | `line-height` | `letter-spacing` | direction / bidi |
+  |---|---|---|---|---|---|---|
+  | **Before** Gregorian range (`bdi.ltr.num`) | `"DejaVu Sans Mono", monospace` | **11.5 px** | 400 | 17.825 px | normal | ltr / isolate |
+  | **Before** Jalali range (`span.num`) | Vazirmatn, IRANSans, Tahoma, … | **13.5 px** | 400 | 20.925 px | normal | rtl / normal |
+  | **Before** count (`span.num`) | Vazirmatn, IRANSans, Tahoma, … | **13.5 px** | 400 | 20.925 px | normal | rtl / normal |
+  | **After** Gregorian range | Vazirmatn, IRANSans, Tahoma, … | **13.5 px** | 400 | 20.925 px | normal | ltr / isolate (unchanged) |
+  | **After** Jalali range | Vazirmatn, IRANSans, Tahoma, … | 13.5 px | 400 | 20.925 px | normal | rtl / normal |
+  | **After** count | Vazirmatn, IRANSans, Tahoma, … | 13.5 px | 400 | 20.925 px | normal | rtl / normal |
+  | **After** indicator id (`bdi.ltr.idl`) | `"DejaVu Sans Mono", monospace` | 11.5 px | 400 | 17.825 px | normal | ltr / isolate |
+
+  The Gregorian range gained **+2 px** of font size and switched family from the
+  mono stack to Vazirmatn, so it now matches the Jalali range and the count cell
+  exactly; the id is byte-identical to before.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_direction.py -q --no-cov`
+  → **30 passed**; the dashboard subset → **623 passed** (622 before, +1 new
+  test); `poetry run mypy src dashboard` → **0 errors**; `ruff check`/`ruff
+  format --check` clean. Before/after crops of one World Bank row and one TGJU
+  row are in `wave-d-assets/step-0a/`: the TGJU (Jalali) row is byte-identical
+  and only the two Gregorian range cells in the World Bank row change size.
+- **Deviations:** none new. The remaining difference between a Gregorian (LTR)
+  and a Jalali (RTL) range cell is **direction only**, which is the D3 bidi
+  decision and stays as recorded (the owner lists it as an optional Wave H
+  polish candidate).
+- **Commit:** this entry is committed with the Step 0a commit.

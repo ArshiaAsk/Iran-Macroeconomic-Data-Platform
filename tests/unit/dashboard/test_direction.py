@@ -20,6 +20,7 @@ from dashboard.components.direction import (
     inject_direction_css,
     plotly_template,
 )
+from dashboard.components.html_table import Ltr, build_html_table
 from dashboard.components.tokens import CHART_CATEGORICAL_COLORS, token
 
 INJECTION_SCRIPT = (
@@ -61,6 +62,36 @@ def test_direction_css_pins_the_ltr_grid_and_plotly_canvases() -> None:
 
     assert f'{CSS_SELECTORS["dataframe"]} {{ direction: ltr; }}' in css
     assert f'{CSS_SELECTORS["plotly_chart"]} {{ direction: ltr; }}' in css
+
+
+def test_ltr_range_cells_inherit_the_body_font_but_ids_stay_mono() -> None:
+    """Step 0a: the mono/11.5 px style belongs to the id line, not to every LTR cell.
+
+    A Gregorian range cell is LTR *and* numeric, so it shares the ``ltr`` class
+    with an indicator id; only the id line (``idl``) may take the mockup's mono
+    11.5 px, so the Gregorian range inherits the table body cell font exactly
+    like the Jalali range and the count cells. The class relationship the CSS
+    keys on is asserted on the rendered markup too, so the two cannot drift.
+    """
+    css = direction_css()
+    ltr_rule = css.split(".dt .ltr {", 1)[1].split("}", 1)[0]
+    id_rule = css.split(".dt .ltr.idl {", 1)[1].split("}", 1)[0]
+
+    # The bare rule keeps the direction and isolation...
+    assert "direction: ltr" in ltr_rule
+    assert "unicode-bidi: isolate" in ltr_rule
+    # ...and no longer forces the id's font on a range cell.
+    assert "font-family" not in ltr_rule
+    assert "font-size" not in ltr_rule
+    # The id line keeps the mockup's mono 11.5 px.
+    assert "font-family: var(--font-mono)" in id_rule
+    assert "font-size: 11.5px" in id_rule
+
+    # The classes the two rules key on are the ones the cell model emits.
+    assert '<bdi class="ltr num">' in build_html_table(["r"], [[Ltr("1960 – 2025", num=True)]])
+    assert '<bdi class="ltr idl">' in build_html_table(
+        ["i"], [[Ltr("NY.GDP.MKTP.CD", mono_id=True)]]
+    )
 
 
 def test_main_block_heading_line_heights_match_the_mockup() -> None:

@@ -311,10 +311,16 @@ _TABLE_RULES: Final[tuple[str, ...]] = (
     ".dt .num { font-variant-numeric: tabular-nums; }",
     ".dt .name { font-weight: 600; }",
     ".dt .sm { font-size: 12px; color: var(--text-3); display: block; }",
-    ".dt .ltr { direction: ltr; unicode-bidi: isolate; "
-    "font-family: var(--font-mono); font-size: 11.5px; display: inline-block; "
+    # The LTR *direction* is the whole point of this rule, so it stays on every
+    # ``.ltr`` cell. The mono family and the 11.5 px size are the *id* style and
+    # apply only to the id line (``.idl``): a Gregorian range cell is also LTR and
+    # numeric, but the mockup renders it as a plain ``td.num`` that inherits the
+    # table body cell font (Step 0a). Keeping mono/11.5 px on the bare ``.ltr``
+    # made the World Bank/IMF/EIA ranges visibly smaller than the Jalali ones.
+    ".dt .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; "
     "max-width: 24ch; overflow: hidden; text-overflow: ellipsis; "
     "vertical-align: bottom; }",
+    ".dt .ltr.idl { font-family: var(--font-mono); font-size: 11.5px; }",
     ".dt .idl { display: block; color: var(--text-3); margin-top: 1px; }",
     ".unit { direction: ltr; unicode-bidi: isolate; display: inline-block; "
     "font-family: var(--font-mono); font-size: 11.5px; background: var(--neutral-bg); "

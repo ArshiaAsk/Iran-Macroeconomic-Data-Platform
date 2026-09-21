@@ -448,7 +448,7 @@ is checked by the type checker rather than by a format string:
 | Cell | Renders |
 |---|---|
 | `Text(value, title=None, num=False)` | Plain text; `None` renders the missing-value em-dash. `num=True` adds the mockup's `num` class (tabular figures; Task 32) |
-| `Ltr(value, title=None, num=False, mono_id=False)` | A left-to-right mono token (an indicator id), `unicode-bidi: isolate` so it cannot flip the table. `num=True` adds `num` (a Gregorian range is numeric *and* LTR); `mono_id=True` adds the block-level muted `idl` line the coverage table puts an id on (Task 32) |
+| `Ltr(value, title=None, num=False, mono_id=False)` | A left-to-right token, `unicode-bidi: isolate` so it cannot flip the table. `num=True` adds `num` (a Gregorian range is numeric *and* LTR); `mono_id=True` adds the block-level muted `idl` line the coverage table puts an id on (Task 32). **The mono family and the 11.5 px size belong to the id line only** (`.dt .ltr.idl`, Step 0a): a Gregorian range cell is also `Ltr` but inherits the table body cell font, exactly like the Jalali range and the count cells, so the two calendars render at the same size |
 | `UnitChip(value, title=None)` | A left-to-right mono chip for a unit (`current US$`) |
 | `StatusChip(label, tone, title=None)` | An HTML/CSS chip with a tone dot — **never** `st.badge` |
 | `Dot(label, tone, title=None)` | An HTML/CSS status dot |
