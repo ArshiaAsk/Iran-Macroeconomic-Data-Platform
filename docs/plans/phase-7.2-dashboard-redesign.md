@@ -1103,7 +1103,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 34, 38–40.
 - **Acceptance:**
-  - [ ] Owner sign-off recorded, or defects filed.
+  - [x] Owner sign-off recorded, or defects filed. — **APPROVED** 2026-09-22
+    (recorded in `validation/archetype-emphasis.md` §10; 15 MATCH rows accepted,
+    3 deviations approved). Signed off in Wave F Step 0a.
 - **Verify:** Manual browser checklist.
 
 ---

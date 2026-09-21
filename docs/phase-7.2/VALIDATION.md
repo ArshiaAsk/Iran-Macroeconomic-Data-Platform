@@ -980,3 +980,29 @@ are the only new tests. **Nothing regressed.**
 - The Wave H carry list from Wave D (F1, F2, F5, F7, filter-bar shape,
   Gregorian/Jalali range direction, `neutralise()` scroll no-op Task 47) is
   unchanged.
+
+## Wave E part C — owner sign-off (docs only)
+
+**Scope.** Wave E close-out: record the owner's decision on the emphasis-domain
+review (`validation/archetype-emphasis.md`, Task 41) and tick its plan box. No
+code change; the Wave F Step 0a commit carries this record.
+
+| Item | Commit | Delta |
+|---|---|---|
+| Task 41 sign-off | *(this commit)* | `validation/archetype-emphasis.md` §10 added (status → **SIGNED OFF — APPROVED**); README status → "Wave E complete; Wave F/G in progress"; plan Task 41 box ticked |
+
+Recorded verbatim on 2026-09-22:
+
+- Owner sign-off: **APPROVED**; the 15 MATCH rows accepted.
+- Approved deviations:
+  - the shared `render_filters` set on Inflation/Welfare/Market — aligning it
+    with `render_filter_bar` remains an optional Wave H polish candidate;
+  - Market's derived-panel titles stay a raw `st.subheader` (resolved display
+    strings, visually identical to `render_section_header`);
+  - Inflation's three explanatory captions rendered as info callouts (contract:
+    notices are callouts).
+- Not needed: routing Welfare's two top-level caveats through
+  `render_callout_stack` (no rendered difference).
+
+**Gate.** Documentation-only change: no test run is required (the Wave F gate
+re-runs the full suite). The tree contains only `docs/` edits.

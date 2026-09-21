@@ -2772,3 +2772,21 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   diffs are inflation 0 %, welfare 30.2 %, market 3.0 % (callout strips only).
   No test run is needed for a docs-only task; the Scope B gate re-runs the suite.
 - **Commit:** this entry is committed with the Task 41 commit.
+
+## Wave F — Step 0a (record the Wave E owner sign-off; docs only)
+
+- **Files:** `docs/phase-7.2/validation/archetype-emphasis.md` (status →
+  SIGNED OFF — APPROVED; new §10 sign-off record), `docs/phase-7.2/VALIDATION.md`
+  (new "Wave E part C — owner sign-off" section), `docs/phase-7.2/README.md`
+  (status → "Wave E complete; Wave F/G in progress"; archetype-emphasis added to
+  the Documents list), `docs/plans/phase-7.2-dashboard-redesign.md` (Task 41 box
+  ticked with the 2026-09-22 APPROVED note).
+- **Recorded verbatim:** owner sign-off **APPROVED**, the 15 MATCH rows accepted;
+  three approved deviations (shared `render_filters` set on the three pages —
+  Wave H polish candidate; Market's derived-panel `st.subheader` titles; Inflation's
+  three explanatory captions as info callouts); the Welfare callout-stack routing
+  is **not needed** (no rendered difference).
+- **Verify:** docs-only; no code or test change. The Wave F gate re-runs the full
+  suite.
+- **Deviations:** none.
+- **Commit:** Step 0a commit.
