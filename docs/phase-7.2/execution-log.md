@@ -1342,3 +1342,34 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** the real bar has no `surface` background or bottom border
   (the mockup draws a white strip with a `border-bottom`); that is Task 28's
   accepted styling, unchanged here — Step 0b is geometry only.
+
+## Step 0c — page-spec lookup is registry-derived, not display-text-derived
+
+- **Files:** `dashboard/app.py`, `tests/unit/dashboard/test_app_router.py`.
+- **Build:**
+  - `_build_page` now passes `url_path=_page_url_path(spec)` to `st.Page`, so
+    each page carries a stable registry-derived identifier.
+  - `_page_url_path(spec)` returns `spec.key`, **except** for the default page,
+    where it returns `""` — `StreamlitPage.url_path` short-circuits to the empty
+    string when `default=True`, regardless of the value passed in.
+  - `_current_page_spec` matches the selected page on `url_path`
+    (`getattr(selected_page, "url_path", "")`) instead of `t(f"nav.{key}")`.
+    The breadcrumb can no longer be broken by a translated nav label.
+  - A page outside the registry (or a stub with no `url_path`) now **falls back
+    to the default page's spec** rather than raising. The breadcrumb is chrome;
+    a missing label must not take down an otherwise-rendering page.
+  - `_PageLike` is a structural `Protocol` declaring `url_path` as a
+    **read-only property** (matching `StreamlitPage.url_path`, which is one) so
+    the lookup is unit-testable without a Streamlit script run.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_app_router.py
+    tests/unit/dashboard/test_layout.py -q --no-cov` → 59 passed.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → 531 passed (no
+    regression; 525 baseline + the 0a/0b/0c additions).
+  - `poetry run mypy src dashboard` → 0 errors; `ruff check`/`format --check`
+    on both files → clean.
+  - New tests: two distinct keys resolve by `url_path`; `_page_url_path` returns
+    `""` for the default and the key otherwise; a non-registry page and a
+    `url_path`-less stub both fall back to the default spec.
+- **Deviations:** none. The prior `RuntimeError` on a lookup miss is replaced by
+  a documented fallback, which is the intended robustness change.

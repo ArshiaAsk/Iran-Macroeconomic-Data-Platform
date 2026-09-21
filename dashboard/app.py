@@ -5,6 +5,8 @@ page modules under ``dashboard/pages/`` stay standalone-runnable so they can
 still be driven directly by ``AppTest``.
 """
 
+from typing import Protocol
+
 import streamlit as st
 
 from dashboard.components.direction import inject_direction_css
@@ -14,17 +16,51 @@ from dashboard.i18n import t
 from dashboard.navigation import GROUPS, PAGES, PageSpec
 
 
+class _PageLike(Protocol):
+    """The one attribute :func:`_current_page_spec` reads off a router page.
+
+    A structural type (rather than ``st.Page``) keeps the lookup testable
+    without a Streamlit script run, where ``st.Page`` degrades to a stub. The
+    member is a read-only property because ``StreamlitPage.url_path`` is one,
+    so a plain settable attribute would not match it structurally.
+    """
+
+    @property
+    def url_path(self) -> str:
+        ...
+
+
+def _page_url_path(spec: PageSpec) -> str:
+    """Return the ``url_path`` the registry gives a page's ``st.Page``.
+
+    Each page is built with ``url_path=spec.key`` (see :func:`_build_page`), so
+    the selected page maps back to its registry entry by a stable identifier
+    instead of by display text. The one exception is the default page:
+    ``StreamlitPage.url_path`` returns the empty string when ``default=True``,
+    regardless of the value passed in.
+    """
+    return "" if spec.is_default else spec.key
+
+
+def _default_page_spec() -> PageSpec:
+    """Return the registry's default page (the safe fallback spec)."""
+    return next(spec for spec in PAGES if spec.is_default)
+
+
 def _build_page(spec: PageSpec) -> st.Page:
     """Build one router page from its registry entry.
 
     The nav label comes from the string catalog (``nav.<key>``), so the sidebar
     and the page's own ``st.title`` (``page.<key>``) share one translated value
-    instead of a hardcoded literal.
+    instead of a hardcoded literal. ``url_path`` is set to the registry key so
+    the router's selected page can be mapped back to its :class:`PageSpec`
+    without comparing display strings (Step 0c).
     """
     return st.Page(
         spec.path,
         title=t(f"nav.{spec.key}"),
         icon=spec.icon,
+        url_path=_page_url_path(spec),
         default=spec.is_default,
     )
 
@@ -53,30 +89,30 @@ def render_database_status() -> None:
         render_status_dot(t("app.db_status_offline"), tone="err")
 
 
-def _current_page_spec(selected_page: st.Page) -> PageSpec:
+def _current_page_spec(selected_page: _PageLike) -> PageSpec:
     """Find the registry spec matching the page currently selected by the router.
 
-    ``st.navigation`` returns the current :class:`Page`, and ``Page.title`` is set
-    to ``t(f"nav.{spec.key}")`` by :func:`_build_page`, so the selected page maps
-    back to exactly one :class:`PageSpec`.
+    The match is on ``url_path``, which :func:`_build_page` sets to the registry
+    key (:func:`_page_url_path`), so the lookup is derived from the registry's
+    own identifiers and **never** from display text — a translated nav label
+    cannot break the breadcrumb (Step 0c).
+
+    A page that is not in the registry (or a stub without ``url_path``) falls
+    back to the default page's spec instead of raising: the breadcrumb is
+    chrome, and a missing label must not take down a page that otherwise
+    renders.
 
     Args:
-        selected_page: The :class:`Page` returned by ``st.navigation``.
+        selected_page: The page returned by ``st.navigation``.
 
     Returns:
-        The matching :class:`PageSpec` from the registry.
-
-    Raises:
-        RuntimeError: When the selected page title does not match any registry
-            entry (this should never happen because the router builds its pages
-            from the registry).
+        The matching :class:`PageSpec`, or the default page's spec on a miss.
     """
-    selected_title = selected_page.title
+    selected_path = getattr(selected_page, "url_path", "")
     for spec in PAGES:
-        if t(f"nav.{spec.key}") == selected_title:
+        if _page_url_path(spec) == selected_path:
             return spec
-    message = f"could not find PageSpec for selected page title: {selected_title!r}"
-    raise RuntimeError(message)
+    return _default_page_spec()
 
 
 def main() -> None:
