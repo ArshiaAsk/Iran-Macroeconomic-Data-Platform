@@ -1150,4 +1150,4 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. Chose 900 s (15 min) because staleness is measured in
   days; the TTL is short enough to reflect a new collection run quickly without
   re-querying on every Streamlit rerun.
-- **Commit hash:** pending
+- **Commit hash:** `00024ba`
