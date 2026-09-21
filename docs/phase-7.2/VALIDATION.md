@@ -1,8 +1,8 @@
 # Phase 7.2 Validation Report
 
-**Status:** Wave B complete (shell — Tasks 25–28 + Step 0 close-out); Wave C not
-started. The visual review recorded here is 2026-09-21 against a populated local
-database.
+**Status:** Wave B complete (shell — Tasks 25–28 + Step 0 close-out); **Wave C
+part 1 complete** (Step 0f + Tasks 29–31, Overview page). The visual review
+recorded here is 2026-09-21 against a populated local database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
 **Wave 0 evidence:** [wave-0-spike.md](wave-0-spike.md) ·
@@ -253,3 +253,146 @@ tests; 0e: four type-scale tests), so **nothing regressed**.
   so the text brand is emitted from `t("app.brand")` via a
   `[data-testid="stSidebarHeader"]` `::after` rule; the mark is a CSS `::before`.
   Recorded in `design-system.md` and Task 27.
+
+---
+
+## Wave C part 1 — Overview page (Step 0f + Tasks 29–31)
+
+**Scope.** Wave C part 1 is the Overview page only. It is the first wave that
+*adopts* the Wave A shared components, so this is the first section of this
+report where they are visible in a screenshot. Three page-composition tasks plus
+one capture-tooling step:
+
+| Step / task | Commit | Delta |
+|---|---|---|
+| Step 0f | `e6d701f` | Harden `scripts/dashboard_screenshots.py`; re-capture `wave-b-assets/all-pages/welfare.png` |
+| Task 29 | `db49a81` | Overview KPI band (6 cells) + scoped KPI/heading typography |
+| Task 30 | `288ea81` | Overview freshness table (typed cells, pure builder) |
+| Task 31 | `bba20ae` | Overview domain bars + the `[7, 5]` two-column row |
+
+### Step 0f — capture tooling
+
+The Wave B `welfare.png` was captured while a chart was still settling, so it
+carried Streamlit's transient `Stop` status widget. The script now asserts the
+running indicator and every spinner/skeleton are absent before each shot:
+
+- `_TRANSIENT_SELECTORS` (`stStatusWidget`, `stSpinner`, `stSkeleton`),
+  `_SETTLE_RETRIES = 20`, `_SETTLE_POLL_MS = 250`, `_SETTLE_QUIET_MS = 500`.
+- `wait_until_settled(page, page_key)` requires a *quiet* window (no transient
+  selector present for `_SETTLE_QUIET_MS`) and is called both from `wait_ready`
+  and again immediately before each `capture`.
+- `ScreenshotNotReadyError` makes a page that never settles fail loudly instead
+  of writing a bad image.
+
+`welfare.png` was re-captured with the hardened script; the `Stop` widget is
+gone (verified in the re-capture below).
+
+### Task 29 — KPI band
+
+The 4-column metric row **and** the separate series-inventory row are replaced by
+one `render_kpi_band` of six cells in mockup order: `منابع`, `حوزهها`,
+`شاخصهای فعال`, `مشاهدات لایه طلایی`, `سریهای مشتقشده`, `سریهای بدون ردیف
+فهرست`. Derived + orphan form a visually separated secondary group (a leading
+divider via the `:has()` boundary rule) and the orphan cell carries the
+`نیازمند بررسی` badge; the three annotated cells carry `help=` tooltips.
+`_render_series_inventory` is removed. Derived and orphan counts are **not**
+deduped (D2) — they are two overlapping views of the same series, exactly as the
+mockup draws them.
+
+**Computed typography vs mockup.** The mockup's type is partly inexpressible in
+the Streamlit theme (the theme has no per-element label weight or heading
+line-height knob), so it is applied as scoped CSS in `direction.py` and verified
+by computed style, not by eyeballing:
+
+| Element | Mockup | Computed (live DOM) | Match |
+|---|---|---|---|
+| `h1` (page title) | 39.2 px / lh 1.4 | 39.2 px / **1.4** | yes |
+| `h3` (section header) | 27 px / lh 1.5 | 27 px / **1.5** | yes |
+| KPI label | 13 px / 500 | **13 px / 500** | yes |
+| KPI primary value | 28 px / 600 | 28 px / 600 | yes |
+| KPI secondary value | 20 px | **20 px** | yes |
+| Body markdown | lh 1.85 | 25.9 px / **1.85** | yes |
+| Band direction | `rtl` | `rtl`, 6 cells | yes |
+| Row column ratio | 7 : 5 | measured **1.406** | yes |
+
+Two of these needed main-block scoping: Streamlit's own `h1`/`h3` rule (lh 1.2)
+outranks a bare element selector, so the heading rules are written against
+`[data-testid="stMainBlockContainer"] h1/h3`. The body line-height was measured
+at **1.9** before this task and is now 1.85.
+
+### Task 30 — freshness table
+
+`build_freshness_rows(frame, *, now) -> FreshnessTable` is a **pure function** —
+no Streamlit, no clock — producing typed cells: source `Text`, freshness `Dot`,
+last collection `TwoLine` (clock line + relative-time line), records `number`,
+and run status `StatusChip` reusing the existing chip mapping via the new
+`status_chip_cell` in `layout.py`. Stale rows sort first. The section header's
+trailing slot carries `t("section.freshness_summary")` (`۴ بهروز · ۳ کهنه`), and
+an empty collection log renders `render_empty` rather than an empty table. Tests
+use the **markup strategy** (`html_texts`) because the table is `st.html`.
+`TwoLine` gained an optional trailing `primary_tone` so the freshness verdict can
+colour its primary line.
+
+### Task 31 — domain bars + two-column row
+
+The `st.page_link` inventory list is replaced by `render_bar_list`, and the page
+composes `st.columns([7, 5])` inside a keyed `overview-row` container: freshness
+in the first column (which is the **right-hand** column under RTL) and the domain
+bars in the second. `overview_row` gets an explicit `direction: rtl` rule so the
+column order is stable. The AppTest assertion is `len(app.get("page_link"))`
+rather than `app.page_link` (AppTest exposes no such attribute).
+
+### Per-page pass / defect (ten pages, hardened script)
+
+Captured to `docs/phase-7.2/wave-c-assets/part1-all-pages/`.
+
+| Page | Result |
+|---|---|
+| `overview` | **PASS** — shell; six-cell KPI band in mockup order with the separated secondary group and the `نیازمند بررسی` tag; two-column row (freshness right/wider, bars left); stale-first ordering; both section headers carry trailing summaries; coverage table below |
+| `correlation` | **PASS** — shell + callout; empty-state hint; no defect |
+| `catalog` | **PASS** — shell + `پاک کردن پالایهها` + catalog search + regions table below the fold |
+| `inflation` | **PASS** — shell + callout; multi-select chips; decile section header below |
+| `gdp` | **PASS** — shell; *defect*: chart legend title reads `label` (carry item, see below) |
+| `trade_energy` | **PASS** — shell + callout; empty-state hint |
+| `welfare` | **PASS** — shell + two callouts; **no `Stop` widget** (Step 0f re-capture confirmed) |
+| `fx_gold` | **PASS** — shell + callout; empty-state hint |
+| `market` | **PASS** — shell + five callouts (one warn, four info) |
+| `labor` | **PASS** — shell + callout |
+
+No page regressed relative to the Wave B gate. The only per-page defect is the
+pre-existing `label` legend title on `gdp`.
+
+### Wave C part 1 gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1375 passed, 3 skipped, 136 deselected** in 170.5 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **559 passed** |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** |
+| Ten-page AppTest smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed**, no page raises |
+| Working tree | `git status --short` | clean (assets committed) |
+
+**Against the Wave B gate.** Wave B ended at **1351 passed / 3 skipped** (full)
+and **535 passed** (dashboard subset); part 1 ends at **1375 / 3** and **559**.
+The **+24** is the Step 0f–31 tests (29: band cells + KPI typography; 30:
+freshness builder + `TwoLine` tone + `tehran_clock_label`; 31: bar list + row
+composition) — **nothing regressed**.
+
+### Accepted deviations and carry items
+
+- **Top bar has no surface or border** — the mockup draws a full-bleed white
+  strip with a `border-bottom`. Unchanged from Wave B (accepted deviation); a
+  shell concern, not a Wave C page concern.
+- **English `Choose options` placeholder** — every filter `st.multiselect` shows
+  Streamlit's untranslated default. It is a `render_filter_bar` concern; carried
+  to the page waves (Tasks 32–34 adopt the filter bar).
+- **`label` chart-legend title** — the GDP chart legend title reads `label`
+  (builders pass `color="label"`). A chart-builder fix, carried to its own task.
+- **Derived/orphan counts intentionally overlap (D2)** — no dedupe by design.
+
+### Carry list for Tasks 32–34
+
+1. Top bar: give the strip its surface + `border-bottom` (shell).
+2. Filter controls: adopt `render_filter_bar` so the placeholder is Persian.
+3. Chart builders: drop the `color="label"` legend title.

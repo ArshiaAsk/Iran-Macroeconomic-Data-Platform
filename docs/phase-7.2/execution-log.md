@@ -1655,3 +1655,40 @@ were never staged or committed (Task 7 owns them).
      mockup's bars are count-descending. Not specified by the task and not changed
      (recorded in `design-system.md` §14 for the Task 34 owner review).
   2. **`metric.indicator_count`** added for the footer's "N شاخص" (see above).
+
+## Wave C part 1 gate — Overview page (Step 0f + Tasks 29–31)
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (new "Wave C part 1" section + status),
+  `docs/phase-7.2/wave-c-assets/part1-all-pages/` (10 PNGs).
+- **Build:**
+  - **Gate runs.** `make check` → **1375 passed, 3 skipped, 136 deselected** in
+    170.5 s, coverage **89.22 %** (≥ 80 %); `poetry run mypy src dashboard` →
+    **0 errors**, 68 source files; dashboard subset → **559 passed**; export
+    integration smoke (`test_exports.py -m integration`) → **1 passed**;
+    ten-page AppTest smoke (`test_all_pages_smoke.py`) → **10 passed**.
+  - **All-pages capture.** With the hardened `scripts/dashboard_screenshots.py`
+    (Step 0f) and the Streamlit server running the `bba20ae` tree, captured ten
+    PNGs at 1440×900 into `docs/phase-7.2/wave-c-assets/part1-all-pages/`. Every
+    page shows the shell with **no `Stop` widget, spinner or skeleton** (the
+    settle assertion). Per-page pass/defect lines are recorded in `VALIDATION.md`.
+  - **Overview delta visible in the capture.** Six-cell KPI band in mockup order
+    (sources / domains / active indicators / Gold observations ‖ derived / orphan
+    with the `نیازمند بررسی` tag), the two-column `[7, 5]` row (freshness right,
+    bars left) with trailing section summaries, stale-first freshness ordering,
+    and the coverage table below.
+  - **Computed typography (mockup vs live DOM).** `h1` 39.2 px / lh **1.4**;
+    `h3` 27 px / lh **1.5**; KPI label **13 px / 500**; primary value 28 px / 600;
+    secondary value **20 px**; body **1.85** (was 1.9 before this task); band
+    `direction: rtl` with 6 cells; row ratio measured **1.406** vs the mockup's
+    7:5. The heading rules are main-block-scoped because Streamlit's own
+    `h1`/`h3` lh-1.2 rule outranks a bare element selector.
+  - **Against the Wave B gate.** Wave B ended at 1351/3 (full) and 535 (subset);
+    part 1 ends at 1375/3 and 559 — the **+24** is the Step 0f–31 tests and
+    **nothing regressed**.
+  - **Plan checkboxes.** Tasks 29–31 acceptance boxes are `[x]`; Task 32 remains
+    `[ ]`.
+- **Verify:** all gate commands above are green; `git status --short` clean apart
+  from the new assets/docs being committed.
+- **Deviations:** none new. Carry items restated for Tasks 32–34: (1) top bar has
+  no surface/border; (2) English `Choose options` placeholder (adopt
+  `render_filter_bar`); (3) chart legend title `label`.
