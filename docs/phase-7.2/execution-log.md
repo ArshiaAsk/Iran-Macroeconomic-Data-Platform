@@ -3122,3 +3122,43 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** none (the two new tests pin the separator, the `aria-hidden`,
   the bold crumb and the label escaping).
 - **Commit:** P3 commit.
+
+## Wave H — P4 (screenshot script: real scroll container + `--full-height`; own commit)
+
+- **Files:** `scripts/dashboard_screenshots.py` (`neutralise()` scrolls the real
+  scroll container; new `main_scroll_height`/`full_height_viewport` helpers;
+  `capture(..., full_height=)`; `--full-height` CLI flag),
+  `docs/phase-7.2/design-system.md` (new §16),
+  `docs/phase-7.2/README.md` (capture note),
+  `docs/phase-7.2/wave-h-assets/p4/` (`heights.txt` + `overview-full.png`).
+- **Dev server:** restarted fresh before the capture set (2026-09-22 02:31:30);
+  commit under capture **`31b88b6`** (the P4 change is script-only, so the served
+  app is identical to HEAD).
+- **(a) Scroll container.** `neutralise()` scrolled
+  `[data-testid="stMainBlockContainer"]`, which is the padded content block and is
+  **not** scrollable, so its `scrollTo(0, 0)` was a no-op. It now scrolls
+  `[data-testid="stMain"]` — Streamlit's real scroll container (constant
+  `_MAIN_SCROLL_SELECTOR`).
+- **(b) `--full-height`.** New optional flag (default **off**). Before each shot
+  the viewport is reset to the default height, the main container's
+  `scrollHeight` is measured (bounded to `_MAX_FULL_HEIGHT`, 12000 px), and the
+  viewport is grown to that height. The **reset is load-bearing**: `scrollHeight`
+  never reports less than the current viewport height, so the first full-height
+  run (no reset) produced grouped heights (4637 x3, 4693 x3, 5248 x4 — one group
+  per nav group), each page inheriting the previous page's grown height as a
+  floor. After the reset the per-page heights are independent.
+- **Runs (both against the fresh server):**
+  - default → ten PNGs, **all 1440x900** (the shipped viewport set is unchanged);
+  - `--full-height` → ten PNGs at per-page content heights: catalog 1393,
+    correlation 921, fx_gold 1026, gdp 1811, inflation 4693, labor 1973, market
+    4113, overview 4637, trade_energy 958, welfare 5248. `correlation`/`trade_energy`
+    are genuinely short empty-state pages (just above the 900 px viewport), not
+    padded. `overview-full.png` shows the whole page header→footer with no blank
+    padding. Recorded in `wave-h-assets/p4/heights.txt`.
+- **Verify:** `poetry run ruff check` / `ruff format --check` /
+  `mypy scripts/dashboard_screenshots.py` → **clean**; both live runs exited 0 and
+  wrote ten PNGs each.
+- **Deviations:** the viewport-reset step was **added after** the first full-height
+  run exposed the floor artifact; it is within P4's scope (the flag must capture
+  the true page height).
+- **Commit:** P4 commit.

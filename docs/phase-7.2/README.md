@@ -86,3 +86,11 @@ C–G, so the Wave A screenshots show only the global look and the chart templat
 Local-development note (D14): the settings-menu theme toggle is already absent
 because the app defines a custom `[theme]`; the toolbar can be restored for
 development with `STREAMLIT_CLIENT_TOOLBAR_MODE=developer`.
+
+Screenshot capture (dev-only): `scripts/dashboard_screenshots.py` writes one PNG
+per registered page. The default run captures the shipped **1440x900** viewport;
+`--full-height` captures each page at its own content height (bounded to 12000 px)
+for a whole-page view. Restart the dev server before a capture set and record the
+commit under capture; see
+[`design-system.md`](design-system.md) §16 and
+[`wave-h-assets/p4/heights.txt`](wave-h-assets/p4/heights.txt).

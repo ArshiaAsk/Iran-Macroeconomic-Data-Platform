@@ -721,3 +721,24 @@ against the list above by its own test, so the two cannot drift.
 - **Deferred:** dark mode (D14), the explicit refresh control, indicator search on
   domain pages, the IMF forecast/actual labeling (needs an ETL change), and the
   cache-TTL item.
+
+## 16. Dev-only screenshot capture (`scripts/dashboard_screenshots.py`)
+
+The script is not part of `make check`; it drives headless Chromium through the
+sidebar and writes one PNG per registered page. It has two capture modes:
+
+- **Default (viewport).** Each shot is the shipped **1440x900** viewport. This is
+  the size every Wave A–G capture set uses and it is unchanged by Wave H.
+- **`--full-height` (Wave H P4).** Before each shot the viewport is reset to the
+  default height, the main scroll container's `scrollHeight` is measured (bounded
+  to `_MAX_FULL_HEIGHT`, 12000 px), and the viewport is grown to that height, so
+  a tall page is captured whole instead of clipped to 900 px. The reset matters:
+  `scrollHeight` never reports less than the current viewport height, so without
+  it each page would inherit the previous page's grown height as a floor. The
+  flag defaults **off**, so the shipped viewport set is byte-for-byte unchanged.
+
+Scrolling targets `[data-testid="stMain"]` — Streamlit's real scroll container.
+`stMainBlockContainer` (which the script scrolled before P4) is the padded content
+block and is **not** scrollable, so its `scrollTo` was a no-op. Evidence for both
+modes (per-page dimensions, the reset rationale) is in
+[`wave-h-assets/p4/heights.txt`](wave-h-assets/p4/heights.txt).
