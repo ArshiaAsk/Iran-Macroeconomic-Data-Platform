@@ -1073,4 +1073,4 @@ were never staged or committed (Task 7 owns them).
   "Wave A complete".
 - **Deviations:** none. The gate is "no new errors / no regressions" against the
   recorded counts, as AM-21 requires, not an absolute test count.
-- **Commit hash:** `PENDING`
+- **Commit hash:** `a42b535`
