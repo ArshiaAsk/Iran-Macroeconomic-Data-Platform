@@ -1006,3 +1006,77 @@ Recorded verbatim on 2026-09-22:
 
 **Gate.** Documentation-only change: no test run is required (the Wave F gate
 re-runs the full suite). The tree contains only `docs/` edits.
+
+## Wave F — Step 0 (Wave E sign-off + single-cell KPI band) and Tasks 42–43 (correlation)
+
+**Scope.** Wave F closes Wave E (owner sign-off recorded, docs only), fixes the
+one-cell KPI band width (Step 0b), migrates the A4 comparison / correlation page
+to the layout contract (Task 42), and prepares its owner review (Task 43, not
+signed off).
+
+| Item | Commit | Delta |
+|---|---|---|
+| Step 0a | `2c16584` | Wave E owner sign-off recorded (APPROVED, 15 MATCH rows, three deviations); README → "Wave E complete; Wave F/G in progress"; plan Task 41 box ticked |
+| Step 0b | `8a791ad` | `kpi_band_column_weights` pads a <3-cell band to the four-cell reference width; `render_kpi_band` renders the padding column empty; design-system §4.1; +4 tests |
+| Task 42 | `f557a45` | `render_correlation_page` on the layout contract (page header, three callout caveats, `render_empty`, `render_section_header`, `row_height` on the overlap summary); guard covers A4; one assertion changed (caption → info) |
+| Task 43 | `51dd15e` | `validation/archetype-correlation.md` prepared (owner sign-off **PENDING**); README → "Wave F awaiting owner review" |
+
+### Step 0b — the single-cell KPI band measurement
+
+| Band | Before | After |
+|---|---|---|
+| Market one-cell (`kpi-band-market-level`) | cell **1042.0 px / band 1044.0 px = 99.8 %** | cell **253.5 px = 24.3 %** (one quarter) |
+| Overview six-cell (reference) | primary cell 143.8 px = 13.8 % | unchanged |
+
+The lone cell stretched across the whole content column; it now keeps the
+four-cell reference width and stays at the RTL start (the appended spacer takes
+the far end). Evidence: `wave-f-assets/step-0b/` (before/after crops).
+
+### Per-page pixel diff (wave-f part A vs wave-e part B)
+
+Ten PNGs, 1440×900, viewport-only, captured to
+`docs/phase-7.2/wave-f-assets/partA-all-pages/`.
+
+| Page | Changed | What changed |
+|---|---|---|
+| `correlation` | 0.17 % (x 1061–1369, y 728–780) | the default no-selection empty state is now the shared callout, so it gains the accent bar and the info glyph |
+| `overview` | 0.00 % | nothing |
+| `catalog` | 0.00 % | nothing (Wave G not started) |
+| `inflation` | 0.00 % | nothing |
+| `gdp` | 0.00 % | nothing |
+| `trade_energy` | 0.00 % | nothing |
+| `welfare` | 0.00 % | nothing |
+| `fx_gold` | 0.00 % | nothing |
+| `market` | 0.00 % | nothing at the top viewport — the Step 0b KPI change is **below the fold** (documented in `wave-f-assets/step-0b/`) |
+| `labor` | 0.00 % | nothing |
+
+**No regressions.** The only viewport change is the correlation empty-state
+callout; every other page is byte-identical. The Step 0b change is below the fold
+and is evidenced separately.
+
+### Wave F gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1459 passed, 3 skipped, 136 deselected** in 177.38 s; ruff format/lint and mypy clean; coverage **89.22 %** |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **643 passed** |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed**, 15 deselected |
+| All-pages smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed** |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+| Working tree | `git status --short` | clean (assets committed) |
+
+**Against the Scope A baseline.** The full suite ends at **1459**, exactly
+**+4** over the Wave E **1455** — the four Step 0b KPI tests; nothing else
+changed a test count. The dashboard subset ends at **643**. The Wave E part B
+record recorded **637**, but a **re-measurement at `0ef17fb` in a clean worktree
+returns 639**; the recorded figure was stale by 2. Against the re-measured
+baseline the subset is **+4** (Step 0b only). **Nothing regressed.**
+
+### Carry-forward items for Wave G
+
+- The correlation owner review (Task 43) is **prepared, awaiting sign-off**
+  (`validation/archetype-correlation.md`). The one carried decision (row 4, the
+  shared `render_filters` set) is recorded there; it does not block Wave G.
+- The Wave D carry list (F1, F2, F5, F7, filter-bar shape, Gregorian/Jalali range
+  direction, `neutralise()` scroll no-op Task 47) is unchanged.

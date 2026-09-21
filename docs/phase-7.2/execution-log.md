@@ -2879,3 +2879,23 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   docs-only task; the Scope A gate re-runs the suite.
 - **Deviations:** none.
 - **Commit:** Task 43 commit.
+
+## Wave F — Scope A gate
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (new "Wave F" section),
+  `docs/phase-7.2/wave-f-assets/partA-all-pages/` (ten-page set).
+- **Gate results:** `make check` → **1459 passed, 3 skipped, 136 deselected**
+  (177.38 s), coverage **89.22 %**, ruff clean; `poetry run mypy src dashboard` →
+  **0 errors, 68 source files**; dashboard subset → **643 passed**; export smoke
+  → **1 passed** (15 deselected); all-pages smoke → **10 passed**; working tree
+  clean after the gate commit.
+- **Baseline accounting:** full suite **+4** over Wave E's 1455 (the four Step 0b
+  KPI tests). The dashboard subset is **643**; the Wave E record said 637, but a
+  re-measurement at `0ef17fb` in a clean worktree gives **639** — the recorded
+  figure was stale by 2. Against the re-measured baseline the subset is **+4**.
+- **Pixel diff (vs `wave-e-assets/partB-all-pages/`):** only `correlation` changed
+  (**0.17 %**, the empty-state callout's accent bar/glyph at x 1061–1369,
+  y 728–780); the other nine pages are byte-identical. The Step 0b KPI change is
+  below the fold and evidenced in `wave-f-assets/step-0b/`.
+- **Deviations:** none.
+- **Commit:** Scope A gate commit.
