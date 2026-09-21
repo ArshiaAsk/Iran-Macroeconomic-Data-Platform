@@ -2,12 +2,16 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave B complete** (shell — Tasks 25–28 plus Step 0 close-out). Wave 0 is
+Status: **Wave C awaiting owner review** (Overview reference implementation —
+Step 0f, Tasks 29–33 and the P1–P5 polish are complete; Task 34's AM-23 visual
+review is prepared in
+[`validation/reference-overview.md`](validation/reference-overview.md) and its
+sign-off is **pending**). Wave 0 is
 recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
-[`execution-log.md`](execution-log.md); the Wave A and Wave B visual reviews and
-gates are in [`VALIDATION.md`](VALIDATION.md). Wave C (Overview reference
-implementation) follows, starting at Task 29.
+[`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual
+reviews and gates are in [`VALIDATION.md`](VALIDATION.md). Waves D–H (the
+archetype page migrations) start only once the owner signs Task 34 off.
 
 Documents:
 

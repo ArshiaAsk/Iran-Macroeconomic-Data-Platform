@@ -2030,3 +2030,87 @@ were never staged or committed (Task 7 owns them).
   callout's remaining pixel differences are Task 17's ratified native-alert
   styling and are carried to the Task 34 review, not fixed here.
 - **Commit:** recorded in the "Wave C part 2b gate" entry below.
+
+### Task 34 — the AM-23 owner visual review (prepared, not signed off)
+
+- **Files:** `docs/phase-7.2/validation/reference-overview.md` (new),
+  `docs/phase-7.2/wave-c-assets/task34/` (17 PNGs),
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Task 34's first acceptance box
+  ticked, with a note that the other two are the owner's act),
+  `docs/phase-7.2/VALIDATION.md` (status line + the "Wave C part 2b" section),
+  `docs/phase-7.2/README.md` (status → "Wave C awaiting owner review").
+  **No code changed.**
+- **Build (AM-23):**
+  - **Evidence.** Captured the Overview at **1440×2200** (`overview-1440x2200.png`,
+    the requested frame), the whole page at 1440×4900 (the page is 4637 px tall),
+    and per-region crops — top bar, header (title + callout), callout, KPI band,
+    the two-column row, and the coverage section — each paired with a
+    like-for-like crop of the mockup PNG cut at the same band boundaries
+    (`region-*-mockup.png`). `region-coverage-section-full.png` (1044×3613) shows
+    the whole coverage section, which does not fit in 2200 px.
+  - **Method.** The mockup PNG is a scaled render (2520 px wide, content column
+    1915 px), so pixel equality is not the test. Each row is judged
+    **structurally** (same elements, order, counts, RTL start), **token-level**
+    (computed colours/weights/sizes against the mockup's CSS declarations) and
+    **measured** (`getBoundingClientRect`/`getComputedStyle`).
+  - **The comparison.** `reference-overview.md` walks all **34 rows** of the
+    plan's mockup traceability table, each with live evidence and a verdict:
+    **30 PASS, 4 PASS-with-approved-deviation, 1 FIX recommended**. No element of
+    the mockup is missing and none was silently dropped.
+  - **Findings needing the owner.** **F1** the main content padding is 70 px where
+    the mockup's `.wrap` uses 40 px, so the content column is 60 px narrower at
+    every width (measured 1044 vs 1104 at 1440 px; 1220 vs 1280 at 1920 px) —
+    recommend **FIX** as its own shell task, since the 70 px restates Streamlit's
+    own default and a one-line change moves every page at once. **F2** the
+    breadcrumb separator is `،` where the mockup writes `/` and the current crumb
+    is not bold — recommend **FIX** with F1. **F3** the `gdp` legend title reads
+    `label` (pre-existing) — recommend **FIX** against the chart builders. **F4**
+    the English `Choose options` placeholder on un-migrated pages — recommend
+    **FIX in Waves D–G**. **F5** the shell-wide `st.caption` LTR direction —
+    recommend **FIX** with F1.
+  - **Recommended approvals (A1–A9).** The callout's native-alert styling; the KPI
+    tooltip marker; the native filter selects; the coverage table's in-box scroll;
+    the footnote wording; the 49 px bar (48 px row + 1 px border); the freshness
+    counts and the 54-row table (both **data**, not design); and Task 33's
+    `label_key` addition.
+  - **Measured shell geometry (live, 1440 px).** Sidebar exactly **256 px**;
+    main block `x=256, w=1184, max-width: 1360px`; content column `x=326, w=1044`;
+    top bar `x=256, w=1184, h=49`, `background: rgb(255,255,255)`; `h1` 28 px /
+    lh 1.4; KPI band `1044×103`; row `1044×462` at the measured 1.406 ratio;
+    coverage section `1044×3613`; `scrollWidth == clientWidth == 1184` at 1440 px
+    and `1664 == 1664` at 1920 px, where the block measures exactly 1360 px so the
+    content cap is real.
+- **Verify:** the review document and all 17 PNGs are in place; every traceability
+  row carries a verdict; the plan's Task 34 box 1 is ticked and boxes 2–3 are left
+  for the owner; `git status --short` clean apart from the assets/docs committed
+  here.
+- **Deviations:** none new in code. Task 34 **deliberately applies none of F1–F5**
+  — it is the decision document, and the fixes are shell/chart-builder work that
+  must not ride along with a review.
+- **Commit:** recorded in the "Wave C part 2b gate" entry below.
+
+### Wave C part 2b gate — Scope B close-out
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (the "Wave C part 2b" section + the
+  status line), `docs/phase-7.2/README.md` (status), plus the Task 33 entry above.
+- **Build:**
+  - **Gate runs.** `make check` → **1438 passed, 3 skipped, 136 deselected** in
+    173.5 s, coverage **89.22 %** (≥ 80 %); `poetry run mypy src dashboard` →
+    **0 errors**, 68 source files; the Task 33 verify → **117 passed**; the
+    dashboard subset → **622 passed** (part 2a ended at 610); the export smoke →
+    **1 passed**; the ten-page AppTest smoke → **10 passed**;
+    `ruff check`/`ruff format` clean.
+  - **Against part 2a.** Part 2a ended at 1426/3 (full) and 610 (subset); part 2b
+    ends at 1438/3 and 622. The **+12** is the 10 D11-guard tests and the 2
+    header-label tests; **nothing regressed**.
+  - **Plan checkboxes.** Task 33's acceptance boxes are `[x]`; Task 34's first box
+    is `[x]` and the two owner boxes are left `[ ]` by design.
+  - **README.** Status is now "Wave C awaiting owner review", with the sign-off
+    recorded as pending and Waves D–H blocked on it.
+- **Verify:** all gate commands above are green; `git status --short` clean apart
+  from the assets/docs being committed.
+- **Deviations:** none new.
+- **Commit:** this entry is committed with the part 2b gate commit.
+
+**Wave C is complete except for the AM-23 owner sign-off. Per the execution rules,
+this session stops here and does not start Task 35.**

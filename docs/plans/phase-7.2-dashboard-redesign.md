@@ -1010,10 +1010,16 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 28, 33.
 - **Acceptance:**
-  - [ ] Element-by-element comparison against the mockup recorded, using the mockup traceability table.
+  - [x] Element-by-element comparison against the mockup recorded, using the mockup traceability table.
   - [ ] Every deviation is marked approved (accepted deviation recorded) or fixed (defect filed).
   - [ ] Owner sign-off recorded.
 - **Verify:** Manual browser comparison at 1440 px + review of `docs/phase-7.2/validation/reference-overview.md`.
+
+> **Prepared, not signed off.** The review document, the 1440×2200 capture and the
+> per-region crops are in place, and every traceability row carries a verdict with
+> the deviations recorded as A1–A9 and the five `FIX` recommendations as F1–F5.
+> The two remaining boxes are the **owner's** act: approving the deviations and
+> recording the sign-off. Nothing after this task starts until they are ticked.
 
 ---
 

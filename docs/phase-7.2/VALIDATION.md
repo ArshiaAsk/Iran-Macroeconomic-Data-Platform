@@ -1,11 +1,11 @@
 # Phase 7.2 Validation Report
 
 **Status:** Wave B complete (shell — Tasks 25–28 + Step 0 close-out); **Wave C
-part 1 complete** (Step 0f + Tasks 29–31, Overview page); **Wave C part 2a
-complete** (P1–P5 polish + Task 32 coverage table) — the Overview reference page
-is finished and awaiting the AM-23 owner visual review (Task 34, **not yet
-signed off**). The visual review recorded here is 2026-09-21 against a populated
-local database.
+complete pending the owner's sign-off** (part 1: Step 0f + Tasks 29–31; part 2a:
+the P1–P5 polish + the Task 32 coverage table; part 2b: Task 33's page header +
+methodology callout and the D11 guard; Task 34's AM-23 review is **prepared, not
+signed off** — see [validation/reference-overview.md](validation/reference-overview.md)).
+The visual review recorded here is 2026-09-21 against a populated local database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
 **Wave 0 evidence:** [wave-0-spike.md](wave-0-spike.md) ·
@@ -572,3 +572,111 @@ P4: amber directive; P5: `--main-pad-x`; Task 32: 42 across `test_html_table.py`
 2. Shell-wide `st.caption` direction rule (Task 34 review item).
 3. Top-bar breadcrumb separator/bold/height (Task 34 review item).
 4. AM-23 owner visual review — **prepared, not signed off** (Task 34).
+
+---
+
+## Wave C part 2b — page header + D11 guard (Task 33) and the AM-23 review (Task 34)
+
+**Scope.** Part 2b closes Wave C: Task 33 adopts the page-header pattern on the
+Overview and turns on the D11 layout guard, and Task 34 prepares the AM-23 owner
+visual review. **Task 34 changes no code** — it is evidence and a decision
+document.
+
+| Item | Commit | Delta |
+|---|---|---|
+| Task 33 | `e5fdef3` | `render_page_header` + the bold methodology callout on the Overview; the function-scoped D11 AST guard |
+| Task 34 | this commit | The 1440×2200 capture, the per-region crops and `validation/reference-overview.md` (prepared; sign-off pending) |
+
+### Task 33 — page header, methodology callout and the D11 guard
+
+`render_overview_page` opens with `render_page_header("page.overview",
+callout_key="warn.forecasts_indistinguishable",
+label_key="note.methodology_label")` instead of a raw `st.title` + `st.warning`,
+and the empty-catalog `st.warning` became `render_callout("warn.catalog_empty")`
+— same tone, same text, same early return, but no longer a raw call. The
+Overview's callout now carries the mockup's bold `یادداشت روش‌شناسی` prefix.
+
+**The one plan deviation.** `render_page_header`'s Task 18 signature had no way
+to pass a label, so it gained an optional `label_key` forwarded to
+`render_callout`. The parameter is additive and defaults to `None`, so the
+ratified Task 18 shape is unchanged for every other caller. The plan's Task 33
+file list named only `page_view.py` and the new guard; the `layout.py` addition is
+recorded in design-system §14 rather than slipped in silently.
+
+**The guard.** `tests/unit/dashboard/test_layout_guard.py` is the static half of
+the D11 contract, modelled on `test_literal_guard.py`. It is **function-scoped**
+(`MIGRATED_PAGES` maps module → migrated function names, because every page
+composition lives in one module, AM-14) and starts with the Overview's whole
+composition: `render_overview_page`, `_render_domain_counts`,
+`_render_coverage_section`. `BANNED_FUNCTIONS` is exactly the §12 list plus the
+`unsafe_allow_html` keyword, and `LAYOUT_WHITELIST` is the four shared-component
+modules — pinned to the document by
+`test_the_whitelist_matches_the_design_system_contract`, which derives the §12
+list from `design-system.md` and asserts set equality, so the guard and the
+contract cannot drift.
+
+Measured live (1440 px): the callout container is
+`st-key-callout-warn-forecasts_indistinguishable`, the bold run computes
+`font-weight: 600` / `color: rgb(154, 91, 0)`, and the alert computes
+`background: rgb(251, 241, 220)` (= `--warn-bg`) with
+`border-inline-start: 3px solid currentColor`. `scrollWidth == clientWidth`.
+
+### Task 34 — the AM-23 owner visual review (prepared)
+
+`docs/phase-7.2/validation/reference-overview.md` compares the shipped shell and
+Overview against the mockup **element by element over the plan's mockup
+traceability table** — all 34 rows, each with live evidence and a verdict.
+**Verdict tally: 30 PASS, 4 PASS-with-approved-deviation, 1 FIX recommended.**
+
+Five findings need the owner's decision, and each is presented with a
+recommendation rather than applied, because Task 34 changes no code:
+
+| # | Finding | Recommendation |
+|---|---|---|
+| F1 | The main content padding is 70 px where the mockup's `.wrap` uses 40 px, so the content column is 60 px narrower at every width (1044 vs 1104 at 1440 px) | **FIX** as its own shell task — the 70 px restates Streamlit's own default (P5 needed to name it so the top bar's negative margin could not drift), and a one-line change moves every page at once |
+| F2 | The breadcrumb separator is `،` where the mockup writes `/`, and the current crumb is not bold | **FIX** in the same shell task |
+| F3 | The `gdp` chart legend title reads `label` (pre-existing, carried from the part 1 gate) | **FIX** against the chart builders |
+| F4 | English `Choose options` placeholder on every un-migrated page | **FIX in Waves D–G**, already proven by Task 32 |
+| F5 | A native `st.caption` inherits LTR, so Persian captions hug the left edge (fixed scoped for the coverage footnote only) | **FIX** in the shell task, once the pages have migrated |
+
+Nine deviations are recommended for approval (A1–A9): the callout's native-alert
+styling, the KPI tooltip marker, the native filter selects, the coverage table's
+in-box scroll, the footnote wording, the 49 px bar, the freshness counts and the
+54-row table (both data, not design), and Task 33's `label_key` addition.
+
+**Evidence.** `wave-c-assets/task34/`: `overview-1440x2200.png` (the requested
+capture), `overview-1440x4900.png` (the whole page, which is 4637 px tall),
+`region-{topbar,header,callout,kpi-band,overview-row,coverage-section}.png` and
+the like-for-like `region-*-mockup.png` crops, plus
+`region-coverage-section-full.png` (1044×3613).
+
+### Wave C part 2b gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1438 passed, 3 skipped, 136 deselected** in 173.5 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Task 33 verify | `poetry run pytest tests/unit/dashboard/test_layout_guard.py tests/unit/dashboard/test_app_overview.py tests/unit/dashboard/test_layout.py -q --no-cov` | **117 passed** |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **622 passed** (was 610; +12 = 10 guard + 2 header-label) |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** |
+| Ten-page AppTest smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed**, no page raises |
+| Lint/format | `poetry run ruff check` / `ruff format` | clean |
+
+**Against the part 2a gate.** Part 2a ended at **1426 passed / 3 skipped** (full)
+and **610** (dashboard subset); part 2b ends at **1438 / 3** and **622**. The
+**+12** is the D11 guard and the two header-label tests — **nothing regressed**.
+
+### Accepted deviations and carry items
+
+Task 33's `label_key` addition is the only new plan deviation (design-system §14).
+The F1–F5 findings are carried into `validation/reference-overview.md` for the
+owner's decision; **none of them is applied in Wave C.**
+
+### Carry list for Wave D
+
+1. **AM-23 owner sign-off** on `validation/reference-overview.md` — the gate that
+   unblocks Waves D–H.
+2. The F1–F5 fixes, if the owner files them (F1/F2/F5 are one shell task; F3 is the
+   chart builders; F4 lands per page in Waves D–G).
+3. `MIGRATED_PAGES` grows by one entry per wave (Task 36 for the four A2 pages,
+   then 38–44).
