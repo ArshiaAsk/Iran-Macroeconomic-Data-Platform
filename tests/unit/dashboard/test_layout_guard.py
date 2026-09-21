@@ -63,6 +63,11 @@ MIGRATED_PAGES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
                 "_render_capped_rows",
                 "render_fx_gold_page",
                 "render_labor_page",
+                # A3 — the emphasis-domain pages (Wave E, Task 38: Inflation).
+                "render_inflation_page",
+                "_render_cpi_decile_section",
+                "_render_cpi_canonical_section",
+                "_render_chain_linking_section",
             }
         ),
     }

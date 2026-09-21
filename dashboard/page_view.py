@@ -255,20 +255,25 @@ def render_inflation_page(repository: DashboardRepository | None = None) -> None
     series -- and the generic domain composition below them keeps the World
     Bank/IMF and every other inflation series reachable. Nothing is interpolated,
     normalized or resampled: Gold rows are drawn exactly as stored.
+
+    The composition follows the D11 layout contract (Task 38): the page header,
+    the shared section headers, and the shared empty/notice states. The filter
+    set is unchanged (:func:`render_filters`), so the selection, the chart modes
+    and every value are exactly as before.
     """
-    st.title(t("page.inflation"))
+    render_page_header("page.inflation")
     if repository is None:
         catalog = cached_list_indicators(domains=(INFLATION_DOMAIN,))
     else:
         catalog = repository.list_indicators(domains=[INFLATION_DOMAIN])
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     filters = render_filters(catalog, "inflation", list(INFLATION_DEFAULT_INDICATORS))
     _render_cpi_decile_section(catalog, filters, repository)
     _render_cpi_canonical_section(catalog, filters, repository)
     _render_chain_linking_section(catalog, filters, repository)
-    st.subheader(t("section.inflation_all_indicators"))
+    render_section_header("section.inflation_all_indicators")
     render_domain_body(
         (INFLATION_DOMAIN,),
         "inflation",
@@ -314,10 +319,10 @@ def _render_cpi_decile_section(
     through the generic multi-indicator chart, which would force ten unrelated
     facets onto the page's main selection.
     """
-    st.subheader(t("section.cpi_deciles"))
+    render_section_header("section.cpi_deciles")
     decile_ids = cpi_decile_ids(catalog)
     if not decile_ids:
-        st.info(t("empty.no_cpi_deciles"))
+        render_empty("empty.no_cpi_deciles")
         return
     selected = st.multiselect(
         t("filter.cpi_deciles"),
@@ -327,16 +332,24 @@ def _render_cpi_decile_section(
         key="inflation_deciles",
     )
     if not selected:
-        st.info(t("empty.select_indicators"))
+        render_callout("empty.select_indicators", tone="info", container_key="cpi-deciles")
         return
     series = _load_series(list(selected), filters.start_date, filters.end_date, repository)
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="cpi-deciles")
         return
-    st.caption(t("warn.cpi_deciles_shared_base"))
+    render_callout("warn.cpi_deciles_shared_base", tone="info")
     scaled = build_scaled_time_series_chart(series, mode=CHART_MODE_SMALL_MULTIPLES)
     if scaled.notice:
-        st.info(scaled.notice)
+        # The notice carries values, so its resolved text passes through ``body``
+        # and the key is the container hook only. A distinct container key keeps
+        # it from colliding with the generic composition's chart notice.
+        render_callout(
+            "chart.notice",
+            tone="info",
+            body=scaled.notice,
+            container_key="cpi-deciles-chart-notice",
+        )
     st.plotly_chart(scaled.figure, use_container_width=True)
 
 
@@ -351,14 +364,14 @@ def _render_cpi_canonical_section(
     ``B<year>`` segments stay off the dashboard), drawn through
     :func:`build_time_series_chart` so each keeps its own panel and axis.
     """
-    st.subheader(t("section.cpi_canonical"))
+    render_section_header("section.cpi_canonical")
     canonical_ids = cpi_canonical_ids(catalog)
     if not canonical_ids:
-        st.info(t("empty.no_cpi_canonical"))
+        render_empty("empty.no_cpi_canonical")
         return
     series = _load_series(canonical_ids, filters.start_date, filters.end_date, repository)
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="cpi-canonical")
         return
     st.plotly_chart(build_time_series_chart(series), use_container_width=True)
 
@@ -410,6 +423,54 @@ def chain_linking_provenance(catalog: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=columns)
 
 
+class ChainLinkingProvenanceTable(NamedTuple):
+    """The chain-linking provenance table ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in
+            :func:`chain_linking_provenance`'s order
+        rows: One tuple of typed cells per chain-linked indicator
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def build_chain_linking_provenance_rows(
+    frame: pd.DataFrame,
+) -> ChainLinkingProvenanceTable:
+    """Build the provenance table as typed cells from the localized frame.
+
+    The frame is the output of :func:`chain_linking_provenance`, whose cells are
+    already Persian display text (the indicator label, the Persian yes/no flag,
+    the Persian-digit base years and the joined segment ancestry). Each value
+    therefore maps to a plain :class:`~dashboard.components.html_table.Text`
+    cell, so the rendered table is byte-identical to the grid it replaces; a null
+    (never produced today) falls back to the shared em-dash through ``Text(None)``.
+
+    Args:
+        frame: Frame from :func:`chain_linking_provenance`
+
+    Returns:
+        A :class:`ChainLinkingProvenanceTable`; an empty frame yields no columns
+        and no rows
+    """
+    if frame.empty:
+        return ChainLinkingProvenanceTable((), ())
+    rows = tuple(
+        tuple(_provenance_cell(value) for value in row)
+        for row in frame.itertuples(index=False, name=None)
+    )
+    return ChainLinkingProvenanceTable(tuple(str(column) for column in frame.columns), rows)
+
+
+def _provenance_cell(value: object) -> Cell:
+    """One provenance cell: plain text, or the shared em-dash for a null."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return Text(None)
+    return Text(str(value))
+
+
 def _flag_label(value: object) -> str:
     """Display a stored boolean flag as the Persian yes/no, never inventing a yes."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -440,22 +501,31 @@ def _render_chain_linking_section(
     ``chain_linking_confidence`` and ``record_metadata`` unchanged. No value is
     recomputed, interpolated or normalized.
     """
-    st.subheader(t("section.chain_linking"))
-    st.caption(t("warn.chain_linking_stored"))
+    render_section_header("section.chain_linking")
+    render_callout("warn.chain_linking_stored", tone="info")
     chain_ids = chain_linked_catalog_ids(catalog)
     if not chain_ids:
-        st.info(t("empty.no_chain_linked"))
+        render_empty("empty.no_chain_linked")
         return
     flagged = catalog[catalog["indicator_id"].isin(chain_ids)]
-    st.dataframe(chain_linking_provenance(flagged), use_container_width=True, hide_index=True)
-    st.caption(t("warn.chain_linking_overlap"))
+    provenance = build_chain_linking_provenance_rows(chain_linking_provenance(flagged))
+    render_html_table(provenance.columns, provenance.rows, variant="coverage")
+    render_callout("warn.chain_linking_overlap", tone="info")
     series = _load_series(chain_ids, filters.start_date, filters.end_date, repository)
     if series.empty:
-        st.info(t("empty.no_chain_linked_observations"))
+        render_callout(
+            "empty.no_chain_linked_observations",
+            tone="info",
+            container_key="chain-linking",
+        )
         return
     figure = build_chain_linking_chart(series)
     if not figure.data:
-        st.info(t("empty.no_chain_linked_observations"))
+        render_callout(
+            "empty.no_chain_linked_observations",
+            tone="info",
+            container_key="chain-linking-figure",
+        )
         return
     st.plotly_chart(figure, use_container_width=True)
     with st.expander(t("section.observations"), expanded=False):

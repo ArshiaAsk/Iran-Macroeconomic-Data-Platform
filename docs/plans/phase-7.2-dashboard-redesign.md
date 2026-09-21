@@ -1068,9 +1068,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `section.cpi_*`, `section.chain_linking`, `warn.chain_linking_*`.
 - **Depends:** Tasks 15–22, 34, 36.
 - **Acceptance:**
-  - [ ] Inflation renders through the shared components; no chart/value change.
-  - [ ] Guard enabled for the Inflation functions.
-  - [ ] The migrated provenance table's assertions use the markup strategy, not `app.dataframe`.
+  - [x] Inflation renders through the shared components; no chart/value change.
+  - [x] Guard enabled for the Inflation functions.
+  - [x] The migrated provenance table's assertions use the markup strategy, not `app.dataframe`.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout_guard.py -q` + the inflation smoke path.
 
 ### 39. (E) MIGRATE the Welfare page emphasis sections

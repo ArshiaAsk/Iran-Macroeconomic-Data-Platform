@@ -2525,3 +2525,83 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   `dashboard/`/`tests/`.
 - **Deviations:** none. This closes Wave D DEFECT 1.
 - **Commit:** this entry is committed with the Step 0b commit.
+
+---
+
+## Wave E — Task 38 (Inflation page emphasis sections)
+
+- **Files:** `dashboard/page_view.py` (`render_inflation_page`,
+  `_render_cpi_decile_section`, `_render_cpi_canonical_section`,
+  `_render_chain_linking_section`, new `build_chain_linking_provenance_rows` +
+  `ChainLinkingProvenanceTable` + `_provenance_cell`),
+  `tests/unit/dashboard/test_layout_guard.py` (MIGRATED_PAGES += the four
+  Inflation functions), `tests/unit/dashboard/test_app_economy.py` (imports
+  `html_texts` + `build_chain_linking_provenance_rows`; rewrote two caption
+  assertions to `app.info`; added the provenance markup assertion and two
+  builder tests).
+- **Build (Task 35 pattern):**
+  - `render_inflation_page` opens with `render_page_header("page.inflation")`;
+    the catalog-empty `st.info` is `render_empty`; the "all indicators"
+    subheader is `render_section_header`.
+  - The CPI decile / canonical / chain-linking section subheaders are
+    `render_section_header`; every empty `st.info` is `render_callout(...,
+    tone="info", container_key=...)` (distinct keys, because
+    `empty.no_observations` / `empty.select_indicators` / the two
+    `empty.no_chain_linked_observations` occurrences can legitimately fire on
+    the same run as the generic composition's `render_empty`, and the callout
+    container key derives from the body key — a bare `render_empty` would raise
+    on a repeated key). The chart notice `st.info(scaled.notice)` is
+    `render_callout("chart.notice", tone="info", body=scaled.notice,
+    container_key="cpi-deciles-chart-notice")`.
+  - The three explanatory `warn.*` captions (`warn.cpi_deciles_shared_base`,
+    `warn.chain_linking_stored`, `warn.chain_linking_overlap`) became
+    `render_callout(..., tone="info")` notices — the plan's "callouts
+    (chain-linking stored/overlap)" read literally, and the rule "render_callout
+    for every notice" applied to the shared-base caption for consistency. The
+    Overview reference keeps its coverage *footnote* as a `st.caption` (a
+    footnote is not a notice); the Inflation captions were notices, so they
+    converted. **Interpretation for the owner.**
+  - The provenance table is a `render_html_table` with typed cells built by the
+    pure `build_chain_linking_provenance_rows(frame)` from the already-localized
+    `chain_linking_provenance` frame; every cell is plain `Text` (the frame is
+    Persian display text, Persian-digit years and joined segment labels), and a
+    null falls back to the shared em-dash. The grid stays a `st.dataframe` only
+    for the observations expander (`_render_capped_rows`,
+    `row_height=OBSERVATIONS_ROW_HEIGHT`).
+  - **Table variant chosen by measured width:** the provenance table measured
+    **1232 px** in the `default` variant inside the 1042 px content column
+    (190 px of sideways scroll inside its own `overflow-x: auto` wrapper), and
+    **1042 px** in the `coverage` variant (`.dt.cov`, no sideways scroll). The
+    `coverage` variant is chosen so the table fits the page column. `.cov` is
+    documented for the two wide coverage/quality tables; the provenance table's
+    long segment-ancestry column makes it wide, so `coverage` is the
+    width-fitting choice. **Recorded for the owner.**
+- **Changed test assertions (Wave E):**
+  - `test_inflation_page_states_that_the_deciles_share_a_unit_and_base_year`:
+    `app.caption` → `app.info` (the notice is a callout now).
+  - `test_inflation_page_renders_the_chain_linking_section`: the two
+    `app.caption` assertions → `app.info` (stored/overlap are callouts now).
+  - New `test_the_provenance_table_is_an_html_table_with_localized_headers`
+    (markup via `html_texts`: four `<th scope="col">` headers + the Urban row's
+    yes flag and both segment labels).
+  - New `test_build_chain_linking_provenance_rows_maps_every_cell_to_plain_text`
+    (pure builder: every cell is `Text`; values equal the frame's cells).
+  - New `test_build_chain_linking_provenance_rows_is_empty_safe`.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_app_economy.py
+  tests/unit/dashboard/test_layout_guard.py -q --no-cov` → **34 passed**;
+  dashboard subset → **634 passed** (was 630; +4 new Inflation tests);
+  `poetry run mypy src dashboard` → **0 errors**, 68 source files.
+- **Visual evidence:** `docs/phase-7.2/wave-e-assets/task-38/` — `before-top/`
+  (copied from `wave-d-assets/partB-all-pages/inflation.png`, the pre-Wave-E
+  reference), `after-top/inflation.png` (page header + filters + decile section
+  with the shared-base info callout), and `after-scroll/{cpi-decile,
+  cpi-canonical,chain-linking}.png`. The chain-linking crop shows the section
+  header, the stored/overlap info callouts, the `coverage`-variant provenance
+  HTML table (Urban row, no sideways scroll) and the chain-linking chart.
+- **Note:** the dev Streamlit server was stale against the migration (started
+  Sep 21, not reloading on save in this sandbox); it was restarted once to
+  capture the migrated renders. The AppTest gate runs the fresh code
+  regardless.
+- **Deviations:** the `coverage` variant on the provenance table and the
+  caption→callout conversion are recorded above for the owner.
+- **Commit:** this entry is committed with the Task 38 commit.
