@@ -724,3 +724,81 @@ and the sign-off line now reads **APPROVED (2026-09-21)**.
 | Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
 
 Wave C is **closed**; Wave D starts from this record.
+
+## Wave D part A — Step 0 (F3/F4 fixes) and Task 35 (generic domain composition)
+
+Step 0a (Gregorian range font size) and Step 0b (the AM-23 sign-off record) are
+documented in "Wave C part 2c" above and in the execution log. This section
+records **Task 35**, the A2 archetype's migration to the layout contract.
+
+### Task 35 — the generic domain composition
+
+The four A2 pages (GDP & Economy, Trade & Energy, FX & Gold, Labor) now render
+through the shared components: the filter set, a chart section header, the chart
+and its mode control, a quality section header, the quality summary as the shared
+RTL HTML table, the observations grid in its expander, and the downloads.
+
+| Change | Detail |
+|---|---|
+| Quality summary → HTML table (D1) | `build_quality_rows` builds typed cells from `localize_table_frame`'s output, so columns, values, Persian digits, Jalali dates and em-dashes are identical to the old grid. `coverage` variant: measured **1040 px** at the page's 1042 px column (fits) vs `default` **1324 px** and `default`+`compact` **1242 px** (both scroll sideways) |
+| Section headers | `render_section_header("section.chart")` and `render_section_header("section.quality")` (new keys); observations keep their expander |
+| Shared empty states | Every composition `st.info` → `render_empty`; the chart-mode and row-cap notices → `render_callout(…, body=…)` with a per-caller container key |
+| Observations density (D1) | `st.dataframe(row_height=OBSERVATIONS_ROW_HEIGHT)` = 40 px (the `.dt.compact` row height) |
+| **F3** legend title | `apply_plotly_typography` blanks `legend_title_text`; `color="label"` no longer renders an English `label` heading. Affects every time-series chart: the four A2 pages + Inflation, Welfare, Market, Correlation |
+| **F4** placeholder | `render_filters` passes `placeholder=t("filter.placeholder")` ("انتخاب کنید") to its four multiselects and two Jalali selectboxes. Affects every page that renders it: gdp, trade_energy, fx_gold, labor, inflation, welfare, market, correlation, catalog (Overview unaffected) |
+
+### Visual evidence (ten pages + four detail sets)
+
+`docs/phase-7.2/wave-d-assets/`: `partA-all-pages-before/` and
+`partA-all-pages/` (ten pages each, 1440×900), plus
+`task-35/before-scroll/` and `task-35/after-scroll/` (the four A2 pages at four
+scroll offsets each). Pixel diff of the ten before/after pairs:
+
+| Page | Changed pixels | What changed |
+|---|---|---|
+| overview | **0** | nothing — the Overview is untouched |
+| correlation, catalog, inflation, welfare, market | 1977–2636, all inside one 87 px strip at x≈335–422 | the filter widgets' placeholder text (F4) only |
+| gdp, trade_energy, fx_gold, labor | 5766–77611 | F4 placeholders + the new section headers + the HTML quality table + (trade_energy, fx_gold) the shared empty-state callout |
+
+Read from the crops: the GDP quality table shows all eleven columns with Persian
+digits (`۶۶`, `۰`, `خیر`, `سالانه`) and no sideways scroll; the Labor single-quarter
+row reads `۱ / ۱ / خیر / ۰` with Jalali dates; no chart legend carries a `label`
+heading any more.
+
+### Accepted deviations and carry items
+
+1. **"One filter bar" is the shared `render_filters`.** The domain filter set
+   renders its own stacked native widgets; Task 35 does not restructure it onto
+   `render_filter_bar`. The plan's file list has no filter-bar refactor, no mockup
+   prescribes a domain-page bar, and widgets, labels, keys and the returned
+   `FilterState` are unchanged. **For the owner's Task 37 review.**
+2. **`_render_capped_rows` gained a required `key_prefix`** (the callout
+   container key), because the Market page renders several grids in one run. One
+   call site in `test_scaling.py` was updated; no behaviour change.
+3. **`RecordingStreamlit` (test_quality.py) gained an `html` recorder.** The plan
+   described that file as pure-helper only; it also drives the render path, so the
+   stub was extended and three tests added for the new builder and its markup.
+4. **The quality table's id cell is capped at 24ch** by the shared `.dt .ltr`
+   rule (`SCI.UNEMPLOYMENT.QUARTERLY` → `SCI.UNEMPLOYMENT.QUAR...`). The cell
+   carries the full id as its `title`, so the token is recoverable on hover — the
+   same cap and tooltip practice the coverage table already uses. **For the
+   owner's review** rather than widening a global rule.
+5. **Titles and caveats are still raw** on the four pages
+   (`render_domain_page`'s `st.title`, `render_fx_gold_page`, `render_labor_page`).
+   Task 36 routes them through `render_page_header`/`render_callout` and enables
+   the D11 guard; Task 35 deliberately stops at the composition.
+6. **Observation for the screenshot script's owner (Task 47):**
+   `neutralise()` scrolls `stMainBlockContainer`, which is not the scroll
+   container (`stMain` is), so its scroll-to-top is a no-op. Captures are
+   unaffected because each page navigation starts at the top.
+
+### Wave D part A gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Task 35 verify | `poetry run pytest tests/unit/dashboard/test_app_economy.py tests/unit/dashboard/test_app_trade_welfare.py tests/unit/dashboard/test_app_fx_gold.py tests/unit/dashboard/test_app_labor.py tests/unit/dashboard/test_quality.py -q --no-cov` | **66 passed** |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **628 passed** (was 623; +5 new tests) |
+| Full gate | `make check` | **1444 passed, 3 skipped**; coverage **89.22 %** |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** |

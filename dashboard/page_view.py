@@ -43,7 +43,11 @@ from dashboard.components.layout import (
 )
 from dashboard.components.quality import render_quality_summary, summarize_quality
 from dashboard.components.states import render_empty
-from dashboard.components.tables import cap_table_rows, localize_table_frame
+from dashboard.components.tables import (
+    OBSERVATIONS_ROW_HEIGHT,
+    cap_table_rows,
+    localize_table_frame,
+)
 from dashboard.formatting import (
     RANGE_SEPARATOR,
     format_number,
@@ -194,6 +198,11 @@ def render_domain_body(
     drawing a second page title (see :func:`render_welfare_page`). ``catalog`` and
     ``filters`` are passed in when the caller has already rendered them, so the
     domain is never queried or filtered twice.
+
+    The composition is the A2 archetype (D11): the shared filter set, then the
+    chart, quality and observations sections through the shared components. Every
+    empty case goes through :func:`dashboard.components.states.render_empty`, so a
+    page never hand-rolls an informational alert.
     """
     domain_list = list(domains)
     if catalog is None:
@@ -202,7 +211,7 @@ def render_domain_body(
         else:
             catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     if filters is None:
         filters = render_filters(catalog, key_prefix, default_indicators)
@@ -212,7 +221,7 @@ def render_domain_body(
             derived_series_ids(filters.indicator_ids, repository, exclude=selected_ids)
         )
     if not selected_ids:
-        st.info(t("empty.select_indicators"))
+        render_empty("empty.select_indicators")
         return
     if filters.start_date > filters.end_date:
         return
@@ -434,7 +443,7 @@ def _render_chain_linking_section(
         return
     st.plotly_chart(figure, use_container_width=True)
     with st.expander(t("section.observations"), expanded=False):
-        _render_capped_rows(series)
+        _render_capped_rows(series, "chain_linking")
 
 
 def render_market_page(repository: DashboardRepository | None = None) -> None:
@@ -607,7 +616,7 @@ def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> Non
     figure = build_time_series_chart(series)
     st.plotly_chart(figure, use_container_width=True)
     with st.expander(t("section.observations"), expanded=False):
-        _render_capped_rows(series)
+        _render_capped_rows(series, key_prefix)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
     render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
 
@@ -1654,16 +1663,26 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
 
 
 def _render_series_section(series: pd.DataFrame, key_prefix: str) -> None:
+    """Render the A2 archetype's chart, quality and observations sections.
+
+    Order matches the archetype: the chart section (its mode control and the
+    figure), then the quality summary, then the observations grid inside its
+    expander, then the downloads. Nothing about the selection, the chart mode, the
+    row cap or the values changes; only the composition and its section titles are
+    shared components now.
+    """
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_empty("empty.no_observations")
         return
     start = series["timestamp"].min().to_pydatetime()
     end = series["timestamp"].max().to_pydatetime()
     quality = summarize_quality(series, start, end)
+    render_section_header("section.chart")
     scaled = _render_scaled_chart(series, key_prefix)
+    render_section_header("section.quality")
     render_quality_summary(quality)
     with st.expander(t("section.observations"), expanded=False):
-        _render_capped_rows(series)
+        _render_capped_rows(series, key_prefix)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
     render_chart_downloads(scaled.figure, f"iran-macro-{key_prefix}-chart")
 
@@ -1685,7 +1704,9 @@ def _render_scaled_chart(series: pd.DataFrame, key_prefix: str) -> ScaledChart:
     )
     scaled = build_scaled_time_series_chart(series, mode=mode)
     if scaled.notice:
-        st.info(scaled.notice)
+        # The notice carries values, so it passes its resolved text through
+        # ``body`` and uses the key for the callout's container hook only.
+        render_callout("chart.notice", tone="info", body=scaled.notice)
     st.plotly_chart(scaled.figure, use_container_width=True)
     return scaled
 
@@ -1695,23 +1716,36 @@ def _chart_mode_label(mode: str) -> str:
     return t(f"chart.mode.{mode}")
 
 
-def _render_capped_rows(series: pd.DataFrame) -> None:
+def _render_capped_rows(series: pd.DataFrame, key_prefix: str) -> None:
     """Render the observations grid as a bounded preview with a truncation hint.
 
     The cap is presentation-only: it never changes a value, a column or the
     timezone-aware ``timestamp`` column, and the exports and the quality summary
-    still describe the full selection.
+    still describe the full selection. The grid is a large, scrollable table, so it
+    stays a ``st.dataframe`` (D1) with ``row_height`` as its density control.
+
+    ``key_prefix`` names the truncation callout's container: a page can render
+    several grids (the Market page's level and one per derived series), and a
+    repeated container key raises.
     """
     capped = cap_table_rows(series)
     if capped.truncated:
-        st.info(
-            t(
+        render_callout(
+            "table.rows_capped",
+            tone="info",
+            container_key=f"rows-capped-{key_prefix}",
+            body=t(
                 "table.rows_capped",
                 shown=format_number(capped.shown_rows),
                 total=format_number(capped.total_rows),
-            )
+            ),
         )
-    st.dataframe(localize_table_frame(capped.frame), use_container_width=True, hide_index=True)
+    st.dataframe(
+        localize_table_frame(capped.frame),
+        use_container_width=True,
+        hide_index=True,
+        row_height=OBSERVATIONS_ROW_HEIGHT,
+    )
 
 
 def survey_year_frame(series: pd.DataFrame) -> pd.DataFrame:

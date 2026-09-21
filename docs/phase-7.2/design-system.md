@@ -231,7 +231,8 @@ if frame.empty:
 | `build_html_table` | `(columns, rows, *, density=…, null_placeholder=…, variant=…, wrap_headers=…)` | The same table as a markup string (used by the tests). |
 
 `variant` is a closed set — `default` (no modifier class) or `coverage` (the
-mockup's `.dt.cov`, Task 32). `wrap_headers` names the **localized** headers that
+mockup's `.dt.cov`, Task 32), used by the two wide tables: the Overview coverage
+table and the quality summary. `wrap_headers` names the **localized** headers that
 break onto two lines at their last space (the mockup's `تعداد<br>مشاهدات`); a
 header that is not among `columns` raises, so a typo cannot silently do nothing.
 
@@ -240,7 +241,8 @@ header that is not among `columns` raises, so a typo cannot silently do nothing.
 | Component | Signature | Purpose |
 |---|---|---|
 | `render_filters` | `(catalog, key_prefix, default_indicators=None)` | The common domain/frequency/source/indicator/date filter set; returns the exact selection. |
-| `render_quality_summary` | `(quality)` | Quality diagnostics for the selected series. |
+| `build_quality_rows` | `(quality)` | The quality summary as typed cells (`QualityTable`), for `render_html_table`. One row per indicator, the columns `summarize_quality` returns. |
+| `render_quality_summary` | `(quality)` | Quality diagnostics for the selected series: the shared RTL HTML table plus the single-observation and material-gap warnings. |
 
 ### 4.4 Downloads — `components/exports.py`
 
@@ -431,7 +433,7 @@ table (`render_html_table`); a table that must sort, scroll or scale is a
 | Coverage (overview) | 50 | small/static | HTML table |
 | Survey-year panel (welfare) | 2 | small/static | HTML table |
 | Chain-linking provenance (inflation) | ~3 | small/static | HTML table |
-| Quality summary (all domain pages) | = indicator count | small/static | HTML table |
+| Quality summary (all domain pages) | = indicator count | small/static | HTML table (`coverage` variant) |
 | Catalog (catalog) | 50–54 | sortable | `st.dataframe` |
 | Observations (all domain pages) | capped 500 (underlying up to ~20 074) | large/scrollable | `st.dataframe` |
 | Join counts (correlation) | N×N | matrix | `st.dataframe` |
@@ -458,7 +460,9 @@ is checked by the type checker rather than by a format string:
 (`comfortable`/`compact`) and `TABLE_VARIANTS` (`default`/`coverage`) are closed
 sets; an unknown value raises. Density is a CSS class on the table, and it is the
 HTML table's density control — the `st.dataframe` class uses `row_height`
-instead. A density can only shorten a row down to its `height` floor, so a table
+instead (`OBSERVATIONS_ROW_HEIGHT` = 40 px in `components/tables.py`, the
+`.dt.compact` row height, so a dense grid and a dense HTML table read at one
+density). A density can only shorten a row down to its `height` floor, so a table
 whose cells wrap to two lines (the coverage table) changes height by less than
 the floor suggests — measured 64 px → 60 px on the Overview coverage table.
 

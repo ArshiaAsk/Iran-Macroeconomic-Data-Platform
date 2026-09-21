@@ -623,6 +623,14 @@ def apply_plotly_typography(figure: BaseFigure) -> BaseFigure:
     Sizing and trace layout already set on the figure are left untouched: the
     template only supplies typography that the figure has not overridden.
 
+    The **legend title is blanked** (Task 35, finding F3). Plotly Express names
+    the legend after the ``color`` column, and every time-series builder passes
+    ``color="label"`` (the Persian display-label column), so the rendered legend
+    carried the literal English word ``label`` above the series names. The
+    series names and colours are untouched; only that title is removed, and it
+    is cleared here rather than in the template because a figure-level
+    ``legend.title`` outranks the template's.
+
     Args:
         figure: Plotly figure to style in place
 
@@ -630,4 +638,5 @@ def apply_plotly_typography(figure: BaseFigure) -> BaseFigure:
         The same figure, for chaining
     """
     figure.update_layout(template=plotly_template())
+    figure.update_layout(legend_title_text="")
     return figure

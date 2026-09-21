@@ -119,6 +119,23 @@ def test_filter_options_are_localized_but_the_state_keeps_raw_slugs() -> None:
     assert all(domain_label("inflation") != value for value in state.indicator_ids)
 
 
+def test_filter_widgets_carry_the_persian_placeholder() -> None:
+    """F4 (Task 35): an empty widget shows the Persian placeholder.
+
+    Streamlit's own default for an empty multiselect/selectbox is the English
+    "Choose options", which must not appear in the Persian UI.
+    """
+    app = AppTest.from_function(_render_filters_probe).run()
+
+    assert not app.exception
+    placeholder = t("filter.placeholder")
+    assert placeholder != "Choose options"
+    for key in ("probe_domains", "probe_frequencies", "probe_sources", "probe_indicators"):
+        assert app.multiselect(key=key).proto.placeholder == placeholder, key
+    for key in ("probe_jalali_year", "probe_jalali_month"):
+        assert app.selectbox(key=key).proto.placeholder == placeholder, key
+
+
 def test_jalali_preset_echoes_the_applied_range_and_disables_manual_dates(
     fake_streamlit_connection,
 ) -> None:

@@ -1034,8 +1034,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse; `section.observations` already exists.
 - **Depends:** Tasks 15–22, 33, 34.
 - **Acceptance:**
-  - [ ] Four pages render through the same composition; no feature or value changed.
-  - [ ] Quality-table assertions use the markup strategy; other four-page suites pass.
+  - [x] Four pages render through the same composition; no feature or value changed.
+  - [x] Quality-table assertions use the markup strategy; other four-page suites pass.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_economy.py tests/unit/dashboard/test_app_trade_welfare.py tests/unit/dashboard/test_app_fx_gold.py tests/unit/dashboard/test_app_labor.py tests/unit/dashboard/test_quality.py -q`.
 
 ### 36. (D) MIGRATE the domain-page headers and enable the guard

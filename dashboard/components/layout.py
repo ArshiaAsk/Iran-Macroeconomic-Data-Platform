@@ -180,6 +180,7 @@ def render_callout(
     label_key: str | None = None,
     detail: str | None = None,
     container_key: str | None = None,
+    body: str | None = None,
 ) -> None:
     """Render the mockup's callout as a native Streamlit alert.
 
@@ -199,20 +200,24 @@ def render_callout(
         container_key: Optional disambiguator for the CSS hook. Defaults to
             ``key``; pass a distinct value when the same callout renders twice in
             one run (a repeated container key raises in Streamlit)
+        body: Optional **already resolved** callout text that overrides ``t(key)``.
+            ``render_callout`` fills no ``{placeholder}`` fields, so a notice whose
+            message carries values (the chart-mode notice, the row-cap hint) passes
+            its resolved text here and uses ``key`` for the container hook only
 
     Raises:
         ValueError: When ``tone`` is not a known callout tone
     """
     renderer = _CALLOUT_RENDERERS[_validated(tone, CALLOUT_TONES, "callout")]
-    body = t(key)
+    text = t(key) if body is None else body
     if label_key is not None:
         # Markdown emphasis, not markup: st.warning/info/error render markdown, so
         # the label is bold without any HTML (and without an escaping concern).
-        body = f"**{t(label_key)}** {body}"
+        text = f"**{t(label_key)}** {text}"
     if detail is not None:
-        body = f"{body}\n\n{detail}"
+        text = f"{text}\n\n{detail}"
     with st.container(key=f"callout-{container_key if container_key is not None else key}"):
-        renderer(body)
+        renderer(text)
 
 
 def render_page_header(

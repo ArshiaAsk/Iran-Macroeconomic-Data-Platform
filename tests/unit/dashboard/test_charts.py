@@ -339,6 +339,26 @@ def test_every_chart_builder_applies_the_token_categorical_palette() -> None:
         assert list(figure.layout.template.layout.colorway) == list(CHART_CATEGORICAL_COLORS)
 
 
+def test_shared_template_blanks_the_plotly_express_legend_title() -> None:
+    """F3 (Task 35): ``color="label"`` must not surface as an English legend title.
+
+    Plotly Express names the legend after the ``color`` column, and every
+    time-series builder passes ``color="label"``, so without the shared
+    ``apply_plotly_typography`` blanking the figure carried a literal "label"
+    heading above the Persian series names.
+    """
+    frame = series_frame()
+
+    figures = (
+        build_time_series_chart(frame),
+        build_scaled_time_series_chart(frame, mode=CHART_MODE_OVERLAY).figure,
+        build_small_multiples_chart(frame).figure,
+    )
+
+    for figure in figures:
+        assert not figure.layout.legend.title.text
+
+
 def test_correlation_chart_localizes_its_axis_and_colorbar_titles() -> None:
     bundle = build_correlation_chart(series_frame())
 

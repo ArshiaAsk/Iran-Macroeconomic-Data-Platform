@@ -99,6 +99,12 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "section.key_indicators": "شاخص‌های کلیدی",
         "section.exact_join_counts": "تعداد تطابق‌های دقیق زمانی",
         "section.observations": "مشاهدات",
+        # The generic domain composition (Task 35): the chart block and the
+        # per-indicator quality table. The observations block keeps its existing
+        # expander label (``section.observations``) rather than gaining a second
+        # title above the same grid.
+        "section.chart": "نمودار سری‌های انتخاب‌شده",
+        "section.quality": "کیفیت داده",
         # Welfare & Survey page (owns the `welfare` domain).
         "section.hbsir_gini_poverty": "روند جینی و فقر نسبی",
         "section.hbsir_deciles": "سهم درآمدی دهک‌ها",
@@ -186,6 +192,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "filter.density": "چگالی",
         "filter.density_comfortable": "راحت",
         "filter.density_compact": "فشرده",
+        # Widget placeholder (Task 35, F4). Streamlit's own default for an
+        # empty ``st.multiselect``/``st.selectbox`` is the English "Choose
+        # options"; every widget on a migrated page passes this key instead, so
+        # no English default can appear in the Persian UI.
+        "filter.placeholder": "انتخاب کنید",
         # CPI decile selector on the Inflation page (Task 13).
         "filter.cpi_deciles": "دهک‌های هزینه",
         # Chart labels and legends.

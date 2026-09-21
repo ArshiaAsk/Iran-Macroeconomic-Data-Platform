@@ -2205,3 +2205,125 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** none new in code. The `F6` numbering gap is recorded rather
   than invented.
 - **Commit:** this entry is committed with the Step 0b commit.
+
+## Wave D — Task 35: the generic domain composition migrates to the layout contract
+
+- **Files:** `dashboard/page_view.py` (`render_domain_body`, `_render_series_section`,
+  `_render_scaled_chart`, `_render_capped_rows`, `_render_market_figure_and_rows`,
+  `_render_chain_linking_section`), `dashboard/components/quality.py`
+  (`build_quality_rows`, `QualityTable`, `render_quality_summary`),
+  `dashboard/components/tables.py` (`OBSERVATIONS_ROW_HEIGHT`),
+  `dashboard/components/filters.py` (F4 placeholders),
+  `dashboard/components/direction.py` (F3 legend title),
+  `dashboard/components/layout.py` (`render_callout(body=…)`), `dashboard/i18n.py`
+  (`section.chart`, `section.quality`, `filter.placeholder`),
+  `docs/phase-7.2/design-system.md`, and the tests
+  (`test_quality.py`, `test_app_labor.py`, `test_derived_series.py`,
+  `test_scaling.py`, `test_filters.py`, `test_charts.py`).
+- **Build (AM-10):** the A2 archetype is now composed from the shared components.
+  - **Quality table → the shared RTL HTML table (D1).** `render_quality_summary`
+    no longer calls `st.dataframe`; `build_quality_rows` turns the frame into
+    typed cells and `render_html_table` renders it. The values are produced by
+    `localize_table_frame` — the same localizer the observation grid and the
+    exports use — so **every column, value, Persian digit, Jalali date and
+    em-dash is byte-identical** to the old grid; only the presentation changes.
+    The indicator id is an `Ltr` cell (isolated LTR token) and the
+    `NUMBER_COLUMNS` columns are `Text(num=True)` (tabular figures).
+  - **Variant choice (measured).** The summary is eleven columns, so it uses the
+    `coverage` variant. Measured in Chromium at the page's 1042 px column with the
+    real markup: `default`/comfortable **1324 px** and `default`/compact
+    **1242 px** both overflow (sideways scroll); `coverage` **1040 px** fits, so
+    all eleven columns are visible without scrolling. `.dt.cov` is exactly the
+    variant for a wide table with a name column.
+  - **Section headers.** `_render_series_section` now renders
+    `render_section_header("section.chart")` above the chart-mode control and the
+    figure, and `render_section_header("section.quality")` above the summary; the
+    observations stay in their `st.expander`. Chart mode, filters, downloads,
+    row cap and values are untouched.
+  - **Shared empty states.** Every `st.info` in the composition became
+    `render_empty` (`empty.no_indicators_for_page`, `empty.select_indicators`,
+    `empty.no_observations`), and the two value-carrying notices (chart-mode
+    fallback, row-cap hint) became `render_callout(…, body=…)`, which is the
+    pattern `render_callout`'s docstring already documented for them. The row-cap
+    callout takes a `container_key` derived from the caller's key prefix, because
+    the Market page renders several grids in one run and a repeated container key
+    raises.
+  - **Observations grid density (D1).** `st.dataframe(row_height=…)` is now set
+    from the new `OBSERVATIONS_ROW_HEIGHT` = 40 px, the `.dt.compact` row height,
+    so a dense grid and a dense HTML table read at one density. No row, column or
+    value changes.
+  - **F3 — legend title.** `apply_plotly_typography` now blanks
+    `legend_title_text`. Every time-series builder passes `color="label"` (the
+    Persian display-label column), and Plotly Express names the legend after that
+    column, so the rendered legend carried a literal English `label` heading.
+    Fixed at the shared lever (the figure-level `legend.title` outranks the
+    template's), so **every** chart that funnels through it is fixed at once:
+    `build_time_series_chart`, `build_overlay_chart`,
+    `build_small_multiples_chart`, `build_survey_year_chart` and, through them,
+    every page that draws a time series — the four Wave D pages plus Inflation,
+    Welfare, Market and Correlation. Series names and colours are unchanged.
+  - **F4 — placeholder.** `render_filters` passes
+    `placeholder=t("filter.placeholder")` ("انتخاب کنید") to its four
+    multiselects and its two Jalali selectboxes, so Streamlit's English default
+    ("Choose options") can no longer appear. Affected pages (every page that
+    renders `render_filters`): gdp, trade_energy, fx_gold, labor, inflation,
+    welfare, market, correlation, catalog. The Overview is unaffected — its
+    coverage bar uses explicit "همه" options and no placeholder.
+- **Verify:** the plan's command —
+  `poetry run pytest tests/unit/dashboard/test_app_economy.py
+  tests/unit/dashboard/test_app_trade_welfare.py
+  tests/unit/dashboard/test_app_fx_gold.py tests/unit/dashboard/test_app_labor.py
+  tests/unit/dashboard/test_quality.py -q --no-cov` → **66 passed**; the wider dashboard
+  subset → **628 passed** (623 before, +5 new tests); `make check` → **1444
+  passed, 3 skipped**, coverage **89.22 %**, `ruff` clean, `mypy src dashboard`
+  **0 errors**; the export smoke → **1 passed**.
+- **Visual evidence** (`docs/phase-7.2/wave-d-assets/`): ten-page 1440×900 sets
+  `partA-all-pages-before/` (pre-Task-35) and `partA-all-pages/` (post-Task-35),
+  plus scrolled detail shots of the four pages in
+  `task-35/before-scroll/` and `task-35/after-scroll/` (four offsets each). A
+  pixel diff of the ten pairs:
+  - `overview` — **0 changed pixels** (untouched).
+  - `correlation`, `catalog`, `inflation`, `welfare`, `market` — **1977–2636
+    changed pixels**, all inside one 87 px-wide strip at x≈335–422: the six filter
+    widgets' placeholder text (F4). Nothing else on those pages moves.
+  - `gdp`, `trade_energy`, `fx_gold`, `labor` — the four Wave D pages: the F4
+    placeholders plus the new section headers, the HTML quality table and (for
+    the two pages with no default selection) the shared empty-state callout.
+  - Read from the crops: the GDP page's quality table now shows all eleven
+    columns with Persian digits (`۶۶`, `۰`, `خیر`, `سالانه`) and no sideways
+    scroll; the Labor page's single-quarter row reads `۱ / ۱ / خیر / ۰` with the
+    Jalali dates; the chart legend no longer carries the `label` heading.
+- **Deviations / interpretations recorded:**
+  1. **"one filter bar" is the shared `render_filters`.** The archetype line
+     says "filter bar"; the domain filter set is `render_filters`, which renders
+     its own stacked native widgets (the `render_filter_bar` component lays out
+     the Overview coverage bar). Task 35 does not restructure it: the plan's file
+     list does not include a filter-bar refactor, no mockup prescribes a
+     domain-page bar, and the widgets, labels, keys and returned `FilterState` are
+     unchanged. Flagged for the owner's Task 37 review.
+  2. **`_render_capped_rows` gained a required `key_prefix`** (the callout
+     container key). `test_scaling.py`'s probe passes `"capped-probe"`; the three
+     production call sites pass their own prefix. One line, no behaviour change.
+  3. **`RecordingStreamlit` in `test_quality.py` gained an `html` recorder.**
+     The plan states `test_quality.py` "stays green (pure-helper assertions
+     only)"; it in fact has three render-path tests using that stub, and
+     `render_html_table` emits through `html_table`'s own `st`, so the stub is
+     extended (and the module patched) rather than the render path left
+     uncovered. Three new tests cover the builder and the markup.
+  4. **The quality table's id cell is capped at 24ch** by the shared
+     `.dt .ltr` rule, so `SCI.UNEMPLOYMENT.QUARTERLY` renders as
+     `SCI.UNEMPLOYMENT.QUAR...`. The cell now carries the full id as its `title`,
+     so the truncated token is recoverable on hover — the same tooltip practice
+     the coverage table's range cells use, and the same 24ch cap the coverage
+     table's id line already has. Raised for the owner's review rather than
+     widening a global rule.
+  5. **`render_domain_page` still calls `st.title`.** Task 36 routes the four
+     pages' titles and the FX/Gold and Labor caveats through
+     `render_page_header`/`render_callout` and enables the D11 guard for the
+     migrated functions; Task 35 deliberately stops at the composition.
+  6. **Observation (not fixed, out of scope):** `scripts/dashboard_screenshots.py`
+     `neutralise()` scrolls `[data-testid="stMainBlockContainer"]`, which is not
+     the scroll container (`stMain` is), so its scroll-to-top is a no-op. The
+     captures are still correct because each page navigation starts at the top;
+     recorded here for the script's owner (Task 47).
+- **Commit:** this entry is committed with the Task 35 commit.

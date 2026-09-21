@@ -83,6 +83,10 @@ def render_filters(
     :class:`FilterState`) keeps the raw catalog slugs. The date range defaults to
     the catalog coverage; a selected day means a Tehran day, and a Jalali preset
     (when chosen) takes over the range.
+
+    Every ``st.multiselect``/``st.selectbox`` carries the Persian
+    ``filter.placeholder`` (F4): Streamlit's own default for an empty widget is
+    the English "Choose options", which must not appear in the Persian UI.
     """
     domains = unique_values(catalog, "domain")
     frequencies = unique_values(catalog, "frequency")
@@ -92,18 +96,21 @@ def render_filters(
         domains,
         format_func=domain_label,
         key=f"{key_prefix}_domains",
+        placeholder=t("filter.placeholder"),
     )
     selected_frequencies = st.multiselect(
         t("filter.frequency"),
         frequencies,
         format_func=frequency_label,
         key=f"{key_prefix}_frequencies",
+        placeholder=t("filter.placeholder"),
     )
     selected_sources = st.multiselect(
         t("filter.source"),
         sources,
         format_func=source_label,
         key=f"{key_prefix}_sources",
+        placeholder=t("filter.placeholder"),
     )
 
     filtered = catalog
@@ -122,6 +129,7 @@ def render_filters(
         default=defaults,
         format_func=indicator_label,
         key=f"{key_prefix}_indicators",
+        placeholder=t("filter.placeholder"),
     )
     default_start, default_end = default_date_bounds(catalog)
     preset_bounds = _render_jalali_presets(catalog, key_prefix)
@@ -247,6 +255,7 @@ def _render_jalali_presets(
             options=[None, *years],
             format_func=lambda year: (none_label if year is None else to_persian_digits(str(year))),
             key=f"{key_prefix}_jalali_year",
+            placeholder=t("filter.placeholder"),
         )
         selected_month = st.selectbox(
             t("filter.jalali_month"),
@@ -255,6 +264,7 @@ def _render_jalali_presets(
                 none_label if month is None else JALALI_MONTH_NAMES[month - 1]
             ),
             key=f"{key_prefix}_jalali_month",
+            placeholder=t("filter.placeholder"),
         )
         day_text = st.text_input(t("filter.jalali_day"), key=f"{key_prefix}_jalali_day")
         if selected_year is None and not day_text.strip():

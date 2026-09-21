@@ -41,13 +41,14 @@ import zoneinfo
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Final, Literal
+from typing import Final, Literal, NamedTuple
 
 import pandas as pd
 import streamlit as st
 
-from dashboard.components.tables import localize_table_frame
-from dashboard.formatting import TEHRAN_TIMEZONE
+from dashboard.components.html_table import Cell, Ltr, Text, render_html_table
+from dashboard.components.tables import NUMBER_COLUMNS, localize_table_frame
+from dashboard.formatting import MISSING_VALUE, TEHRAN_TIMEZONE
 from dashboard.i18n import t
 from dashboard.labels import FREQUENCY_LABELS
 
@@ -61,6 +62,8 @@ __all__ = [
     "TRADING_SESSION_SOURCES",
     "TRADING_SESSIONS_PER_YEAR",
     "ExpectedPeriods",
+    "QualityTable",
+    "build_quality_rows",
     "calendar_for_source",
     "expected_observation_count",
     "expected_periods",
@@ -420,12 +423,90 @@ def _has_material_gap(quality: pd.DataFrame) -> bool:
     return bool((ratio >= MISSING_PERIOD_WARNING_RATIO).any())
 
 
+class QualityTable(NamedTuple):
+    """A quality summary ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in ``summarize_quality``'s order
+        rows: One tuple of typed cells per indicator, in the frame's order
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def _quality_cell(value: object, *, numeric: bool, ltr: bool) -> Cell:
+    """One quality cell: an LTR token, a tabular number, or plain text.
+
+    The value arrives already localized, so the em-dash a null renders is the
+    shared missing-value placeholder; it is passed through as ``None`` so the cell
+    emits the same ``.na`` markup as every other RTL table.
+
+    An id is an :class:`~dashboard.components.html_table.Ltr` cell, which the
+    shared ``.dt .ltr`` rule caps at 24ch with an ellipsis; the cell therefore
+    carries the full id as its ``title``, so the truncated token is still
+    recoverable on hover (the same tooltip practice the coverage table's range
+    cells use).
+    """
+    text = None if value is None or str(value) == MISSING_VALUE else str(value)
+    if ltr:
+        return Ltr(text, title=text)
+    return Text(text, num=numeric)
+
+
+def build_quality_rows(quality: pd.DataFrame) -> QualityTable:
+    """Build the quality summary as typed cells, in the frame's order.
+
+    One row per indicator and exactly the columns
+    :func:`summarize_quality` returns. The values come from
+    :func:`dashboard.components.tables.localize_table_frame` -- the same localizer
+    the observation grid and the exports use -- so the HTML table cannot drift
+    from the frame, and the em-dash a null renders is unchanged.
+
+    The indicator id is an :class:`~dashboard.components.html_table.Ltr` cell (an
+    LTR token isolated inside RTL text) and the columns in
+    :data:`dashboard.components.tables.NUMBER_COLUMNS` are
+    :class:`~dashboard.components.html_table.Text` cells with tabular figures;
+    every other column is plain text.
+
+    Args:
+        quality: Frame from :func:`summarize_quality`
+
+    Returns:
+        A :class:`QualityTable`; an empty frame yields no columns and no rows
+    """
+    if quality.empty:
+        return QualityTable((), ())
+    display = localize_table_frame(quality)
+    numeric = [str(column) in NUMBER_COLUMNS for column in quality.columns]
+    ltr = [str(column) == "indicator_id" for column in quality.columns]
+    rows = tuple(
+        tuple(
+            _quality_cell(value, numeric=numeric[index], ltr=ltr[index])
+            for index, value in enumerate(row)
+        )
+        for row in display.itertuples(index=False, name=None)
+    )
+    return QualityTable(tuple(str(column) for column in display.columns), rows)
+
+
 def render_quality_summary(quality: pd.DataFrame) -> None:
-    """Display quality diagnostics, including zero-row and sparse-history cases."""
+    """Display quality diagnostics, including zero-row and sparse-history cases.
+
+    The summary is a small, static, presentation-only table, so it is the shared
+    RTL HTML table (D1) rather than a ``st.dataframe``; the two warnings stay
+    native alerts. Nothing about the frame changes: same columns, same values,
+    same nulls.
+
+    It is the ``coverage`` variant: the summary is as wide as the Overview
+    coverage table (eleven columns), so it needs the same wrapping rules to fit
+    the page instead of scrolling sideways inside its own box.
+    """
     if quality.empty:
         st.info(t("empty.no_quality_rows"))
         return
-    st.dataframe(localize_table_frame(quality), use_container_width=True, hide_index=True)
+    table = build_quality_rows(quality)
+    render_html_table(table.columns, table.rows, variant="coverage")
     if (quality["rows_returned"] == 1).any():
         st.warning(t("warn.single_observation"))
     if _has_material_gap(quality):
