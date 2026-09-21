@@ -1117,8 +1117,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `warn.correlation_*`, `section.exact_join_counts`.
 - **Depends:** Tasks 15–22, 34.
 - **Acceptance:**
-  - [ ] Correlation renders through the shared components; suppression and overlap logic unchanged.
-  - [ ] Guard enabled for the correlation functions.
+  - [x] Correlation renders through the shared components; suppression and overlap logic unchanged.
+  - [x] Guard enabled for the correlation functions.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_correlation.py tests/unit/dashboard/test_layout_guard.py -q`.
 
 ### 43. (F) OWNER VISUAL REVIEW — comparison / correlation

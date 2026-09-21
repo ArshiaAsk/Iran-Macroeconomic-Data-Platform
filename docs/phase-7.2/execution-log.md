@@ -2815,3 +2815,42 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   (`test_layout.py` 63, was 59; +4). No existing assertion changed.
 - **Deviations:** none.
 - **Commit:** Step 0b commit.
+
+## Wave F — Task 42 (migrate the correlation page)
+
+- **Files:** `dashboard/page_view.py` (`render_correlation_page`),
+  `tests/unit/dashboard/test_app_correlation.py` (one assertion),
+  `tests/unit/dashboard/test_layout_guard.py` (`MIGRATED_PAGES` + A4),
+  `docs/phase-7.2/wave-f-assets/task-42/` (before/after top, heatmap, tables;
+  viewport + full-page).
+- **Build:** `render_page_header("page.correlation")` replaces the raw
+  `st.title`; the three empty/no-selection states go through
+  `render_empty`; the mixed-frequencies and low-overlap caveats are
+  `render_callout` (the low-overlap text carries values through `body=`), and the
+  exact-join note becomes an info `render_callout` (was a raw `st.caption`);
+  `render_section_header("section.exact_join_counts")` replaces the raw
+  `st.subheader`. The join-count matrix stays a native `st.dataframe` and the
+  overlap summary a native `st.dataframe(row_height=OBSERVATIONS_ROW_HEIGHT)`
+  (D1); the quality table stays the already-migrated `render_quality_summary`.
+  The heatmap builder and the `build_correlation_chart` suppression/overlap logic
+  are **untouched**.
+- **Changed assertions (1):** `test_correlation_page_warns_and_suppresses_a_low_overlap_pair`
+  — the exact-join note assertion moves from `app.caption` to `app.info`, because
+  the note is now an info callout (contract: notices are callouts). Every other
+  correlation assertion passes unchanged (`app.warning` for the two caveats,
+  `app.dataframe` for the overlap summary, `not app.exception`).
+- **Heatmap readability check (Task 14 template + F3):** the figure's first trace
+  is a `heatmap` with `zmin=-1`, `zmax=1` and `colorscale=None` (Plotly's default
+  diverging scale); the colour-bar title `chart.pearson_r` renders; the template's
+  `layout.colorscale` is an **empty** `Colorscale()` (`sequential=None`,
+  `diverging=None`) and its `layout.colorway` does not apply to a heatmap trace, so
+  the categorical palette does **not** override the diverging scale. Visually the
+  red→white→blue scale, the colour-bar labels (۱، ۰٫۵، ۰، −۰٫۵، −۱) and the axis
+  labels are readable in `after/after-heatmap.png`. No axis was reversed.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_app_correlation.py
+  tests/unit/dashboard/test_layout_guard.py -q --no-cov` → **15 passed**. Pixel
+  diff (viewport): `top` 4.0 % (the exact-join info callout added at the foot),
+  `heatmap`/`tables` larger only because the added callout shifts the page down;
+  the heatmap itself is visually identical.
+- **Deviations:** none.
+- **Commit:** Task 42 commit.

@@ -1720,17 +1720,28 @@ def render_labor_page(repository: DashboardRepository | None = None) -> None:
 
 
 def render_correlation_page(repository: DashboardRepository | None = None) -> None:
-    """Render exact-timestamp correlation diagnostics."""
+    """Render exact-timestamp correlation diagnostics.
+
+    The composition follows the D11 layout contract: the page opens with
+    ``render_page_header``, every caveat (mixed frequencies, low overlap, exact
+    join) is a ``render_callout`` with its own container key, the section title is
+    a ``render_section_header``, and the empty/no-selection states are
+    ``render_empty``. The join-count matrix and the overlap summary stay native
+    ``st.dataframe`` tables (D1: a matrix and a sortable N-row table); only the
+    overlap summary takes the shared density ``row_height``. The quality summary is
+    the already-migrated ``render_quality_summary``. The suppression and
+    exact-join logic in ``build_correlation_chart`` is untouched.
+    """
     from dashboard.components.charts import build_correlation_chart
 
-    st.title(t("page.correlation"))
+    render_page_header("page.correlation")
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.info(t("empty.catalog_empty"))
+        render_empty("empty.catalog_empty")
         return
     filters = render_filters(catalog, "correlation")
     if not filters.indicator_ids:
-        st.info(t("empty.select_two_indicators"))
+        render_empty("empty.select_two_indicators")
         return
     if filters.start_date > filters.end_date:
         return
@@ -1747,23 +1758,27 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
             filters.end_date,
         )
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_empty("empty.no_observations")
         return
     frequencies = set(series["frequency"].astype(str))
     if len(frequencies) > 1:
-        st.warning(t("warn.mixed_frequencies"))
+        render_callout("warn.mixed_frequencies")
     bundle = build_correlation_chart(series)
     if bundle.suppressed_pairs:
-        st.warning(
-            t(
+        # The message carries the suppressed-pair count and the overlap minimum,
+        # so it passes its resolved text through ``body`` and uses the key for the
+        # callout's container hook only.
+        render_callout(
+            "warn.correlation_low_overlap",
+            body=t(
                 "warn.correlation_low_overlap",
                 count=format_number(len(bundle.suppressed_pairs)),
                 minimum=format_number(bundle.min_overlap),
-            )
+            ),
         )
-    st.caption(t("warn.correlation_exact_join"))
+    render_callout("warn.correlation_exact_join", tone="info")
     st.plotly_chart(bundle.figure, use_container_width=True)
-    st.subheader(t("section.exact_join_counts"))
+    render_section_header("section.exact_join_counts")
     matrix_column, summary_column = st.columns(2)
     with matrix_column:
         st.dataframe(bundle.join_counts, use_container_width=True)
@@ -1772,6 +1787,7 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
             localize_table_frame(bundle.overlap_summary),
             use_container_width=True,
             hide_index=True,
+            row_height=OBSERVATIONS_ROW_HEIGHT,
         )
     render_quality_summary(summarize_quality(series, filters.start_date, filters.end_date))
     render_data_downloads(series, "iran-macro-correlation")
