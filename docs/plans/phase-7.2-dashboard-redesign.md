@@ -898,8 +898,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** —
 - **Acceptance:**
-  - [ ] Only the freshness wrapper changes; other wrappers keep their current TTL behaviour.
-  - [ ] A test asserts the TTL is passed.
+  - [x] Only the freshness wrapper changes; other wrappers keep their current TTL behaviour.
+  - [x] A test asserts the TTL is passed.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_queries_ttl.py -q`.
 
 ### 27. (B) BUILD the sidebar shell (brand, DB status, active item)

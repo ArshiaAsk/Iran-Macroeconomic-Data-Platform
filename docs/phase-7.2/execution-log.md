@@ -1119,3 +1119,35 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. `trade_energy` uses `swap_horiz` rather than `bolt`; both
   are distinct from `fx_gold`'s `currency_exchange`.
 - **Commit hash:** `1f06944`
+
+## Task 26 — ADD the freshness-query TTL (D7)
+
+- **Files:** `dashboard/queries.py`, `tests/unit/dashboard/test_queries_ttl.py`
+  (new), `docs/plans/phase-7.2-dashboard-redesign.md` (checkboxes).
+- **Build:**
+  - Added module-level constant `FRESHNESS_CACHE_TTL_SECONDS: int = 900` (15
+    minutes) to `dashboard/queries.py` with a docstring noting that staleness is
+    measured in days and that an explicit refresh control is deferred.
+  - Changed only `cached_source_freshness` to
+    `@st.cache_data(show_spinner=False, ttl=FRESHNESS_CACHE_TTL_SECONDS)` and
+    expanded its docstring. The other six cached wrappers are unchanged.
+  - Wrote `tests/unit/dashboard/test_queries_ttl.py` with AST-based tests:
+    `test_freshness_ttl_is_a_positive_number_of_seconds`,
+    `test_freshness_wrapper_passes_the_ttl` (asserts the `ttl` keyword is the
+    `Name` node `FRESHNESS_CACHE_TTL_SECONDS`),
+    `test_other_wrappers_do_not_pass_a_ttl` (asserts the other six wrappers
+    have no `ttl` keyword), and a `_decorator_keywords` helper plus a
+    `CACHED_WRAPPERS` tuple.
+- **Verify:**
+  - `poetry run ruff check tests/unit/dashboard/test_queries_ttl.py
+    dashboard/queries.py` → clean.
+  - `poetry run mypy dashboard/queries.py tests/unit/dashboard/test_queries_ttl.py`
+    → 0 errors.
+  - `poetry run pytest tests/unit/dashboard/test_queries_ttl.py -q --no-cov` →
+    3 passed.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → 507 passed, no
+    regressions.
+- **Deviations:** none. Chose 900 s (15 min) because staleness is measured in
+  days; the TTL is short enough to reflect a new collection run quickly without
+  re-querying on every Streamlit rerun.
+- **Commit hash:** pending
