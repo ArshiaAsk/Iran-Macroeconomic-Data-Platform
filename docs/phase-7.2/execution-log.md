@@ -1074,3 +1074,21 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. The gate is "no new errors / no regressions" against the
   recorded counts, as AM-21 requires, not an absolute test count.
 - **Commit hash:** `a42b535`
+
+---
+
+## Step 0 — ten-page router smoke (permanent)
+
+- **Files:** `tests/unit/dashboard/test_all_pages_smoke.py` (new),
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Gate line).
+- **Build:** The Wave A gate used a throwaway `/tmp` test that renders every
+  `PageSpec` through the router with the fake repository. This commit makes it
+  permanent: `test_every_page_renders_through_the_router` is parametrized over
+  `PAGES`, each page driven through `app_smoke.app_test(use_router=True)`, the
+  only assertion `not app.exception`. The id carries `group-key` so a failure
+  names the page.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py
+  -q --no-cov` → 10 passed; `ruff check` / `mypy` clean; full dashboard subset
+  → 501 passed (491 + 10 new), no regressions.
+- **Deviations:** none.
+- **Commit hash:** `ebf35eb`
