@@ -44,6 +44,7 @@ __all__ = [
     "PERSIAN_DECIMAL_SEPARATOR",
     "PERSIAN_PERCENT_SIGN",
     "PERSIAN_THOUSANDS_SEPARATOR",
+    "RANGE_SEPARATOR",
     "TEHRAN_TIMEZONE",
     "DigitMode",
     "format_large_number",
@@ -389,12 +390,35 @@ def _gregorian_period_label(value: datetime, frequency: str, digit_mode: DigitMo
     return to_persian_digits(text) if digit_mode == "fa" else text
 
 
+def _compact_jalali_daily(
+    start: datetime,
+    end: datetime,
+    digit_mode: DigitMode,
+) -> str | None:
+    """Collapse a same-month/same-year daily Jalali range, or ``None``.
+
+    The mockup renders a three-day TGJU span as ``۱۸ – ۲۰ شهریور ۱۴۰۵`` rather
+    than repeating the month and year. Only a range whose two ends fall in the
+    same Jalali year *and* month collapses; anything else returns ``None`` so the
+    caller falls back to the full two-period label. Pure and display-only.
+    """
+    first = gregorian_to_jalali(start)
+    last = gregorian_to_jalali(end)
+    if (first.year, first.month) != (last.year, last.month):
+        return None
+    text = (
+        f"{first.day}{RANGE_SEPARATOR}{last.day} {JALALI_MONTH_NAMES[first.month - 1]} {first.year}"
+    )
+    return to_persian_digits(text) if digit_mode == "fa" else text
+
+
 def range_label(
     start: datetime,
     end: datetime,
     *,
     frequency: str,
     calendar: str = "jalali",
+    compact: bool = False,
     digit_mode: DigitMode = "fa",
 ) -> str:
     """Label a start/end period range, calendar-aware.
@@ -403,6 +427,11 @@ def range_label(
     periods via :func:`_gregorian_period_label`; anything else renders Jalali
     periods via :func:`jalali_period_label`. The default is ``"jalali"`` so an
     un-migrated caller keeps today's output byte-for-byte.
+
+    ``compact=True`` is opt-in and only affects a **daily Jalali** range whose
+    two ends share a Jalali month and year: it collapses to the mockup's
+    ``۱۸ – ۲۰ شهریور ۱۴۰۵``. Every other case, and the Gregorian branch, is
+    unchanged, so the Task 13 golden tests keep passing.
 
     Bidi note: the Gregorian year-month form (``2023-05``) is LTR-ordered data
     embedded in RTL text. Two such tokens separated by a neutral en dash can
@@ -415,6 +444,7 @@ def range_label(
         end: Stored end period end (UTC)
         frequency: Catalog frequency slug
         calendar: ``"gregorian"`` for international sources, otherwise Jalali
+        compact: Collapse a same-month/same-year daily Jalali range (opt-in)
         digit_mode: ``"fa"`` for display, ``"latin"`` for exports and tests
 
     Returns:
@@ -424,6 +454,10 @@ def range_label(
         first = _gregorian_period_label(start, frequency, digit_mode)
         last = _gregorian_period_label(end, frequency, digit_mode)
     else:
+        if compact and frequency == "daily":
+            collapsed = _compact_jalali_daily(start, end, digit_mode)
+            if collapsed is not None:
+                return collapsed
         first = jalali_period_label(start, frequency, digit_mode=digit_mode)
         last = jalali_period_label(end, frequency, digit_mode=digit_mode)
     return f"{first}{RANGE_SEPARATOR}{last}"

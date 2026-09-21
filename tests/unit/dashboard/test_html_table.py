@@ -27,9 +27,13 @@ def _one_cell(cell: Cell) -> str:
 
 #: Every cell variant carrying the hostile payload, for the escaping sweep.
 #: ``TwoLine`` appears twice: plain, and with a primary tone (the freshness date).
+#: The two flagged text-like cells (Task 32's ``num``/``mono_id``) are swept too,
+#: so a new wrapper cannot bypass the escaping.
 HOSTILE_CELLS = [
     Text(HOSTILE),
+    Text(HOSTILE, num=True),
     Ltr(HOSTILE),
+    Ltr(HOSTILE, num=True, mono_id=True),
     UnitChip(HOSTILE),
     StatusChip(HOSTILE, "ok"),
     Dot(HOSTILE, "warn"),
@@ -194,3 +198,89 @@ def test_wrapper_scrolls_within_its_own_box_and_caps_long_tokens() -> None:
     assert "text-overflow: ellipsis;" in css
     # The table CSS is emitted by the shell owner exactly once, never per table.
     assert css.count(".dt-wrap {") == 1
+
+
+# --- Task 32: the coverage table's opt-ins ------------------------------------
+
+
+def test_wrap_headers_breaks_the_named_header_at_its_last_space() -> None:
+    """The mockup's coverage headers are two lines (`تعداد` / `مشاهدات`)."""
+    markup = build_html_table(
+        ("شاخص", "تعداد مشاهدات", "میانگین اطمینان"),
+        ((Text("x"), Text("y"), Text("z")),),
+        wrap_headers=("تعداد مشاهدات", "میانگین اطمینان"),
+    )
+
+    assert '<th scope="col">تعداد<br>مشاهدات</th>' in markup
+    assert '<th scope="col">میانگین<br>اطمینان</th>' in markup
+    # A header that is not named stays on one line.
+    assert '<th scope="col">شاخص</th>' in markup
+
+
+def test_wrap_headers_leaves_a_single_word_header_unbroken() -> None:
+    markup = build_html_table(("شاخص",), ((Text("x"),),), wrap_headers=("شاخص",))
+
+    assert '<th scope="col">شاخص</th>' in markup
+    assert "<br>" not in markup
+
+
+def test_wrap_headers_escapes_each_half_of_a_broken_header() -> None:
+    markup = build_html_table(("a <b> c",), ((Text("x"),),), wrap_headers=("a <b> c",))
+
+    assert '<th scope="col">a &lt;b&gt;<br>c</th>' in markup
+    assert "<b>" not in markup
+
+
+def test_wrap_headers_rejects_a_header_that_is_not_a_column() -> None:
+    with pytest.raises(ValueError, match="wrap_headers not among the columns"):
+        build_html_table(("شاخص",), ((Text("x"),),), wrap_headers=("تعداد مشاهدات",))
+
+
+def test_coverage_variant_adds_the_modifier_class() -> None:
+    """Task 32: the wide coverage table takes the mockup's `.dt.cov`."""
+    markup = build_html_table(("x",), ((Text("y"),),), variant="coverage")
+
+    assert '<table class="dt cov comfortable">' in markup
+
+
+def test_default_variant_adds_no_modifier_class() -> None:
+    markup = build_html_table(("x",), ((Text("y"),),))
+
+    assert '<table class="dt comfortable">' in markup
+
+
+def test_unknown_variant_raises() -> None:
+    with pytest.raises(ValueError, match="unknown table variant"):
+        build_html_table(("x",), ((Text("y"),),), variant="wide")
+
+
+def test_coverage_variant_css_matches_the_mockup() -> None:
+    css = direction_css()
+
+    assert ".dt.cov th { white-space: normal;" in css
+    assert ".dt.cov td:first-child { min-width: 230px; }" in css
+    assert ".dt.cov .num { white-space: nowrap; }" in css
+    # Declared before the density override, so `.dt.compact` still wins the
+    # properties it owns (height, font-size, line-height) on a compact table.
+    assert css.index(".dt.cov td {") < css.index(".dt.compact td {")
+
+
+def test_num_text_cell_carries_the_tabular_figures_class() -> None:
+    markup = _one_cell(Text("۱۹۶۰", num=True))
+
+    assert '<span class="num">۱۹۶۰</span>' in markup
+
+
+def test_a_num_text_cell_still_renders_the_missing_placeholder() -> None:
+    markup = _one_cell(Text(None, num=True))
+
+    assert f'<span class="num"><span class="na">{MISSING_VALUE}</span></span>' in markup
+
+
+def test_ltr_num_and_mono_id_compose_their_classes() -> None:
+    """Task 32: a Gregorian range is numeric *and* LTR; an id is the `idl` line."""
+    assert '<bdi class="ltr num">1960-2025</bdi>' in _one_cell(Ltr("1960-2025", num=True))
+    assert '<bdi class="ltr idl">NY.GDP</bdi>' in _one_cell(Ltr("NY.GDP", mono_id=True))
+    assert '<bdi class="ltr num idl">NY.GDP</bdi>' in _one_cell(
+        Ltr("NY.GDP", num=True, mono_id=True)
+    )

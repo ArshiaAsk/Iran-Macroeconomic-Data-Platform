@@ -13,19 +13,22 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from dashboard.components.direction import CSS_SELECTORS, direction_css
-from dashboard.components.html_table import Dot, StatusChip, Text, TwoLine
+from dashboard.components.html_table import DENSITIES, Dot, Ltr, StatusChip, Text, TwoLine, UnitChip
 from dashboard.components.layout import BarRow
 from dashboard.formatting import (
+    RANGE_SEPARATOR,
     format_number,
     jalali_date_label,
     relative_time_label,
     tehran_clock_label,
 )
 from dashboard.i18n import t
-from dashboard.labels import domain_label, source_label
+from dashboard.labels import domain_label, frequency_label, indicator_label, source_label
 from dashboard.navigation import page_for_domain
 from dashboard.page_view import (
+    build_coverage_rows,
     build_freshness_rows,
+    filter_coverage_frame,
     freshness_display,
     freshness_summary,
     ordered_domain_rows,
@@ -523,3 +526,285 @@ def test_overview_row_declares_the_rtl_context() -> None:
 
     assert CSS_SELECTORS["overview_row"] in css
     assert f'{CSS_SELECTORS["overview_row"]} {{ direction: rtl; }}' in css
+
+
+# --- Task 32: the Overview coverage table -------------------------------------
+
+#: The ten coverage headers in the mockup's order.
+_COVERAGE_HEADERS = (
+    t("table.indicator"),
+    t("table.domain"),
+    t("table.source_name"),
+    t("table.frequency"),
+    t("table.unit"),
+    t("table.coverage_range"),
+    t("table.observed_range"),
+    t("table.observation_count"),
+    t("table.chained_rows"),
+    t("table.average_confidence"),
+)
+
+
+def _coverage_frame() -> pd.DataFrame:
+    """One World Bank annual row and one TGJU daily row, in that order.
+
+    The pair is the point: the two calendars the range cells have to separate, and
+    the two row shapes (a chained/confidence-bearing annual series and a
+    three-observation daily snapshot with neither).
+    """
+    return pd.DataFrame(
+        [
+            {
+                "indicator_id": "NY.GDP.MKTP.CD",
+                "name": "GDP (current US$)",
+                "unit": "current US$",
+                "frequency": "annual",
+                "domain": "gdp",
+                "source_name": "world_bank",
+                "availability_start": pd.Timestamp("1960-12-31", tz="UTC"),
+                "availability_end": pd.Timestamp("2025-12-31", tz="UTC"),
+                "observed_start": pd.Timestamp("1960-12-31", tz="UTC"),
+                "observed_end": pd.Timestamp("2025-12-31", tz="UTC"),
+                "observation_count": 66,
+                "chain_linked_count": 0,
+                "confidence": None,
+            },
+            {
+                "indicator_id": "TGJU.USD.FREE",
+                "name": "USD free rate",
+                "unit": "IRR",
+                "frequency": "daily",
+                "domain": "fx",
+                "source_name": "tgju",
+                "availability_start": pd.Timestamp("2026-09-09", tz="UTC"),
+                "availability_end": pd.Timestamp("2026-09-11", tz="UTC"),
+                "observed_start": pd.Timestamp("2026-09-09", tz="UTC"),
+                "observed_end": pd.Timestamp("2026-09-11", tz="UTC"),
+                "observation_count": 3,
+                "chain_linked_count": None,
+                "confidence": None,
+            },
+        ]
+    )
+
+
+def test_build_coverage_rows_uses_the_mockup_columns_and_wrapped_headers() -> None:
+    table = build_coverage_rows(_coverage_frame())
+
+    assert table.columns == _COVERAGE_HEADERS
+    # Only the three right-hand headers are two-line in the mockup.
+    assert table.wrap_headers == (
+        t("table.observation_count"),
+        t("table.chained_rows"),
+        t("table.average_confidence"),
+    )
+    assert len(table.rows) == 2
+
+
+def test_build_coverage_rows_labels_every_descriptive_cell() -> None:
+    table = build_coverage_rows(_coverage_frame())
+    cells = table.rows[0]
+
+    assert cells[0] == TwoLine(
+        indicator_label("NY.GDP.MKTP.CD", "GDP (current US$)"),
+        (Ltr("NY.GDP.MKTP.CD", mono_id=True),),
+    )
+    assert cells[1] == Text(domain_label("gdp"))
+    assert cells[2] == Text(source_label("world_bank"))
+    assert cells[3] == Text(frequency_label("annual"))
+    assert cells[4] == UnitChip("current US$")
+    assert cells[7] == Text(format_number(66), num=True)
+    assert cells[8] == Text(format_number(0), num=True)
+
+
+def test_build_coverage_rows_gives_a_gregorian_source_an_ltr_range_with_exact_dates() -> None:
+    """D3 + AM-27(e): the display is a Gregorian year, the tooltip is exact."""
+    table = build_coverage_rows(_coverage_frame())
+
+    # The separator comes from the one place that owns it; `test_formatting` pins
+    # its exact bytes with literal golden values.
+    expected = Ltr(
+        f"۱۹۶۰{RANGE_SEPARATOR}۲۰۲۵",
+        title=f"1960-12-31{RANGE_SEPARATOR}2025-12-31",
+        num=True,
+    )
+    assert table.rows[0][5] == expected
+    assert table.rows[0][6] == expected
+
+
+def test_build_coverage_rows_keeps_a_jalali_source_in_a_text_cell() -> None:
+    """D3: a domestic range is RTL text, and a daily one takes the compact form."""
+    table = build_coverage_rows(_coverage_frame())
+    compact_daily = f"۱۸{RANGE_SEPARATOR}۲۰ شهریور ۱۴۰۵"
+
+    assert table.rows[1][5] == Text(compact_daily, num=True)
+    assert table.rows[1][6] == Text(compact_daily, num=True)
+
+
+def test_build_coverage_rows_reads_the_calendar_map_it_is_given() -> None:
+    """The Task 13 map is injected, so an empty one forces the Jalali form."""
+    table = build_coverage_rows(_coverage_frame(), calendar_map={})
+
+    assert table.rows[0][5] == Text(f"۱۳۳۹{RANGE_SEPARATOR}۱۴۰۴", num=True)
+
+
+def test_build_coverage_rows_renders_the_em_dash_for_every_null() -> None:
+    """The mockup's `na` cell: a missing value is never an invented zero."""
+    table = build_coverage_rows(_coverage_frame())
+
+    assert table.rows[1][8] == Text(None, num=True)  # chained rows
+    assert table.rows[1][9] == Text(None, num=True)  # average confidence
+    assert table.rows[0][9] == Text(None, num=True)
+
+
+def test_build_coverage_rows_renders_a_missing_bound_as_the_em_dash() -> None:
+    frame = _coverage_frame()
+    frame.loc[0, "observed_start"] = pd.NaT
+    frame.loc[0, "observed_end"] = pd.NaT
+
+    table = build_coverage_rows(frame)
+
+    assert table.rows[0][6] == Text(None)
+    # The coverage range is unaffected: only the observed pair was cleared.
+    assert isinstance(table.rows[0][5], Ltr)
+
+
+def test_build_coverage_rows_returns_headers_only_for_an_empty_frame() -> None:
+    table = build_coverage_rows(_coverage_frame().iloc[0:0])
+
+    assert table.columns == _COVERAGE_HEADERS
+    assert table.rows == ()
+
+
+def test_build_coverage_rows_preserves_the_frame_order() -> None:
+    """The repository owns the order; the builder never re-sorts."""
+    frame = _coverage_frame().iloc[::-1].reset_index(drop=True)
+
+    table = build_coverage_rows(frame)
+
+    assert table.rows[0][1] == Text(domain_label("fx"))
+    assert table.rows[1][1] == Text(domain_label("gdp"))
+
+
+def test_filter_coverage_frame_applies_each_select_in_memory() -> None:
+    frame = _coverage_frame()
+
+    assert len(filter_coverage_frame(frame)) == 2
+    assert list(filter_coverage_frame(frame, domain="gdp")["indicator_id"]) == ["NY.GDP.MKTP.CD"]
+    assert list(filter_coverage_frame(frame, source="tgju")["indicator_id"]) == ["TGJU.USD.FREE"]
+    assert list(filter_coverage_frame(frame, frequency="daily")["indicator_id"]) == [
+        "TGJU.USD.FREE"
+    ]
+    assert filter_coverage_frame(frame, domain="gdp", source="tgju").empty
+
+
+def test_filter_coverage_frame_skips_a_column_the_frame_does_not_carry() -> None:
+    """A partial frame still renders instead of raising on the missing column."""
+    frame = _coverage_frame().drop(columns=["frequency"])
+
+    assert len(filter_coverage_frame(frame, frequency="annual")) == 2
+
+
+def test_overview_coverage_uses_the_markup_strategy_not_a_dataframe(
+    fake_streamlit_connection,
+) -> None:
+    """Task 16's map + Task 32: the coverage grid is an HTML table now."""
+    app = _overview_app()
+
+    frames = [frame.value for frame in app.dataframe]
+    assert all(t("table.coverage_range") not in frame.columns for frame in frames)
+    assert any(t("table.coverage_range") in body for body in html_texts(app))
+
+
+def test_overview_coverage_table_is_the_coverage_variant_with_two_line_headers(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    body = next(body for body in html_texts(app) if t("table.coverage_range") in body)
+    assert '<table class="dt cov comfortable">' in body
+    assert "<br>".join(t("table.observation_count").split(" ")) in body
+    assert "<br>".join(t("table.chained_rows").split(" ")) in body
+    # The indicator id sits in the mockup's block-level `idl` line.
+    assert '<bdi class="ltr idl">' in body
+
+
+def test_overview_coverage_footnote_explains_the_gregorian_calendar(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    assert t("table.coverage_footnote") in [caption.value for caption in app.caption]
+
+
+def test_overview_coverage_footnote_declares_the_rtl_context() -> None:
+    """A native `st.caption` inherits the LTR main block, so it needs the hook."""
+    css = direction_css()
+
+    assert f'{CSS_SELECTORS["coverage_footnote"]} {{ direction: rtl; text-align: right; }}' in css
+
+
+def test_overview_coverage_filter_bar_reduces_the_rows_and_updates_the_label(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+    repository = FakeDashboardRepository()
+    total = len(repository.coverage)
+    # The bar starts on "همه" and echoes the whole frame's row count.
+    assert t("filter.showing_rows", count=format_number(total)) in [
+        element.value for element in app.markdown
+    ]
+
+    app.selectbox(key="overview_coverage_domain").select("gdp").run()
+
+    assert not app.exception
+    filtered = filter_coverage_frame(repository.coverage, domain="gdp")
+    assert 0 < len(filtered) < total
+    assert t("filter.showing_rows", count=format_number(len(filtered))) in [
+        element.value for element in app.markdown
+    ]
+    body = next(body for body in html_texts(app) if t("table.coverage_range") in body)
+    assert body.count("<tr>") == len(filtered) + 1  # the header row plus the rows
+
+
+def test_overview_coverage_filter_bar_offers_the_all_option(
+    fake_streamlit_connection,
+) -> None:
+    """The mockup's "همه": the no-filter option is the default and reads as such."""
+    app = _overview_app()
+
+    control = app.selectbox(key="overview_coverage_domain")
+    assert control.value is None
+    assert list(control.options) == [
+        t("filter.all"),
+        domain_label("gdp"),
+        domain_label("inflation"),
+    ]
+
+
+def test_overview_coverage_density_control_offers_the_two_densities(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    control = app.segmented_control(key="overview_coverage_density")
+    assert control.value == "comfortable"
+    assert list(control.options) == [
+        t("filter.density_comfortable"),
+        t("filter.density_compact"),
+    ]
+    # One option per density the HTML table accepts, so the control's value can be
+    # passed straight to `render_html_table` (pinned end-to-end below).
+    assert len(control.options) == len(DENSITIES)
+
+
+def test_overview_coverage_table_honours_the_compact_density(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    app.segmented_control(key="overview_coverage_density").select("compact").run()
+
+    assert not app.exception
+    body = next(body for body in html_texts(app) if t("table.coverage_range") in body)
+    assert '<table class="dt cov compact">' in body

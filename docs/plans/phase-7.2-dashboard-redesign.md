@@ -975,20 +975,20 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `table.coverage_range`="بازهٔ پوشش", `table.observed_range`="بازهٔ مشاهده‌شده", `table.chained_rows`="ردیف‌های زنجیره‌شده", `table.average_confidence`="میانگین اطمینان", `filter.all`, `filter.showing_rows`, `filter.density*`, `table.coverage_footnote`.
 - **Depends:** Tasks 13, 15, 21, 30.
 - **Acceptance:**
-  - [ ] World Bank rows show Gregorian years; Iranian rows stay Jalali; tooltip carries the exact date.
-  - [ ] Filters reduce the row count and the label updates.
-  - [ ] Nulls render the em-dash.
-  - [ ] The coverage assertions use the markup strategy, not `app.dataframe`.
-  - [ ] **AM-26:** at 1280 px and 1024 px the coverage table scrolls inside its `overflow-x: auto` wrapper and the page does not scroll sideways (manual check, shared with Task 15).
-  - [ ] **AM-26 (deferred from Task 15):** re-run the 1280/1024 px check on the **real Overview coverage table** (Task 15 could only verify this on its probe app).
-  - [ ] **Compact daily range (opt-in):** `range_label` gains an opt-in `compact`
+  - [x] World Bank rows show Gregorian years; Iranian rows stay Jalali; tooltip carries the exact date.
+  - [x] Filters reduce the row count and the label updates.
+  - [x] Nulls render the em-dash.
+  - [x] The coverage assertions use the markup strategy, not `app.dataframe`.
+  - [x] **AM-26:** at 1280 px and 1024 px the coverage table scrolls inside its `overflow-x: auto` wrapper and the page does not scroll sideways (manual check, shared with Task 15).
+  - [x] **AM-26 (deferred from Task 15):** re-run the 1280/1024 px check on the **real Overview coverage table** (Task 15 could only verify this on its probe app).
+  - [x] **Compact daily range (opt-in):** `range_label` gains an opt-in `compact`
     argument (default unchanged, so the golden Jalali tests keep passing) that
     collapses a same-month/same-year daily range to the mockup's form
     (`۱۸ – ۲۰ شهریور ۱۴۰۵`), with tests.
-  - [ ] **Two-line headers (opt-in):** `render_html_table` gains an opt-in
+  - [x] **Two-line headers (opt-in):** `render_html_table` gains an opt-in
     `wrap_headers` option matching the mockup's two-line coverage headers
     (`تعداد<br>مشاهدات`), with a test.
-  - [ ] **Bidi placement:** Gregorian ranges render in an `Ltr` cell and Jalali
+  - [x] **Bidi placement:** Gregorian ranges render in an `Ltr` cell and Jalali
     ranges in a `Text` cell, per the Task 13 bidi decision.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q` + manual browser check against the mockup.
 

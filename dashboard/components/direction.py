@@ -107,6 +107,13 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "top_bar": '[class*="st-key-top-bar"]',
         # Overview's two-column row (Task 31): the mockup's 7fr/5fr grid.
         "overview_row": '[class*="st-key-overview-row"]',
+        # The coverage section's footnote (Task 32). Scoped to the section on
+        # purpose: `st.caption` inherits the main block's LTR direction, so a
+        # Persian caption hugs the left edge. Fixing that shell-wide would move
+        # every un-migrated page's captions, which the wave discipline forbids.
+        "coverage_footnote": (
+            '[class*="st-key-overview-coverage-section"] [data-testid="stCaptionContainer"]'
+        ),
     }
 )
 
@@ -289,6 +296,17 @@ _TABLE_RULES: Final[tuple[str, ...]] = (
     "border-bottom: 1px solid var(--border); white-space: nowrap; line-height: 1.5; }",
     ".dt tbody tr:last-child td { border-bottom: 0; }",
     ".dt tbody tr:hover td { background: var(--hover); }",
+    # The `coverage` variant (Task 32): the mockup's `.dt.cov`. Its ten columns
+    # are tight, so the cells wrap by default and only the numeric ones are held
+    # on one line; the indicator cell keeps a minimum width so its name wraps
+    # rather than stretching the table. Declared *before* `.dt.compact` on
+    # purpose: both selectors are equally specific, so the density override still
+    # wins for the properties it owns (height, font-size, line-height).
+    ".dt.cov th { white-space: normal; padding: 9px 10px; font-size: 12px; "
+    "vertical-align: bottom; }",
+    ".dt.cov td { padding: 0 10px; white-space: normal; font-size: 13.5px; " "line-height: 1.55; }",
+    ".dt.cov .num { white-space: nowrap; }",
+    ".dt.cov td:first-child { min-width: 230px; }",
     ".dt.compact td { height: 40px; padding: 0 10px; font-size: 13.5px; " "line-height: 1.45; }",
     ".dt .num { font-variant-numeric: tabular-nums; }",
     ".dt .name { font-weight: 600; }",
@@ -477,6 +495,10 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     # the left and the two sections would swap. The column weights themselves come
     # from `st.columns([7, 5])`.
     f'{CSS_SELECTORS["overview_row"]} {{ direction: rtl; }}',
+    # The coverage footnote (Task 32): a native `st.caption` inherits the LTR main
+    # block, so its Persian sentence would render at the left edge. Scoped to the
+    # coverage section so no other page's captions move.
+    f'{CSS_SELECTORS["coverage_footnote"]} {{ direction: rtl; text-align: right; }}',
 )
 
 

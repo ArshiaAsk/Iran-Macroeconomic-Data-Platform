@@ -223,8 +223,13 @@ if frame.empty:
 
 | Component | Signature | Purpose |
 |---|---|---|
-| `render_html_table` | `(columns, rows, *, density="comfortable", null_placeholder="—")` | Render an RTL HTML table from typed cells. |
-| `build_html_table` | `(columns, rows, *, density=…, null_placeholder=…)` | The same table as a markup string (used by the tests). |
+| `render_html_table` | `(columns, rows, *, density="comfortable", null_placeholder="—", variant="default", wrap_headers=())` | Render an RTL HTML table from typed cells. |
+| `build_html_table` | `(columns, rows, *, density=…, null_placeholder=…, variant=…, wrap_headers=…)` | The same table as a markup string (used by the tests). |
+
+`variant` is a closed set — `default` (no modifier class) or `coverage` (the
+mockup's `.dt.cov`, Task 32). `wrap_headers` names the **localized** headers that
+break onto two lines at their last space (the mockup's `تعداد<br>مشاهدات`); a
+header that is not among `columns` raises, so a typo cannot silently do nothing.
 
 ### 4.3 Filters and diagnostics — `components/filters.py`, `components/quality.py`
 
@@ -438,17 +443,20 @@ is checked by the type checker rather than by a format string:
 
 | Cell | Renders |
 |---|---|
-| `Text(value, title=None)` | Plain text; `None` renders the missing-value em-dash |
-| `Ltr(value, title=None)` | A left-to-right mono token (an indicator id), `unicode-bidi: isolate` so it cannot flip the table |
+| `Text(value, title=None, num=False)` | Plain text; `None` renders the missing-value em-dash. `num=True` adds the mockup's `num` class (tabular figures; Task 32) |
+| `Ltr(value, title=None, num=False, mono_id=False)` | A left-to-right mono token (an indicator id), `unicode-bidi: isolate` so it cannot flip the table. `num=True` adds `num` (a Gregorian range is numeric *and* LTR); `mono_id=True` adds the block-level muted `idl` line the coverage table puts an id on (Task 32) |
 | `UnitChip(value, title=None)` | A left-to-right mono chip for a unit (`current US$`) |
 | `StatusChip(label, tone, title=None)` | An HTML/CSS chip with a tone dot — **never** `st.badge` |
 | `Dot(label, tone, title=None)` | An HTML/CSS status dot |
 | `TwoLine(primary, secondary_parts=(), title=None, primary_tone=None)` | A bold primary line above inline parts joined by the mockup's `·`; `primary_tone` colours the primary line (the stale freshness date is amber) |
 
-`TONES` (`ok`/`warn`/`err`/`accent`/`neutral`) and `DENSITIES`
-(`comfortable`/`compact`) are closed sets; an unknown value raises. Density is a
-CSS class on the table, and it is the HTML table's density control — the
-`st.dataframe` class uses `row_height` instead.
+`TONES` (`ok`/`warn`/`err`/`accent`/`neutral`), `DENSITIES`
+(`comfortable`/`compact`) and `TABLE_VARIANTS` (`default`/`coverage`) are closed
+sets; an unknown value raises. Density is a CSS class on the table, and it is the
+HTML table's density control — the `st.dataframe` class uses `row_height`
+instead. A density can only shorten a row down to its `height` floor, so a table
+whose cells wrap to two lines (the coverage table) changes height by less than
+the floor suggests — measured 64 px → 60 px on the Overview coverage table.
 
 **Every data-derived value is escaped** through `escape_html` before
 interpolation, and the whole table is emitted inside an `overflow-x: auto` wrapper
@@ -467,6 +475,14 @@ pins the opt-in behaviour. `Asia/Tehran` is applied only when a value is rendere
 or a selected day is interpreted; `tehran_day_bounds` / `jalali_day_bounds` are
 the only bounds constructors. The Plotly grid stays LTR (time flows left to
 right) — only the legend and titles are RTL-aligned.
+
+The Overview coverage table (Task 32) is the first opted-in surface. Each range
+cell is placed by its source's calendar: a Gregorian source's range is an `Ltr`
+cell whose `title` carries the exact stored bounds (the display is a bare year),
+and a Jalali source's is a `Text` cell that collapses a same-month daily span to
+the mockup's `۱۸ – ۲۰ شهریور ۱۴۰۵` (`range_label(..., compact=True)`, also
+opt-in). The calendar map is a **parameter** of `build_coverage_rows`, so a test
+injects `{}` and gets the all-Jalali form.
 
 **Theme lock.** `base="light"` is locked; dark mode is not supported in 7.2 and is
 deferred. A custom `[theme]` in `config.toml` already removes the settings-menu
@@ -638,6 +654,10 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | Bar-list domain order | **Resolved by P1 (Wave C part 2)** — `ordered_domain_rows` sorts the rows count-descending, ties by the domain's Persian display name ascending, so the bars match the mockup's order | The mockup's bars are count-descending; Task 31 left `available_domains`'s order and flagged it here, and P1 made the sort explicit and unit-tested |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
 | Filter-bar spacer | A `st.columns` weight, not `flex: 1` | `st.columns` expresses fixed proportions, not "absorb the remainder" |
+| Coverage filter-bar selects | Native `st.selectbox` controls (label above, full column width) rather than the mockup's 32 px `.sel` chips with the label inline (`حوزه: همه`) | D13 native-first: the bar is the native widgets laid out by `render_filter_bar`. A chip-shaped control would need a custom widget, which this phase does not build. Measured: the bar is 73 px tall vs the mockup's 55 px |
+| Coverage table width | The ten columns need 1169 px inside a 1042 px wrapper at 1440 px, so the last column is partly scrolled out; the mockup's shorter sample fits in 1102 px | Real data: 54 catalog rows with longer Persian names than the mockup's eight. The wrapper scrolls the table inside its own box and the page never scrolls sideways (AM-26, measured at 1440/1280/1024 px) |
+| Coverage footnote wording | `تاریخ دقیق در راهنمای هر خانه است.` rather than the mockup's `تاریخ دقیق در tooltip است.` | The Task 13 catalog key predates Task 32 and keeps the Persian UI free of the English word "tooltip"; the literal guard forbids a hardcoded replacement |
+| Native `st.caption` direction (shell-wide) | A caption inherits the main block's LTR direction, so a Persian sentence hugs the left edge. **Fixed for the coverage footnote only** by the scoped `coverage_footnote` hook; every other page's captions are unchanged | A shell-wide caption rule would move every un-migrated page's captions, which the wave discipline forbids. Filed for the Task 34 review as a shell defect |
 
 ## 15. Open items
 

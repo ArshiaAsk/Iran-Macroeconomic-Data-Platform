@@ -369,3 +369,62 @@ def test_range_label_gregorian_latin_digits() -> None:
         )
         == "2023-05 – 2024-01"
     )
+
+
+# --- range_label compact daily form (Task 32) -------------------------------
+
+
+def test_range_label_compact_collapses_a_same_month_daily_range() -> None:
+    """The mockup's coverage table shows ``۱۸ – ۲۰ شهریور ۱۴۰۵``."""
+    assert (
+        range_label(_DAILY_START, _DAILY_END, frequency="daily", compact=True)
+        == "۱۸ – ۲۰ شهریور ۱۴۰۵"
+    )
+
+
+def test_range_label_compact_is_opt_in() -> None:
+    """The default stays the two-period form the Task 13 golden tests pin."""
+    assert range_label(_DAILY_START, _DAILY_END, frequency="daily") == (
+        "۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵"
+    )
+    assert range_label(_DAILY_START, _DAILY_END, frequency="daily", compact=False) == (
+        "۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵"
+    )
+
+
+@pytest.mark.parametrize("frequency", ["annual", "monthly", "quarterly"])
+def test_range_label_compact_leaves_every_other_frequency_alone(frequency: str) -> None:
+    start, end = _MONTHLY_START, _MONTHLY_END
+    assert range_label(start, end, frequency=frequency, compact=True) == range_label(
+        start, end, frequency=frequency
+    )
+
+
+def test_range_label_compact_keeps_a_cross_month_daily_range_whole() -> None:
+    """Only a same Jalali year *and* month collapses."""
+    start = datetime(2026, 9, 11, tzinfo=UTC)  # ۲۰ شهریور ۱۴۰۵
+    end = datetime(2026, 9, 12, tzinfo=UTC)  # ۲۱ شهریور ۱۴۰۵ — same month
+    assert range_label(start, end, frequency="daily", compact=True) == "۲۰ – ۲۱ شهریور ۱۴۰۵"
+    across_months = range_label(
+        _DAILY_START,
+        datetime(2026, 10, 5, tzinfo=UTC),
+        frequency="daily",
+        compact=True,
+    )
+    assert across_months == range_label(
+        _DAILY_START, datetime(2026, 10, 5, tzinfo=UTC), frequency="daily"
+    )
+
+
+def test_range_label_compact_ignores_the_gregorian_branch() -> None:
+    assert (
+        range_label(_DAILY_START, _DAILY_END, frequency="daily", calendar="gregorian", compact=True)
+        == "۲۰۲۶-۰۹ – ۲۰۲۶-۰۹"
+    )
+
+
+def test_range_label_compact_latin_digits() -> None:
+    assert (
+        range_label(_DAILY_START, _DAILY_END, frequency="daily", compact=True, digit_mode="latin")
+        == "18 – 20 شهریور 1405"
+    )

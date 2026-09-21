@@ -1,7 +1,7 @@
 """Composable page-rendering functions used by Streamlit page modules."""
 
 import math
-from collections.abc import Hashable, Iterable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Final, NamedTuple
 
@@ -19,19 +19,22 @@ from dashboard.components.charts import (
     build_time_series_chart,
 )
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
-from dashboard.components.filters import FilterState, render_filters
+from dashboard.components.filters import FilterState, render_filters, unique_values
 from dashboard.components.html_table import (
     Cell,
     Dot,
+    Ltr,
     Text,
     Tone,
     TwoLine,
+    UnitChip,
     render_html_table,
 )
 from dashboard.components.layout import (
     BarRow,
     KpiCell,
     render_bar_list,
+    render_filter_bar,
     render_kpi_band,
     render_section_header,
     status_chip_cell,
@@ -40,10 +43,12 @@ from dashboard.components.quality import render_quality_summary, summarize_quali
 from dashboard.components.states import render_empty
 from dashboard.components.tables import cap_table_rows, localize_table_frame
 from dashboard.formatting import (
+    RANGE_SEPARATOR,
     format_number,
     gregorian_to_jalali,
     jalali_date_label,
     jalali_year_label,
+    range_label,
     relative_time_label,
     tehran_clock_label,
     tehran_timestamp_label,
@@ -53,8 +58,10 @@ from dashboard.formatting import (
 from dashboard.i18n import t
 from dashboard.labels import (
     DERIVED_SUFFIX_LABELS,
+    SOURCE_CALENDAR,
     derived_label,
     domain_label,
+    frequency_label,
     indicator_label,
     source_expected_cadence,
     source_label,
@@ -825,8 +832,7 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
             )
             _render_domain_counts(domain_counts)
 
-    st.subheader(t("section.available_coverage"))
-    st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
+    _render_coverage_section(coverage)
 
 
 def series_inventory_counts(inventory: pd.DataFrame) -> tuple[int, int]:
@@ -947,6 +953,334 @@ def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
     rows = ordered_domain_rows(domain_counts)
     total = sum(row.indicator_count for row in rows)
     render_bar_list(rows, t("metric.indicator_count", count=format_number(total)))
+
+
+#: Session-state keys of the Overview coverage filter bar. The three filter keys
+#: and the density key are read **before** the bar renders, so the frame the table
+#: renders is the one the controls describe in the same run; the controls then
+#: write the same keys back on the next interaction.
+_COVERAGE_DOMAIN_KEY: Final[str] = "overview_coverage_domain"
+_COVERAGE_SOURCE_KEY: Final[str] = "overview_coverage_source"
+_COVERAGE_FREQUENCY_KEY: Final[str] = "overview_coverage_frequency"
+_COVERAGE_DENSITY_KEY: Final[str] = "overview_coverage_density"
+
+#: Row densities in the mockup's segmented-control order ("راحت" first). The
+#: values are the HTML table's own density slugs, so the control's value passes
+#: straight to ``render_html_table``; a test pins the pair against ``DENSITIES``.
+_COVERAGE_DENSITIES: Final[tuple[str, ...]] = ("comfortable", "compact")
+
+
+class CoverageTable(NamedTuple):
+    """A coverage table ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in mockup order
+        rows: One tuple of typed cells per indicator, in the frame's order
+        wrap_headers: The subset of ``columns`` the mockup renders on two lines
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+    wrap_headers: tuple[str, ...]
+
+
+def _optional_cell_text(value: object) -> str | None:
+    """A stripped, non-empty string, or ``None`` for a null/blank/non-text value."""
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _optional_cell_number(value: Any) -> float | None:
+    """A finite number, or ``None`` for a null, boolean or non-numeric value.
+
+    ``value`` is typed ``Any`` because it arrives as an untyped pandas row
+    attribute: a count is a Python ``int``, but ``avg``/``sum`` can come back as a
+    ``Decimal``. ``pd.to_numeric`` is the same coercion the Overview's observation
+    total uses, so a value the database returns as a ``Decimal`` or as a NumPy
+    scalar is read as a number rather than silently rendered as missing.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    numeric = pd.to_numeric(value, errors="coerce")
+    if pd.isna(numeric):
+        return None
+    number = float(numeric)
+    return number if math.isfinite(number) else None
+
+
+def _label_cell(value: object, label: Callable[[str], str]) -> Cell:
+    """A text cell whose catalog slug is resolved through the label layer."""
+    slug = _optional_cell_text(value)
+    return Text(None if slug is None else label(slug))
+
+
+def _exact_range_title(first: datetime, last: datetime) -> str:
+    """The stored bounds as exact ISO dates, for a range cell's tooltip."""
+    return f"{first.date().isoformat()}{RANGE_SEPARATOR}{last.date().isoformat()}"
+
+
+def _coverage_range_cell(
+    start: object,
+    end: object,
+    *,
+    frequency: str,
+    calendar: str,
+) -> Cell:
+    """One range cell: an ``Ltr`` for a Gregorian source, a ``Text`` for Jalali.
+
+    This is the Task 13 bidi decision. A Gregorian range (``1960-2025``) is an LTR
+    data token embedded in RTL text, so it is isolated in a ``bdi`` and cannot
+    flip the row; a Jalali range is RTL text and stays a ``Text`` cell. A
+    Gregorian cell also carries the exact stored bounds in its ``title``: the
+    display is a bare year, so the tooltip is where the precise dates live, which
+    is exactly what the section footnote promises. A daily Jalali range collapses
+    to the mockup's compact same-month form (see
+    :func:`dashboard.formatting.range_label`); every other frequency is unchanged.
+
+    A missing bound renders the em-dash rather than a one-sided range.
+    """
+    first = _aware_utc(start)
+    last = _aware_utc(end)
+    if first is None or last is None:
+        return Text(None)
+    if calendar == "gregorian":
+        return Ltr(
+            range_label(first, last, frequency=frequency, calendar=calendar),
+            title=_exact_range_title(first, last),
+            num=True,
+        )
+    return Text(
+        range_label(first, last, frequency=frequency, calendar=calendar, compact=True),
+        num=True,
+    )
+
+
+def _coverage_count_cell(value: object) -> Cell:
+    """A numeric coverage cell, or the em-dash when the value is unknown."""
+    number = _optional_cell_number(value)
+    return Text(None if number is None else format_number(number), num=True)
+
+
+def build_coverage_rows(
+    frame: pd.DataFrame,
+    *,
+    calendar_map: Mapping[str, str] = SOURCE_CALENDAR,
+) -> CoverageTable:
+    """Build the Overview coverage table as typed cells, in the frame's order.
+
+    One row per catalog indicator, exactly the rows
+    :meth:`DashboardRepository.coverage_summary` returns. The cells are:
+
+    - indicator — :class:`TwoLine`: the display name above the raw id, which the
+      mockup sets in its own block-level ``idl`` line
+    - domain / source / frequency — :class:`Text` through the label layer
+    - unit — :class:`UnitChip`
+    - coverage range / observed range — the catalog bounds and the observed
+      bounds, each labelled by :func:`range_label`. A Gregorian source's range is
+      an :class:`Ltr` cell carrying the exact dates in its tooltip; a Jalali
+      source's is a :class:`Text` cell (the Task 13 bidi decision)
+    - observation count / chained rows / average confidence — numeric
+      :class:`Text` cells, em-dash when unknown (never an invented zero)
+
+    The three right-hand headers are the ones the mockup renders on two lines;
+    they come back as ``wrap_headers`` so the caller never restates them. Row
+    order is the frame's, which the repository owns; nothing is invented,
+    re-sorted or recomputed.
+
+    Args:
+        frame: Coverage frame from ``coverage_summary()``
+        calendar_map: Source slug -> display calendar. Defaults to the Task 13
+            :data:`~dashboard.labels.SOURCE_CALENDAR`; inject an empty map to
+            force every range into the Jalali form (tests, and any future
+            opt-out). A source absent from the map keeps the Jalali default
+
+    Returns:
+        A :class:`CoverageTable`; an empty frame yields the headers with no rows
+    """
+    columns = (
+        t("table.indicator"),
+        t("table.domain"),
+        t("table.source_name"),
+        t("table.frequency"),
+        t("table.unit"),
+        t("table.coverage_range"),
+        t("table.observed_range"),
+        t("table.observation_count"),
+        t("table.chained_rows"),
+        t("table.average_confidence"),
+    )
+    wrap_headers = (
+        t("table.observation_count"),
+        t("table.chained_rows"),
+        t("table.average_confidence"),
+    )
+    if frame.empty:
+        return CoverageTable(columns, (), wrap_headers)
+    rows: list[tuple[Cell, ...]] = []
+    for row in frame.itertuples(index=False):
+        indicator_id = _optional_cell_text(row.indicator_id)
+        frequency = _optional_cell_text(row.frequency) or ""
+        source_name = _optional_cell_text(row.source_name) or ""
+        calendar = calendar_map.get(source_name, "jalali")
+        if indicator_id is None:
+            indicator: Cell = Text(None)
+        else:
+            indicator = TwoLine(
+                indicator_label(indicator_id, _optional_cell_text(row.name)),
+                (Ltr(indicator_id, mono_id=True),),
+            )
+        rows.append(
+            (
+                indicator,
+                _label_cell(row.domain, domain_label),
+                _label_cell(row.source_name, source_label),
+                _label_cell(row.frequency, frequency_label),
+                UnitChip(_optional_cell_text(row.unit)),
+                _coverage_range_cell(
+                    row.availability_start,
+                    row.availability_end,
+                    frequency=frequency,
+                    calendar=calendar,
+                ),
+                _coverage_range_cell(
+                    row.observed_start,
+                    row.observed_end,
+                    frequency=frequency,
+                    calendar=calendar,
+                ),
+                _coverage_count_cell(row.observation_count),
+                _coverage_count_cell(row.chain_linked_count),
+                _coverage_count_cell(row.confidence),
+            )
+        )
+    return CoverageTable(columns, tuple(rows), wrap_headers)
+
+
+def filter_coverage_frame(
+    frame: pd.DataFrame,
+    *,
+    domain: str | None = None,
+    source: str | None = None,
+    frequency: str | None = None,
+) -> pd.DataFrame:
+    """Apply the coverage filter bar's three selects to the loaded frame.
+
+    The coverage frame holds one row per catalog indicator, so the filters run in
+    memory and issue no extra query. ``None`` is the mockup's "همه" and matches
+    every row; a column the frame does not carry is skipped rather than raising,
+    so a partial frame still renders.
+
+    Args:
+        frame: Coverage frame from ``coverage_summary()``
+        domain: Selected domain slug, or ``None`` for all
+        source: Selected ``source_name`` slug, or ``None`` for all
+        frequency: Selected frequency slug, or ``None`` for all
+
+    Returns:
+        The filtered frame, in the input order
+    """
+    filtered = frame
+    for column, value in (
+        ("domain", domain),
+        ("source_name", source),
+        ("frequency", frequency),
+    ):
+        if value is None or column not in filtered.columns:
+            continue
+        filtered = filtered[filtered[column] == value]
+    return filtered
+
+
+def _coverage_option_label(label: Callable[[str], str]) -> Callable[[str | None], str]:
+    """An option formatter for a coverage select: "همه" for the no-filter value."""
+    return lambda value: t("filter.all") if value is None else label(value)
+
+
+def _render_coverage_section(coverage: pd.DataFrame) -> None:
+    """Render the coverage section: filter bar, table, footnote.
+
+    The bar is Task 21's :func:`render_filter_bar` with three ``st.selectbox``
+    controls (domain / source / frequency) and two trailing ones — the mockup's
+    row-count echo and its density segmented control. The three selections and the
+    density are read from ``st.session_state`` **before** the bar renders, so the
+    frame the table renders is the one the controls describe in the same run; the
+    controls then write the same keys back.
+
+    The table is the ``coverage`` variant (wide cells, two-line headers) at the
+    selected density, and the footnote states the calendar rule the range cells
+    implement: a Gregorian-calendar source shows a Gregorian year and the exact
+    date is in each cell's tooltip (D3 opt-in).
+    """
+    selected_domain = st.session_state.get(_COVERAGE_DOMAIN_KEY)
+    selected_source = st.session_state.get(_COVERAGE_SOURCE_KEY)
+    selected_frequency = st.session_state.get(_COVERAGE_FREQUENCY_KEY)
+    density = st.session_state.get(_COVERAGE_DENSITY_KEY, _COVERAGE_DENSITIES[0])
+    if density not in _COVERAGE_DENSITIES:
+        density = _COVERAGE_DENSITIES[0]
+    filtered = filter_coverage_frame(
+        coverage,
+        domain=selected_domain,
+        source=selected_source,
+        frequency=selected_frequency,
+    )
+
+    def domain_control() -> None:
+        st.selectbox(
+            t("filter.domain"),
+            options=[None, *unique_values(coverage, "domain")],
+            format_func=_coverage_option_label(domain_label),
+            key=_COVERAGE_DOMAIN_KEY,
+        )
+
+    def source_control() -> None:
+        st.selectbox(
+            t("filter.source"),
+            options=[None, *unique_values(coverage, "source_name")],
+            format_func=_coverage_option_label(source_label),
+            key=_COVERAGE_SOURCE_KEY,
+        )
+
+    def frequency_control() -> None:
+        st.selectbox(
+            t("filter.frequency"),
+            options=[None, *unique_values(coverage, "frequency")],
+            format_func=_coverage_option_label(frequency_label),
+            key=_COVERAGE_FREQUENCY_KEY,
+        )
+
+    def rows_control() -> None:
+        st.markdown(t("filter.showing_rows", count=format_number(len(filtered))))
+
+    def density_control() -> None:
+        st.segmented_control(
+            t("filter.density"),
+            options=list(_COVERAGE_DENSITIES),
+            default=_COVERAGE_DENSITIES[0],
+            format_func=lambda value: t(f"filter.density_{value}"),
+            key=_COVERAGE_DENSITY_KEY,
+            label_visibility="collapsed",
+        )
+
+    with st.container(key="overview-coverage-section"):
+        render_section_header("section.available_coverage")
+        render_filter_bar(
+            [domain_control, source_control, frequency_control],
+            trailing=[rows_control, density_control],
+            key="overview-coverage",
+        )
+        table = build_coverage_rows(filtered)
+        if table.rows:
+            render_html_table(
+                table.columns,
+                table.rows,
+                density=density,
+                variant="coverage",
+                wrap_headers=table.wrap_headers,
+            )
+        else:
+            render_empty("empty.no_coverage_rows")
+        st.caption(t("table.coverage_footnote"))
 
 
 class FreshnessTable(NamedTuple):

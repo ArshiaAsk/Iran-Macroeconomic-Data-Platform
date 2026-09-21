@@ -1838,3 +1838,79 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** the three breadcrumb/height differences above are recorded for
   the Task 34 owner review; the surface, border and full-bleed themselves match.
 - **Commit:** recorded in the "Wave C part 2a gate" entry below.
+
+### Task 32 — the Overview coverage table with filters and calendar opt-in
+
+- **Files:** `dashboard/page_view.py` (`CoverageTable`, `build_coverage_rows`,
+  `filter_coverage_frame`, `_coverage_range_cell`, `_coverage_count_cell`,
+  `_label_cell`, `_optional_cell_text`, `_optional_cell_number`,
+  `_exact_range_title`, `_coverage_option_label`, `_render_coverage_section`, the
+  four coverage session-state keys and `_COVERAGE_DENSITIES`;
+  `render_overview_page` now calls `_render_coverage_section`),
+  `dashboard/components/html_table.py` (`Text.num`, `Ltr.num`/`Ltr.mono_id`,
+  `TABLE_VARIANTS`, the `variant` and `wrap_headers` options, `_header_markup`,
+  `_validated_variant`), `dashboard/components/direction.py` (the four `.dt.cov`
+  rules and the scoped `coverage_footnote` hook), `dashboard/formatting.py`
+  (`_compact_jalali_daily`, the `compact` opt-in on `range_label`,
+  `RANGE_SEPARATOR` exported), `dashboard/i18n.py` (`table.indicator`,
+  `table.coverage_range`, `table.observed_range`, `table.chained_rows`,
+  `table.average_confidence`, `empty.no_coverage_rows`),
+  `tests/unit/dashboard/test_html_table.py`, `test_formatting.py`,
+  `test_app_overview.py`, `docs/phase-7.2/design-system.md` (sections 4.2, 8, 9 and
+  four new section 14 rows), `docs/phase-7.2/wave-c-assets/task32/`.
+- **Build:** the coverage grid is now the typed HTML table instead of
+  `st.dataframe`. Ten columns in the mockup's order, with the three right-hand
+  headers two-line (`wrap_headers`), the indicator name above its raw id in the
+  mockup's block-level `idl` line, unit chips, and the em-dash for every null.
+  - **Calendar (D3).** `build_coverage_rows` takes the calendar map as a
+    parameter (default `SOURCE_CALENDAR`): a Gregorian source's range is an `Ltr`
+    cell carrying the exact stored bounds in its `title`, a Jalali source's is a
+    `Text` cell. `range_label(..., compact=True)` — opt-in, default unchanged —
+    collapses a same-month/same-year daily Jalali range to `۱۸ – ۲۰ شهریور ۱۴۰۵`.
+  - **Filter bar (Task 21's first consumer).** Three `st.selectbox` controls with
+    an `None`/"همه" option filter the already-loaded frame **in memory** (no extra
+    query), plus the row-count echo and an `st.segmented_control` density toggle.
+    The three selections and the density are read from `st.session_state` before
+    the bar renders, so the frame the table renders is the one the controls
+    describe in the same run.
+  - **Footnote.** `st.caption(t("table.coverage_footnote"))`, and the coverage
+    section is wrapped in `st.container(key="overview-coverage-section")` so the
+    section has one addressable boundary (the Task 34 per-region crops need it).
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/ -q --no-cov` → **610 passed**
+    (baseline 568 after P1–P5; +42 new across the three files). `poetry run mypy
+    src dashboard` → **no issues in 68 source files**. `ruff check`/`ruff format`
+    clean.
+  - **Measured (live DOM).** Page-level `scrollWidth == clientWidth` at **1440,
+    1280 and 1024 px** (1440/1440, 1280/1280, 1024/1024), so the page never
+    scrolls sideways; the coverage wrapper's `scrollWidth` stays 1169 against
+    client widths 1042 / 882 / 626, so the table scrolls **inside its own box**
+    (AM-26, including the Task 15 deferral). The rendered table is
+    `dt cov comfortable`, 1169×3450 px, **54 rows**. Header cells measure
+    `font-size: 12px`, `white-space: normal`, `vertical-align: bottom`; the first
+    cell `min-width: 230px`; body cells 13.5px. Density toggle measured
+    **64 px → 60 px** row height on the same table.
+  - **Visual.** `coverage-viewport.png` (1440×900) plus element-by-element crops
+    against the mockup: `header-live.png` (1056×50) vs `header-mockup.png`
+    (1104×28) — same title, same RTL start; `filter-bar-live.png` (1056×73) vs
+    `filter-bar-mockup.png` (1104×55) — same control order (domain/source/frequency
+    at the RTL start, the count echo and the density toggle at the far end, "راحت"
+    selected); `table-live.png` / `table-live-top.png` vs `table-mockup.png`
+    (1102×493) — same ten headers, same two-line headers, same id line, and the
+    same per-row values (`۱۹۶۰ – ۲۰۲۵`, `فروردین ۱۳۶۱ – بهمن ۱۴۰۱`,
+    `۱۸ – ۲۰ شهریور ۱۴۰۵`, `—` for the SCI row's observed/count/chained/
+    confidence cells); `footnote-live.png` vs `footnote-mockup.png` — same
+    sentence, same RTL start.
+- **Deviations:** four, all recorded in design-system section 14 and carried to the
+  Task 34 review — (a) the three filter selects are native `st.selectbox` controls,
+  not the mockup's 32 px inline-label chips (D13; the bar is 73 px vs 55 px);
+  (b) the real table needs 1169 px in a 1042 px wrapper, so the last column is
+  partly scrolled out where the mockup's shorter sample fits (AM-26 accepts the
+  in-box scroll); (c) the footnote reads `راهنمای هر خانه` where the mockup says
+  `tooltip`, the Task 13 key's Persian wording; (d) a native `st.caption` inherits
+  the LTR main block, so the Persian footnote hugged the left edge — **fixed
+  scoped** by the `coverage_footnote` hook, with the shell-wide caption gap filed
+  for Task 34 rather than fixed (a global rule would move every un-migrated page).
+  One addition beyond the plan's key list: `table.indicator` (`شاخص`), the mockup's
+  own first header, and `empty.no_coverage_rows` for the filtered-to-zero state.
+- **Commit:** recorded in the "Wave C part 2a gate" entry below.

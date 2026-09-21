@@ -228,6 +228,18 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.observation_count": "تعداد مشاهدات",
         "table.chain_linked_count": "ردیف‌های زنجیره‌شده",
         "table.confidence": "میانگین اطمینان",
+        # Coverage-table headers (Task 32). The Overview coverage table names its
+        # own columns rather than borrowing the catalog grid's, exactly as P3 gave
+        # the freshness table its own `table.last_collection`: the two surfaces can
+        # then be reworded independently. `table.chained_rows` and
+        # `table.average_confidence` happen to read the same as the grid's
+        # `table.chain_linked_count` / `table.confidence` today; the pair of range
+        # headers is genuinely new wording (one range per pair of bounds).
+        "table.indicator": "شاخص",
+        "table.coverage_range": "بازهٔ پوشش",
+        "table.observed_range": "بازهٔ مشاهده‌شده",
+        "table.chained_rows": "ردیف‌های زنجیره‌شده",
+        "table.average_confidence": "میانگین اطمینان",
         "table.has_base_year_changes": "تغییر سال پایه",
         "table.base_years": "سال‌های پایه",
         "table.is_active": "فعال",
@@ -304,6 +316,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "empty.no_observations": "هیچ مشاهده‌ای با شاخص‌ها و بازه زمانی انتخاب‌شده مطابقت ندارد.",
         "empty.no_collection_runs": "هنوز هیچ اجرای گردآوری ثبت نشده است.",
         "empty.no_quality_rows": "هیچ مشاهده لایه طلایی با پالایه‌های فعلی مطابقت ندارد.",
+        "empty.no_coverage_rows": "هیچ شاخصی با پالایه‌های پوشش مطابقت ندارد.",
         "empty.no_hbsir_observations": "هیچ مشاهده HBSIR در بازه زمانی انتخاب‌شده موجود نیست.",
         "empty.no_cpi_deciles": "هیچ سری شاخص قیمت مصرف‌کننده به تفکیک دهک هزینه در فهرست شاخص‌ها موجود نیست.",
         "empty.no_cpi_canonical": "هیچ سری زنجیره‌شده شاخص قیمت مصرف‌کننده در فهرست شاخص‌ها موجود نیست.",
