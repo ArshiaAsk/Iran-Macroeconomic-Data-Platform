@@ -1719,7 +1719,7 @@ were never staged or committed (Task 7 owns them).
     → clean.
 - **Deviations:** none. The bar order now matches the mockup; the §14 note is
   resolved rather than carried.
-- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+- **Commit:** `16aefda`.
 
 ### P2 — secondary KPI cell width (mockup `flex: 1.35`)
 
@@ -1745,7 +1745,7 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. The `1.378` rendered ratio (vs the spec's exact `1.35`) is
   an artifact of Streamlit's `calc(% - gap)` column basis, recorded here rather
   than worked around.
-- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+- **Commit:** `3dd58c0`.
 
 ### P3 — last-collection column header
 
@@ -1763,7 +1763,7 @@ were never staged or committed (Task 7 owns them).
   updated to the new key.
 - **Deviations:** none. This resolves the §14 "Freshness last-collection header"
   row (the plan's "reuse the existing key" instruction is superseded by P3).
-- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+- **Commit:** `4528e56`.
 
 ### P4 — amber stale count in the freshness summary
 
@@ -1794,7 +1794,7 @@ were never staged or committed (Task 7 owns them).
   commit (`4a5995f`) because P5's `design-system.md` edit was staged after it;
   the row is present and correct, so P4's own commit carries only the i18n key
   and the test.
-- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+- **Commit:** `c8fcb6f`.
 
 ### P5 — top bar surface, border and full-bleed
 
@@ -1837,7 +1837,7 @@ were never staged or committed (Task 7 owns them).
     (1104×101) re-confirm P2's wider secondary cells.
 - **Deviations:** the three breadcrumb/height differences above are recorded for
   the Task 34 owner review; the surface, border and full-bleed themselves match.
-- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+- **Commit:** `4a5995f`.
 
 ### Task 32 — the Overview coverage table with filters and calendar opt-in
 
@@ -1913,4 +1913,41 @@ were never staged or committed (Task 7 owns them).
   for Task 34 rather than fixed (a global rule would move every un-migrated page).
   One addition beyond the plan's key list: `table.indicator` (`شاخص`), the mockup's
   own first header, and `empty.no_coverage_rows` for the filtered-to-zero state.
-- **Commit:** recorded in the "Wave C part 2a gate" entry below.
+- **Commit:** `3191e2f`.
+
+### Wave C part 2a gate — Scope A close-out
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (new "Wave C part 2a" section + the
+  status line), `docs/phase-7.2/wave-c-assets/part2a-all-pages/` (11 PNGs: the ten
+  registry pages plus `overview-coverage.png`), plus the five P1–P5 `Commit:`
+  lines above filled in with their real hashes.
+- **Build:**
+  - **Gate runs.** `make check` → **1426 passed, 3 skipped, 136 deselected** in
+    177.2 s, coverage **89.22 %** (≥ 80 %); `poetry run mypy src dashboard` →
+    **0 errors**, 68 source files; dashboard subset → **610 passed**; export
+    integration smoke (`test_exports.py -m integration`) → **1 passed**;
+    ten-page AppTest smoke (`test_all_pages_smoke.py`) → **10 passed**.
+  - **All-pages capture.** The Streamlit server was restarted against the
+    committed `3191e2f` tree (it does not hot-reload), then
+    `scripts/dashboard_screenshots.py --out-dir
+    docs/phase-7.2/wave-c-assets/part2a-all-pages` captured ten 1440×900 PNGs.
+    Every page shows the shell with **no `Stop` widget, spinner or skeleton** (the
+    Step 0f settle assertion). An eleventh scrolled capture,
+    `overview-coverage.png`, shows the coverage section (filter bar, two-line
+    headers, em-dash nulls) in the committed tree.
+  - **Overview delta visible in the capture (vs part 1).** Top bar now white with
+    a bottom hairline (P5); KPI band with the wider secondary group (P2); the
+    freshness header reads `آخرین گردآوری` (P3) and the stale count is amber
+    (P4); the domain bars read **15, 15, 8, 4, 3, 2, 1, 1, 1** (P1, was
+    unsorted); the coverage `st.dataframe` is gone.
+  - **Against the part 1 gate.** Part 1 ended at 1375/3 (full) and 559 (subset);
+    part 2a ends at 1426/3 and 610 — the **+51** is the P1–P5 and Task 32 tests,
+    and **nothing regressed**. Per-page pass/defect lines are in `VALIDATION.md`;
+    the only per-page defect is the pre-existing `label` legend title on `gdp`.
+  - **Plan checkboxes.** Tasks 29–32 acceptance boxes are now all `[x]`.
+- **Verify:** all gate commands above are green; `git status --short` clean apart
+  from the assets/docs being committed.
+- **Deviations:** none new in the gate itself. The four Task 32 deviations and the
+  three P5 breadcrumb/height differences are restated in `VALIDATION.md` under
+  "Accepted deviations and carry items" and carried to the Task 34 review.
+- **Commit:** this entry is committed with the part 2a gate commit.

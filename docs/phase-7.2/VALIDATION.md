@@ -1,8 +1,11 @@
 # Phase 7.2 Validation Report
 
 **Status:** Wave B complete (shell — Tasks 25–28 + Step 0 close-out); **Wave C
-part 1 complete** (Step 0f + Tasks 29–31, Overview page). The visual review
-recorded here is 2026-09-21 against a populated local database.
+part 1 complete** (Step 0f + Tasks 29–31, Overview page); **Wave C part 2a
+complete** (P1–P5 polish + Task 32 coverage table) — the Overview reference page
+is finished and awaiting the AM-23 owner visual review (Task 34, **not yet
+signed off**). The visual review recorded here is 2026-09-21 against a populated
+local database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
 **Wave 0 evidence:** [wave-0-spike.md](wave-0-spike.md) ·
@@ -396,3 +399,176 @@ composition) — **nothing regressed**.
 1. Top bar: give the strip its surface + `border-bottom` (shell).
 2. Filter controls: adopt `render_filter_bar` so the placeholder is Persian.
 3. Chart builders: drop the `color="label"` legend title.
+
+---
+
+## Wave C part 2a — Overview polish (P1–P5) and the coverage table (Task 32)
+
+**Scope.** Part 2a finishes the Overview reference page: five owner-flagged polish
+items (P1–P5, deferred from the part 1 gate) and Task 32, which replaces the last
+`st.dataframe` on the page with the typed HTML table. Nothing outside the
+presentation layer changed.
+
+| Item | Commit | Delta |
+|---|---|---|
+| P1 | `16aefda` | Domain bars sort count-descending, ties by Persian domain name ascending |
+| P2 | `3dd58c0` | Secondary KPI cells take the mockup's `flex: 1.35` |
+| P3 | `4528e56` | Overview freshness header uses `آخرین گردآوری` |
+| P5 | `4a5995f` | Top bar surface + bottom border + full-bleed via one `--main-pad-x` |
+| P4 | `c8fcb6f` | Amber stale count in the freshness summary |
+| Task 32 | `3191e2f` | Coverage table (typed cells, filters, density, calendar opt-in) |
+
+### P1 — bar order
+
+`ordered_domain_rows(domain_counts) -> list[BarRow]` is a **pure** helper: count
+descending, ties by the domain's Persian display name ascending (`domain_label`),
+which reproduces the mockup's own tie order (`تورم` before `رفاه` at 15; `ارز`
+before `بازار …` at 1). A missing or non-numeric count is treated as zero and
+never dropped; the sort is stable. The rendered order in the capture below is
+**15, 15, 8, 4, 3, 2, 1, 1, 1**.
+
+### P2 — secondary KPI width
+
+`kpi_column_weights(cells)` returns `1.35` for a cell flagged `secondary` and
+`1.0` otherwise, and `render_kpi_band` passes those weights to `st.columns`. The
+ratio lives in the component rather than CSS because `st.columns` owns the
+geometry. Measured at 1440 px: the four primary cells render **143.85 px** and the
+two secondary cells **198.30 px** — a rendered ratio of **1.378**. Streamlit's
+`flex-basis` percentages are exactly **14.9254 %** / **20.1493 %** (i.e. `1.35×`);
+the rendered widths diverge only because the basis is `calc(<pct>% - 14px)`, so a
+fixed 14 px gap is subtracted from every cell.
+
+### P3 — last-collection header
+
+The Overview freshness table's third header is the mockup's `آخرین گردآوری`
+(new key `table.last_collection`). The generic `table.collection_timestamp`
+(`زمان گردآوری`) is deliberately **not** changed, because `freshness_display` and
+the exports still use it.
+
+### P4 — amber stale count
+
+`section.freshness_summary` is now `{fresh} بهروز · :orange[{stale}] کهنه`. Only
+the stale count is wrapped in the markdown orange directive — the section
+header's trailing slot is a markdown string, so the directive is the native route
+to the mockup's amber number. The theme maps `orange` to the warn palette
+(`orangeColor = #9A5B00`). Measured live: the stale count's span computes
+`color: rgb(154, 91, 0)`; the fresh count stays muted. The tuple return and the
+empty-log behaviour are untouched.
+
+### P5 — top bar surface, border and full-bleed
+
+The bar gains `background: var(--surface)` and `border-bottom: 1px solid
+var(--border)`. For the full-bleed variant the main container declares
+`--main-pad-x: 70px` and reads it for its own horizontal padding; the bar reads
+the same property for `width`, `max-width`, `margin-inline` and `padding-inline`,
+so the four values cannot drift. The `width`/`max-width` pair is required because
+the bar's containing block is Streamlit's inner `stLayoutWrapper` (already inside
+the main padding) and Streamlit sets `max-width: 100%`, so a negative margin
+alone shifts the bar left without widening it.
+
+Measured live: 1440 px → bar `x=256, width=1184` (right edge 1440),
+`background: rgb(255,255,255)`, `border-bottom: 1px solid rgb(225,229,235)`,
+`scrollWidth == clientWidth == 1440`; bar content aligned to the page column
+(`breadcrumb right = 1370 = h1 right`). 1280 px → bar `x=256, width=1024`,
+`scrollWidth == clientWidth == 1280`. No horizontal page scroll at either width.
+
+### Task 32 — the coverage table
+
+The coverage grid is now the typed HTML table (`dt cov`) instead of
+`st.dataframe`: ten columns in the mockup's order, the three right-hand headers
+two-line (`wrap_headers`), the indicator name above its raw id in a block-level
+LTR mono line, `UnitChip` units, and the em-dash for every null.
+
+- **Calendar (D3).** `build_coverage_rows(frame, *, calendar_map=SOURCE_CALENDAR)`
+  takes the calendar map as a parameter: a Gregorian source's range is an `Ltr`
+  cell carrying the exact stored bounds in its `title`, a Jalali source's is a
+  `Text` cell. `range_label(..., compact=True)` — opt-in, default unchanged —
+  collapses a same-month/same-year daily Jalali range to `۱۸ – ۲۰ شهریور ۱۴۰۵`.
+- **Filter bar (Task 21's first consumer).** Three `st.selectbox` controls with an
+  "همه" option filter the already-loaded frame **in memory** (no extra query),
+  plus the `نمایش ۵۴ ردیف` echo and an `st.segmented_control` density toggle. The
+  selections are read from `st.session_state` before the bar renders, so the frame
+  the table renders is the one the controls describe in the same run.
+- **Footnote.** `st.caption(t("table.coverage_footnote"))`, with the whole section
+  wrapped in `st.container(key="overview-coverage-section")` so it has one
+  addressable boundary (Task 34's per-region crops need it).
+
+Measured live (AM-26, including the Task 15 deferral): page-level
+`scrollWidth == clientWidth` at **1440, 1280 and 1024 px** (1440/1440, 1280/1280,
+1024/1024), so the page never scrolls sideways; the coverage wrapper's
+`scrollWidth` stays 1169 against client widths 1042 / 882 / 626, so the table
+scrolls **inside its own box**. The rendered table is `dt cov comfortable`,
+1169×3450 px, **54 rows**. Header cells: 12 px, `white-space: normal`,
+`vertical-align: bottom`; first cell `min-width: 230px`; body cells 13.5 px.
+The density toggle changes the same table's row height **64 px → 60 px**.
+
+### Per-page pass / defect (ten pages, hardened script)
+
+Captured to `docs/phase-7.2/wave-c-assets/part2a-all-pages/` at 1440×900 with the
+Step 0f hardened script (every page asserts the `Stop` widget, spinner and
+skeleton are absent before the capture). `overview-coverage.png` is an extra
+scrolled capture that shows the coverage section in the committed tree.
+
+| Page | Result |
+|---|---|
+| `overview` | **PASS** — top bar now has its surface + border (P5); KPI band with the wider secondary group (P2); freshness header `آخرین گردآوری` (P3) and the amber stale count (P4); bars count-descending (P1); coverage table with the filter bar, two-line headers and the em-dash below the fold |
+| `correlation` | **PASS** — shell + callout + empty-state hint; top bar chrome present |
+| `catalog` | **PASS** — shell + catalog search; top bar chrome present |
+| `inflation` | **PASS** — shell + callout; top bar chrome present |
+| `gdp` | **PASS** — *pre-existing defect*: chart legend title reads `label` (unchanged carry item) |
+| `trade_energy` | **PASS** — shell + callout + empty-state hint |
+| `welfare` | **PASS** — shell + two callouts; **no `Stop` widget** |
+| `fx_gold` | **PASS** — shell + callout + empty-state hint |
+| `market` | **PASS** — shell + five callouts; top bar chrome present |
+| `labor` | **PASS** — shell + callout |
+
+No page regressed relative to the part 1 gate. The only per-page defect remains
+the pre-existing `label` legend title on `gdp`.
+
+### Wave C part 2a gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1426 passed, 3 skipped, 136 deselected** in 177.2 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **610 passed** |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** |
+| Ten-page AppTest smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed**, no page raises |
+| Working tree | `git status --short` | clean (assets committed) |
+
+**Against the part 1 gate.** Part 1 ended at **1375 passed / 3 skipped** (full) and
+**559 passed** (dashboard subset); part 2a ends at **1426 / 3** and **610**. The
+**+51** is the P1–P5 and Task 32 tests (P1: ordering; P2: weights; P3: header key;
+P4: amber directive; P5: `--main-pad-x`; Task 32: 42 across `test_html_table.py`,
+`test_formatting.py` and `test_app_overview.py`) — **nothing regressed**.
+
+### Accepted deviations and carry items
+
+- **Native filter selects (Task 32).** The three coverage filter controls are
+  native `st.selectbox` widgets, not the mockup's 32 px inline-label chips (D13);
+  the bar measures 73 px against the mockup's 55 px.
+- **Coverage table width (Task 32).** The real table needs 1169 px in a 1042 px
+  wrapper, so the leftmost column is partly scrolled out where the mockup's
+  shorter sample fits. AM-26 accepts the in-box scroll.
+- **Footnote wording (Task 32).** The footnote reads `راهنمای هر خانه` where the
+  mockup says `tooltip` — the Task 13 key's Persian wording.
+- **Caption direction (Task 32).** A native `st.caption` inherits the LTR main
+  block, so the Persian footnote hugged the left edge; fixed **scoped** via the
+  `coverage_footnote` hook, with the shell-wide caption gap carried to Task 34 (a
+  global rule would move every un-migrated page).
+- **Top-bar breadcrumb details (P5).** The separator is `›` live vs `/` in the
+  mockup, the current-page crumb is not bold, and the live bar is 49 px (48 px row
+  + 1 px border) vs the mockup's 48 px box. Carried to the Task 34 review.
+- **English `Choose options` placeholder.** Still present on every un-migrated
+  page (`gdp`, `welfare`, `correlation`, …) because those pages have not adopted
+  `render_filter_bar` yet. Waves D–G.
+- **`label` chart-legend title.** Unchanged; a chart-builder fix carried to its
+  own task.
+
+### Carry list for Tasks 33–34
+
+1. Page header + methodology callout: adopt `render_page_header` on Overview
+   (Task 33) and turn on the D11 layout guard.
+2. Shell-wide `st.caption` direction rule (Task 34 review item).
+3. Top-bar breadcrumb separator/bold/height (Task 34 review item).
+4. AM-23 owner visual review — **prepared, not signed off** (Task 34).
