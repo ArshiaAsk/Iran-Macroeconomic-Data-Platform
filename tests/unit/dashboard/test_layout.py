@@ -687,12 +687,14 @@ def test_filter_bar_container_declares_the_rtl_context() -> None:
 
 def test_top_bar_selector_is_registered_and_styled() -> None:
     """The top bar's keyed-container hook is declared in ``CSS_SELECTORS`` and
-    emitted by ``direction_css()``, with the columns row forced to 48 px."""
+    emitted by ``direction_css()``, with the columns row held to the mockup's
+    48 px via ``min-height`` (a plain ``height`` is inert on this flex item —
+    see the Step 0b note in ``direction.py``)."""
     assert "top_bar" in CSS_SELECTORS
     css = direction_css()
     assert CSS_SELECTORS["top_bar"] in css
     assert f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}' in css
-    assert "height: 48px" in css
+    assert "min-height: 48px" in css
     assert "top-bar-breadcrumb" in css
     assert "top-bar-stamp" in css
 

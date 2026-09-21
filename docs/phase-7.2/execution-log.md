@@ -1292,3 +1292,53 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. The 15 px / 700 brand typography is unchanged from the
   mockup; no font-size reduction was needed once the natural width was
   measured.
+
+## Step 0b — top-bar geometry (re-measured and fixed)
+
+- **Files:** `dashboard/components/direction.py` (`_CHROME_COMMENT`,
+  `main_block_container` padding, top-bar row rule),
+  `tests/unit/dashboard/test_direction.py`,
+  `tests/unit/dashboard/test_layout.py`, `docs/phase-7.2/design-system.md`
+  (§6, §9, §14),
+  `docs/phase-7.2/wave-b-assets/step-0b-topbar/` (4 PNGs).
+- **Build:**
+  - **Re-measured (Playwright, 1440×900, shipped app).** `stHeader` is
+    `position: absolute`, `z-index 999990`, **52.5 px** tall at `y = 0`;
+    `stMainBlockContainer` `x = 256`, `width = 1184`, `max-width 1360px`;
+    before the fix its `padding-top` was `120px`, so the top bar sat at `y = 120`
+    — a **67.5 px** empty gap below the header (`h1` at `y = 154.8`).
+  - **52.5 vs 60 reconciled.** Both are 3.75 rem: 52.5 = 3.75 rem × the themed
+    14 px root; 60 = 3.75 rem × the browser's default 16 px root. **52.5 px is
+    correct for the shipped app.** A second server run with
+    `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` also measured **52.5 px**, so
+    toolbar mode is not the cause; the 60 px figure predates the 14 px themed
+    base. Task 9's 52.5 px was right.
+  - **48 px bar height was inert.** The row's `height: 48px` never applied:
+    Streamlit's `.stHorizontalBlock` sets `flex: 1 1 0%` and the keyed container
+    is a *column* flex parent, so the vertical main axis takes `flex-basis: 0%`
+    over `height`. Measured row height **20.8 px** with `height: 48px`; changed
+    to `min-height: 48px`, which constrains a flex item → **48 px**.
+  - **Gap fixed.** `main_block_container` `padding-top` `120px → 64px`
+    (52.5 px header + 12 px gap).
+  - **Non-bleed correction recorded.** The bar is the main container's first
+    child, so it is **inside the 1360 px content column, not full-bleed**
+    (`x = 326, width = 1044`, identical to the `h1` column) — this corrects
+    Task 28's "no non-bleed deviation" statement. It is **not visible at
+    1440 px** (main area 1184 px < 1360 px cap); it only shows above a
+    1616 px viewport.
+- **After (measured):** `padding-top 64px`; top bar `y = 64`, `height = 48px`,
+  `bottom = 112`; `h1` `y = 126`; **header-bottom → bar-top gap = 11.5 px**
+  (target ≤ 24 px). Content moved up 28.8 px.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_direction.py
+    tests/unit/dashboard/test_layout.py tests/unit/dashboard/test_app_router.py
+    -q --no-cov` → 81 passed.
+  - `poetry run ruff check`/`format --check` on the touched files → clean;
+    `poetry run mypy src dashboard` → 0 errors.
+  - Screenshots (`wave-b-assets/step-0b-topbar/`): `overview-after.png` plus
+    `topbar-before.png` / `topbar-after.png` (top 260 px strip). The bar is now
+    directly under the header; the mockup crop shows the same order
+    (breadcrumb at the RTL start, stamp at the far end).
+- **Deviations:** the real bar has no `surface` background or bottom border
+  (the mockup draws a white strip with a `border-bottom`); that is Task 28's
+  accepted styling, unchanged here — Step 0b is geometry only.

@@ -325,11 +325,12 @@ Fragile — **do not use**:
 | Active nav link styling | `st-emotion-cache-1yak103` (hashed) | Hash changes between builds; use `[aria-current="page"]` |
 | Anything requiring a width/max-width | — | Streamlit sets inline widths, so a `!important` override is unavoidable and must stay in the chrome block |
 
-**Known gaps.** The native `[data-testid="stHeader"]` is **60 px**, not the
-mockup's 48 px top bar — Task 28 builds the mockup's bar as a new keyed
-container (`st.container(key="top-bar")`) and raises the main block's
-`padding-top` to 120 px (60 + 48 + 12). The native alert ships **no icon
-element**, which is why the callout glyph is drawn in CSS.
+**Known gaps.** The native `[data-testid="stHeader"]` is **52.5 px** at the
+themed 14 px base — not the mockup's 48 px top bar — so Task 28 builds the
+mockup's bar as a new keyed container (`st.container(key="top-bar")`) and Step 0b
+sets the main block's `padding-top` to **64 px** (52.5 px header + 12 px gap).
+The native alert ships **no icon element**, which is why the callout glyph is
+drawn in CSS.
 
 **Sidebar brand + DB status (Task 27, fallback 2).** The sidebar brand and the
 DB-status indicator are CSS-pinned, not rendered by `st.logo` or
@@ -454,11 +455,41 @@ button and developer options while keeping the viewer options the analyst needs.
 For local development the developer override is the environment variable
 `STREAMLIT_CLIENT_TOOLBAR_MODE=developer`.
 
-**Measured shell geometry (Task 28).** The native `[data-testid="stHeader"]` is
-60 px. The mockup's top bar is 48 px, built as a new keyed container below the
-native header. The main block container's `padding-top` is raised to 120 px
-(60 px header + 48 px top bar + 12 px breathing room), up from the pre-Task-28
-96 px. The max content width stays 1360 px.
+**Measured shell geometry (Task 28; corrected in Step 0b).** Measured at
+1440×900 in the shipped app:
+
+| Element | Value |
+|---|---|
+| Native `[data-testid="stHeader"]` | `position: absolute`, `z-index: 999990`, **52.5 px** tall (3.75 rem at the themed 14 px root), `y = 0` |
+| `stMainBlockContainer` | `x = 256`, `width = 1184`, `padding-top: 64px`, `max-width: 1360px` |
+| Top bar keyed container | `y = 64`, **48 px** tall (via `min-height`), `x = 326`, `width = 1044` |
+| First content block (`h1`) | `y = 126` |
+| Header bottom → bar top gap | **11.5 px** (target ≤ 24 px) |
+
+**The 52.5 px vs 60 px reconciliation.** Both figures are 3.75 rem: **52.5 px**
+is 3.75 rem at the theme's `baseFontSize = 14`, and **60 px** is the same 3.75 rem
+at the browser's default 16 px root. The 60 px figure was measured before the
+14 px themed base applied (or without the custom theme); **52.5 px is correct for
+the shipped app**, and it holds in both `toolbarMode = "viewer"` and the
+`STREAMLIT_CLIENT_TOOLBAR_MODE=developer` override (both measured 52.5 px).
+
+**The 48 px bar height needs `min-height`, not `height`.** Streamlit's own
+`.stHorizontalBlock` rule sets `flex: 1 1 0%` and the keyed container is a
+**column** flex parent, so the main axis is vertical and `flex-basis: 0%`
+overrides a plain `height`. Measured: the row computed **20.8 px** with
+`height: 48px` and **48 px** with `min-height: 48px`; `align-items: center` was
+unaffected. Task 28's `height: 48px` was therefore inert.
+
+**The bar is contained in the 1360 px column, not full-bleed (Step 0b
+correction).** The bar is the first child of `stMainBlockContainer`, so it
+inherits the container's `max-width: 1360px` and its 70 px side padding — its
+content column is `x = 326, width = 1044` at 1440 px, identical to the page
+title's column. This **corrects the Task 28 "no non-bleed deviation"
+statement**: there *is* a non-bleed deviation from the mockup (whose top bar
+spans the full main width). It is **not visible at 1440 px**, because the main
+area is 1184 px — narrower than the 1360 px cap, so the cap does not bind; the
+difference only becomes visible at viewports wider than **1616 px**
+(1360 + 256 sidebar). The max content width stays 1360 px.
 
 ## 10. Charts and exports
 
@@ -568,7 +599,8 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 |---|---|---|
 | Inline-SVG nav and brand glyphs | A CSS-drawn shape or a Material/Unicode glyph | DOMPurify strips `<svg>` (`st.html` HTML profile) |
 | Callout glyph | A CSS-drawn ring with the "i" dot and stem | The native alert ships no icon element |
-| 48 px top bar | The native header stays 60 px; the mockup's bar is a new keyed container | Task 28 — the bar is `st.container(key="top-bar")` with `st.columns`; `padding-top: 120px` on the main block clears it |
+| 48 px top bar | The native header stays 52.5 px; the mockup's bar is a new keyed container | Task 28 — the bar is `st.container(key="top-bar")` with `st.columns`; Step 0b seats it 12 px under the header (`padding-top: 64px`) |
+| Non-bleed top bar | The bar is inside the 1360 px content column, not full-bleed | Step 0b correction — the bar is the main container's first child, so it inherits the container's `max-width` and side padding; not visible at 1440 px (see section 9) |
 | Metric/subheader type scale | The theme's own scale | `tokens.py` holds no type-scale tokens; the scale belongs to the `[theme]` layer |
 | KPI tag placement | A real `st.badge` beneath the metric | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |

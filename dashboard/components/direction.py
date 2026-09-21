@@ -126,14 +126,17 @@ _RULES: Final[tuple[tuple[str, str], ...]] = (
 #: ``data-testid`` or the ``[aria-current="page"]`` attribute; the hashed
 #: ``st-emotion-cache-*`` active-link class is deliberately **not** used.
 #: Widths need ``!important`` against Streamlit's inline styles. The native
-#: ``[data-testid="stHeader"]`` is 60 px (the mockup's 48 px top bar is a new
-#: element built in Task 28); the main container's top padding is intentionally
-#: **not** touched here. Brand and top-bar rules land in Tasks 27/28.
+#: ``[data-testid="stHeader"]`` is **52.5 px** at the themed 14 px base
+#: (3.75 rem; the older 60 px figure is the same 3.75 rem at the browser's 16 px
+#: default root — Step 0b reconciled the two). The main container's top padding
+#: clears the header and seats the top bar 12 px below it. Brand and top-bar
+#: rules land in Tasks 27/28.
 _CHROME_COMMENT: Final[str] = (
     "/* Streamlit-chrome selectors — verified on Streamlit 1.61.1 "
     "(wave-0-spike.md §4.3/§4.4). Stable data-testid hooks + "
     '[aria-current="page"]; widths need !important. Native header '
-    '[data-testid="stHeader"] is 60 px (mockup top bar 48 px → Task 28). '
+    '[data-testid="stHeader"] is 52.5 px at the 14 px themed base '
+    "(mockup top bar 48 px → Task 28). "
     "Do not extend without re-running the selector probe. */"
 )
 
@@ -153,7 +156,7 @@ _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
         "background: var(--accent-soft); color: var(--accent); "
         "font-weight: 600; border-inline-start: 3px solid var(--accent);",
     ),
-    ("main_block_container", "max-width: 1360px !important; padding-top: 120px !important;"),
+    ("main_block_container", "max-width: 1360px !important; padding-top: 64px !important;"),
 )
 
 #: Brand block (Task 27, brand fallback 2). The sidebar header is empty chrome
@@ -394,13 +397,18 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     # Filter bar (Task 21): only the reading direction is ours; the columns, their
     # weights and their centre alignment come from `st.columns`.
     f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}',
-    # Top bar (Task 28). The container is a keyed vertical block; the columns row
-    # inside it is targeted and forced to 48 px. Breadcrumb on the RTL start and the
-    # last-collection stamp on the RTL end. The main container padding-top is raised
-    # to 120 px (60 px native header + 48 px top bar + 12 px breathing room).
+    # Top bar (Task 28; Step 0b). The container is a keyed vertical block; the
+    # columns row inside it carries the mockup's 48 px height. The row must use
+    # `min-height`, not `height`: Streamlit's own `.stHorizontalBlock` rule sets
+    # `flex: 1 1 0%` and the keyed container is a column flex parent, so the main
+    # axis is vertical and `flex-basis: 0%` overrides a plain `height` — measured
+    # 20.8 px with `height: 48px`, 48 px with `min-height: 48px`. Breadcrumb on the
+    # RTL start and the last-collection stamp on the RTL end. The main container
+    # padding-top is 64 px = the native header (52.5 px) + a 12 px gap, so the bar
+    # sits directly under the header instead of 67.5 px below it (Step 0b).
     f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}',
     f'{CSS_SELECTORS["top_bar"]} [data-testid="stHorizontalBlock"] {{ '
-    "align-items: center; height: 48px; }",
+    "align-items: center; min-height: 48px; }",
     f'{CSS_SELECTORS["top_bar"]} .top-bar-breadcrumb {{ '
     "font-size: 13px; font-weight: 500; color: var(--text-2); "
     "text-align: right; }",
