@@ -53,3 +53,32 @@ def test_brand_text_appears_in_the_injected_stylesheet(
     assert not app.exception
     styles = " ".join(m.value for m in app.markdown)
     assert t("app.brand") in styles
+
+
+def test_top_bar_renders_breadcrumb_derived_from_registry(
+    fake_streamlit_connection: None,
+) -> None:
+    """The top-bar breadcrumb is derived from ``PAGES``/``GROUPS`` (Task 28):
+    the root, the default page's group label and the page title all appear."""
+    app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
+    app.run()
+
+    assert not app.exception
+    default_spec = next(spec for spec in PAGES if spec.is_default)
+    fragments = html_texts(app)
+    breadcrumb = next(f for f in fragments if "top-bar-breadcrumb" in f)
+    assert t("shell.breadcrumb_root") in breadcrumb
+    assert t(f"group.{default_spec.group}") in breadcrumb
+    assert t(f"page.{default_spec.key}") in breadcrumb
+
+
+def test_top_bar_renders_last_collection_stamp(
+    fake_streamlit_connection: None,
+) -> None:
+    """The right-hand stamp carries the timezone label, always present."""
+    app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
+    app.run()
+
+    assert not app.exception
+    stamp = next(f for f in html_texts(app) if "top-bar-stamp" in f)
+    assert t("shell.timezone") in stamp

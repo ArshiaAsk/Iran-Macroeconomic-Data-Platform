@@ -31,6 +31,7 @@ LOCALE: Final[str] = "fa"
 #: was invented outside the agreed structure.
 KEY_PREFIXES: Final[tuple[str, ...]] = (
     "app.",
+    "shell.",
     "group.",
     "nav.",
     "page.",
@@ -56,6 +57,9 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "app.db_status_label": "وضعیت پایگاه داده",
         "app.db_status_online": "متصل",
         "app.db_status_offline": "قطع",
+        "shell.breadcrumb_root": "سامانه",
+        "shell.last_collection": "آخرین گردآوری: {date}",
+        "shell.timezone": "منطقهٔ زمانی تهران",
         # Sidebar groups (mirror dashboard.navigation.GROUPS).
         "group.overview_analysis": "مرور و تحلیل",
         "group.domains": "حوزه‌ها",

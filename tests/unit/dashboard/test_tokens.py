@@ -149,3 +149,11 @@ def test_theme_font_keys_are_owned_by_task_seven() -> None:
 
     assert str(theme["font"]).startswith("Vazirmatn")
     assert str(theme["headingFont"]).startswith("Vazirmatn")
+
+
+def test_client_toolbar_mode_is_viewer() -> None:
+    """Task 28 sets ``[client] toolbarMode = "viewer"`` to hide the native Deploy
+    button and developer options. The custom ``[theme]`` already hides the theme
+    toggle (D14), so this is the only remaining chrome to suppress."""
+    data = tomllib.loads(CONFIG.read_text("utf-8"))
+    assert data["client"]["toolbarMode"] == "viewer"

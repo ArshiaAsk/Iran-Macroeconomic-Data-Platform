@@ -17,6 +17,13 @@
 [server]
 enableStaticServing = true
 
+# Phase 7.2 (Task 28): hide the native Deploy button and developer options so the
+# analyst sees a clean viewer shell. The custom [theme] already hides the theme
+# toggle (D14). For local development set the environment variable
+# STREAMLIT_CLIENT_TOOLBAR_MODE=developer to restore the full toolbar.
+[client]
+toolbarMode = "viewer"
+
 [theme]
 base = "light"
 primaryColor = "#1D4E89"

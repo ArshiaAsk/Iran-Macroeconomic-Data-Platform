@@ -101,6 +101,7 @@ ignore = [
 "src/connectors/sci_scraper.py" = ["RUF001", "RUF002", "ARG002"]  # Allow Persian text and unused protocol args
 "src/etl/gold.py" = ["RUF002"]  # Allow special chars in docstrings
 "dashboard/i18n.py" = ["RUF001", "RUF002", "RUF003"]  # Persian UI string catalog
+"dashboard/components/layout.py" = ["RUF001", "RUF002", "RUF003"]  # RTL breadcrumb separator, Persian labels
 "dashboard/labels.py" = ["RUF001", "RUF002", "RUF003"]  # Persian display names
 "dashboard/formatting.py" = ["RUF001", "RUF002", "RUF003"]  # Persian digits, separators, labels
 "tests/unit/dashboard/test_i18n.py" = ["RUF001", "RUF002", "RUF003"]  # Persian fixtures

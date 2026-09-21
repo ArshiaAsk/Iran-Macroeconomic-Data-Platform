@@ -179,10 +179,12 @@ def test_chrome_block_styles_sidebar_width_active_item_and_max_width() -> None:
     assert f'{CSS_SELECTORS["sidebar_user_content"]} {{ order: 2; margin-top: auto;' in css
 
 
-def test_chrome_block_does_not_touch_main_container_top_padding() -> None:
+def test_chrome_block_raises_main_container_top_padding_for_top_bar() -> None:
+    """Task 28 raises the main container's top padding to clear the native
+    header (60 px) + the top bar (48 px) + breathing room (12 px) = 120 px."""
     css = direction_css()
 
-    assert "padding-top" not in css
+    assert "padding-top: 120px" in css
 
 
 # --- Task 27: sidebar brand (fallback 2) — CSS-pinned mark + text ---

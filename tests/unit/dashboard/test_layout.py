@@ -680,3 +680,72 @@ def test_filter_bar_container_declares_the_rtl_context() -> None:
 
     assert CSS_SELECTORS["filter_bar"] in css
     assert f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}' in css
+
+
+# --- Task 28: top bar / breadcrumb + last-collection stamp ------------------
+
+
+def test_top_bar_selector_is_registered_and_styled() -> None:
+    """The top bar's keyed-container hook is declared in ``CSS_SELECTORS`` and
+    emitted by ``direction_css()``, with the columns row forced to 48 px."""
+    assert "top_bar" in CSS_SELECTORS
+    css = direction_css()
+    assert CSS_SELECTORS["top_bar"] in css
+    assert f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}' in css
+    assert "height: 48px" in css
+    assert "top-bar-breadcrumb" in css
+    assert "top-bar-stamp" in css
+
+
+def test_top_bar_renders_breadcrumb_and_stamp(
+    fake_streamlit_connection: None,
+) -> None:
+    """The breadcrumb carries the root › group › page, and the stamp carries the
+    last-collection date through the Tehran/Jalali helpers."""
+    app = _run(
+        "from dashboard.components.layout import render_top_bar\n"
+        'render_top_bar("مرور و تحلیل", "مرور کلی")\n'
+    )
+
+    assert not app.exception
+    fragments = html_texts(app)
+    breadcrumb = next(f for f in fragments if "top-bar-breadcrumb" in f)
+    stamp = next(f for f in fragments if "top-bar-stamp" in f)
+    # The breadcrumb root, group and page labels all appear.
+    assert t("shell.breadcrumb_root") in breadcrumb
+    assert "مرور و تحلیل" in breadcrumb
+    assert "مرور کلی" in breadcrumb
+    # The stamp carries the timezone label (always present) and the
+    # last-collection prefix (present when freshness has data).
+    assert t("shell.timezone") in stamp
+    assert t("shell.last_collection", date="")[:10] in stamp
+
+
+def test_top_bar_renders_unknown_placeholder_when_freshness_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty freshness frame renders the unknown placeholder, not a crash."""
+    import pandas as pd
+
+    from dashboard.queries import cached_source_freshness
+
+    cached_source_freshness.clear()
+    monkeypatch.setattr(
+        "dashboard.components.layout.cached_source_freshness",
+        lambda: pd.DataFrame(),
+    )
+
+    app = _run(
+        "from dashboard.components.layout import render_top_bar\n"
+        'render_top_bar("مرور و تحلیل", "مرور کلی")\n'
+    )
+
+    assert not app.exception
+    stamp = next(f for f in html_texts(app) if "top-bar-stamp" in f)
+    assert t("value.unknown") in stamp
+
+
+def test_top_bar_container_declares_the_rtl_context() -> None:
+    css = direction_css()
+
+    assert f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}' in css

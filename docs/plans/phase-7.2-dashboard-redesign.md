@@ -921,10 +921,10 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `shell.last_collection`="آخرین گردآوری: {date}", `shell.timezone`="منطقهٔ زمانی تهران", `shell.breadcrumb_root`="سامانه".
 - **Depends:** Tasks 11, 26, 27.
 - **Acceptance:**
-  - [ ] Breadcrumb derives from `PAGES`/`GROUPS`, not a literal.
-  - [ ] Missing collection log renders the unknown placeholder, not a crash.
-  - [ ] The toolbar mode is set (per the D14 addendum) and the non-bleed deviation (if used) is recorded.
-  - [ ] The `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` override is documented.
+  - [x] Breadcrumb derives from `PAGES`/`GROUPS`, not a literal.
+  - [x] Missing collection log renders the unknown placeholder, not a crash.
+  - [x] The toolbar mode is set (per the D14 addendum) and the non-bleed deviation (if used) is recorded.
+  - [x] The `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` override is documented.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_router.py -q` + manual browser check.
 
 ---

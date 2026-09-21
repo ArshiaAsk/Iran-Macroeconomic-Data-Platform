@@ -1190,3 +1190,60 @@ were never staged or committed (Task 7 owns them).
   - The brand text wraps in the 256px sidebar; the mark and first line sit on
     one row, and the remaining text wraps below.
 - **Commit hash:** `59e1a25`
+
+## Task 28 — BUILD the top bar / breadcrumb with the last-collection stamp
+
+- **Files:** `dashboard/components/layout.py` (`render_top_bar`),
+  `dashboard/components/direction.py` (`top_bar` CSS selector + rules,
+  `main_block_container` padding-top raised to 120 px),
+  `dashboard/app.py` (`_current_page_spec` helper + `render_top_bar` call),
+  `dashboard/i18n.py` (`shell.*` namespace + `"shell."` added to `KEY_PREFIXES`),
+  `.streamlit/config.toml` (`[client] toolbarMode = "viewer"`),
+  `docs/phase-7.2/design-system.md` (§3, §4.1, §6, §9, §14, §15),
+  `pyproject.toml` (per-file-ignores for `layout.py` RUF001),
+  `tests/unit/dashboard/test_layout.py` (5 new tests),
+  `tests/unit/dashboard/test_app_router.py` (2 new tests),
+  `tests/unit/dashboard/test_direction.py` (padding-top test updated),
+  `tests/unit/dashboard/test_tokens.py` (toolbarMode config test),
+  plan checkboxes.
+- **Build:**
+  - `render_top_bar(group_label, page_label, *, key="top-bar")` renders a keyed
+    `st.container` with one `st.columns([1, 1])` row. The breadcrumb (root › group
+    › page) is an escaped `st.html` fragment in the first column (RTL start);
+    the last-collection stamp is in the second column (RTL end). The stamp reads
+    `cached_source_freshness()`, takes the max `collection_timestamp`, and
+    formats it through `to_tehran` → `jalali_date_label` + the clock portion of
+    `tehran_timestamp_label`. An empty or unparseable frame falls back to
+    `t("value.unknown")`.
+  - `_current_page_spec(selected_page)` maps the `Page` returned by
+    `st.navigation` back to a `PageSpec` by matching `selected_page.title`
+    against `t(f"nav.{spec.key}")`, so the breadcrumb is derived from the
+    registry, not a literal.
+  - `main_block_container` chrome rule changed to `padding-top: 120px` (60 px
+    native header + 48 px top bar + 12 px breathing room), up from 96 px.
+  - `[client] toolbarMode = "viewer"` added to `.streamlit/config.toml` with a
+    comment documenting `STREAMLIT_CLIENT_TOOLBAR_MODE=developer` for local dev.
+  - `"shell."` added to `KEY_PREFIXES` in `dashboard/i18n.py` for the three new
+    `shell.*` keys.
+- **Verify:**
+  - `poetry run ruff check` / `ruff format` on all touched files → clean.
+  - `poetry run mypy src dashboard` → 0 errors (68 source files).
+  - `poetry run pytest tests/unit/dashboard/test_layout.py
+    tests/unit/dashboard/test_app_router.py tests/unit/dashboard/test_direction.py
+    tests/unit/dashboard/test_tokens.py tests/unit/dashboard/test_i18n.py
+    -q --no-cov` → 105 passed.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **525 passed** (518
+    + 7 new), no regressions.
+  - `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov`
+    → 10 passed (all pages still render through the router with the top bar).
+- **Deviations:**
+  - No non-bleed deviation: the top bar sits inside the 1360 px max-width main
+    container, consistent with the mockup's content alignment.
+  - `dashboard/components/layout.py` added to `pyproject.toml`
+    `per-file-ignores` for `RUF001`/`RUF002`/`RUF003` because the breadcrumb
+    separator `›` (U+203A) is an intentional RTL glyph, matching the existing
+    convention for Persian-text dashboard modules.
+  - The breadcrumb separator is `›` (single right-pointing angle quotation
+    mark), the RTL-appropriate separator; the LTR `>` was not used because it
+    would render incorrectly in the RTL context.
+- **Commit hash:** _pending_

@@ -36,14 +36,16 @@ from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Final, Literal, NamedTuple, TypeAlias
 
+import pandas as pd
 import streamlit as st
 
 from dashboard.components.escaping import escape_html
 from dashboard.components.html_table import TONES
-from dashboard.formatting import format_number
+from dashboard.formatting import format_number, jalali_date_label, tehran_timestamp_label, to_tehran
 from dashboard.i18n import t
 from dashboard.labels import domain_label
 from dashboard.navigation import page_for_domain
+from dashboard.queries import cached_source_freshness
 from src.etl.bronze import STATUS_FAILED, STATUS_PARTIAL, STATUS_SUCCESS
 
 __all__ = [
@@ -61,6 +63,7 @@ __all__ = [
     "render_section_header",
     "render_status_chip",
     "render_status_dot",
+    "render_top_bar",
 ]
 
 BadgeColor: TypeAlias = Literal[
@@ -221,6 +224,60 @@ def render_page_header(
     st.title(t(title_key))
     if callout_key is not None:
         render_callout(callout_key, tone=tone)
+
+
+def render_top_bar(
+    group_label: str,
+    page_label: str,
+    *,
+    key: str = "top-bar",
+) -> None:
+    """Render the shell top bar: breadcrumb and last-collection stamp.
+
+    The bar is built from native ``st.columns`` inside a keyed ``st.container``
+    (D13/AM-7). The container establishes an RTL context: the first column is the
+    rightmost visually, so the breadcrumb lives in column 0 (RTL start) and the
+    last-collection stamp in column 1 (RTL end). The component calls
+    :func:`dashboard.queries.cached_source_freshness` and formats the latest
+    ``collection_timestamp`` through the Tehran/Jalali helpers; if the freshness
+    frame is empty or cannot be parsed, it falls back to :data:`value.unknown`.
+
+    Args:
+        group_label: Already-resolved sidebar group label (from
+            ``t(f"group.{spec.group}")``).
+        page_label: Already-resolved page title (from ``t(f"page.{spec.key}")``).
+        key: Optional container-key override. The default ``"top-bar"`` is the
+            CSS hook in :data:`dashboard.components.direction.CSS_SELECTORS`.
+    """
+    freshness = cached_source_freshness()
+    stamp: str | None = None
+    if not freshness.empty and "collection_timestamp" in freshness.columns:
+        try:
+            latest = freshness["collection_timestamp"].max()
+            if pd.notna(latest):
+                tehran_ts = to_tehran(pd.Timestamp(latest))
+                jalali = jalali_date_label(tehran_ts)
+                # The timestamp label includes both date and clock; keep only the
+                # clock portion for the stamp (the date is already shown in Jalali).
+                time_part = tehran_timestamp_label(tehran_ts).split()[-1]
+                stamp = (
+                    f"{t('shell.last_collection', date=jalali)} · {time_part} · "
+                    f"{t('shell.timezone')}"
+                )
+        except (ValueError, TypeError):
+            stamp = None
+
+    if stamp is None:
+        stamp = t("value.unknown")
+
+    breadcrumb = f"{t('shell.breadcrumb_root')} › {group_label} › {page_label}"
+
+    with st.container(key=key):
+        breadcrumb_col, stamp_col = st.columns([1, 1])
+        with breadcrumb_col:
+            st.html(f'<div class="top-bar-breadcrumb">{escape_html(breadcrumb)}</div>')
+        with stamp_col:
+            st.html(f'<div class="top-bar-stamp">{escape_html(stamp)}</div>')
 
 
 def _render_kpi_cell(cell: KpiCell) -> None:

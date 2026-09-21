@@ -95,6 +95,7 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "section_subtitle": '[class*="st-key-section-subtitle-"]',
         "section_trailing": '[class*="st-key-section-trailing-"]',
         "filter_bar": '[class*="st-key-filter-bar-"]',
+        "top_bar": '[class*="st-key-top-bar"]',
     }
 )
 
@@ -152,7 +153,7 @@ _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
         "background: var(--accent-soft); color: var(--accent); "
         "font-weight: 600; border-inline-start: 3px solid var(--accent);",
     ),
-    ("main_block_container", "max-width: 1360px !important;"),
+    ("main_block_container", "max-width: 1360px !important; padding-top: 120px !important;"),
 )
 
 #: Brand block (Task 27, brand fallback 2). The sidebar header is empty chrome
@@ -385,6 +386,19 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     # Filter bar (Task 21): only the reading direction is ours; the columns, their
     # weights and their centre alignment come from `st.columns`.
     f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}',
+    # Top bar (Task 28). The container is a keyed vertical block; the columns row
+    # inside it is targeted and forced to 48 px. Breadcrumb on the RTL start and the
+    # last-collection stamp on the RTL end. The main container padding-top is raised
+    # to 120 px (60 px native header + 48 px top bar + 12 px breathing room).
+    f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; }}',
+    f'{CSS_SELECTORS["top_bar"]} [data-testid="stHorizontalBlock"] {{ '
+    "align-items: center; height: 48px; }",
+    f'{CSS_SELECTORS["top_bar"]} .top-bar-breadcrumb {{ '
+    "font-size: 13px; font-weight: 500; color: var(--text-2); "
+    "text-align: right; }",
+    f'{CSS_SELECTORS["top_bar"]} .top-bar-stamp {{ '
+    "font-size: 13px; font-weight: 500; color: var(--text-2); "
+    "text-align: left; }",
 )
 
 

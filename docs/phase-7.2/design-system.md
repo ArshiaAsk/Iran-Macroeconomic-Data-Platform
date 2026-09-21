@@ -117,11 +117,11 @@ generic tail), while `direction.py` repeats the token stack as `FONT_STACK` for
 the CSS that must not depend on the theme. Only the palette, the radii and the
 base size are asserted token-equal (`test_tokens.py`).
 
-`client.toolbarMode` is **not** set yet. The custom `[theme]` already hides the
-theme toggle (section 9), so the only remaining reason for it is hiding the
-native Deploy button and developer options; the plan's recommended `"viewer"`
-value lands with the top bar (Task 28), together with the documented
-`STREAMLIT_CLIENT_TOOLBAR_MODE=developer` local override.
+`client.toolbarMode` is set to `"viewer"` (Task 28). The custom `[theme]`
+already hides the theme toggle (section 9), so this suppresses the native Deploy
+button and developer options while keeping the viewer options the analyst needs.
+For local development the developer override is the environment variable
+`STREAMLIT_CLIENT_TOOLBAR_MODE=developer`.
 
 **The font is vendored, not fetched.** `dashboard/static/Vazirmatn.ttf` (241 328 B,
 variable, wght 100–900, from the official `vazirmatn` npm package 33.0.3) plus its
@@ -150,6 +150,7 @@ needs no `unsafe_allow_html`.
 | `render_status_chip` | `(status)` | A standalone collection-run chip (`st.badge`), for use **outside** tables. |
 | `render_status_dot` | `(label, tone)` | A standalone coloured dot with a label; the one escaped fragment here. |
 | `render_bar_list` | `(rows, total_label, *, key="default")` | The indicators-by-domain bar panel. |
+| `render_top_bar` | `(group_label, page_label, *, key="top-bar")` | The shell top bar: breadcrumb (root › group › page) and last-collection stamp (Jalali date · clock · Tehran zone). The stamp reads `cached_source_freshness()` and formats the latest `collection_timestamp` through the Tehran/Jalali helpers; an empty or unparseable frame falls back to `t("value.unknown")`. |
 | `render_empty` | `(key)` | The shared empty state for any `empty.*` message. |
 | `render_error` | `(key, *, detail=None)` | The shared error state: message, retry hint, optional detail. |
 | `render_loading` | `()` | The shared loading placeholder. |
@@ -325,9 +326,10 @@ Fragile — **do not use**:
 | Anything requiring a width/max-width | — | Streamlit sets inline widths, so a `!important` override is unavoidable and must stay in the chrome block |
 
 **Known gaps.** The native `[data-testid="stHeader"]` is **60 px**, not the
-mockup's 48 px top bar — Task 28 builds the mockup's bar as a new element and does
-not restyle the native one. The native alert ships **no icon element**, which is
-why the callout glyph is drawn in CSS.
+mockup's 48 px top bar — Task 28 builds the mockup's bar as a new keyed
+container (`st.container(key="top-bar")`) and raises the main block's
+`padding-top` to 120 px (60 + 48 + 12). The native alert ships **no icon
+element**, which is why the callout glyph is drawn in CSS.
 
 **Sidebar brand + DB status (Task 27, fallback 2).** The sidebar brand and the
 DB-status indicator are CSS-pinned, not rendered by `st.logo` or
@@ -441,11 +443,16 @@ right) — only the legend and titles are RTL-aligned.
 deferred. A custom `[theme]` in `config.toml` already removes the settings-menu
 theme toggle in 1.61.1 (verified: no `stMainMenuItem-theme-*` at any
 `toolbarMode`), so the lock is enforced today with **no CSS hacks on the native
-menu**. The plan's recommended `client.toolbarMode = "viewer"` — to hide the
-native Deploy button and developer options while keeping the viewer options the
-analyst needs — is **not applied yet**; it lands with the top bar (Task 28). For
-local development the developer override is the environment variable
+menu**. Task 28 sets `client.toolbarMode = "viewer"` — to hide the native Deploy
+button and developer options while keeping the viewer options the analyst needs.
+For local development the developer override is the environment variable
 `STREAMLIT_CLIENT_TOOLBAR_MODE=developer`.
+
+**Measured shell geometry (Task 28).** The native `[data-testid="stHeader"]` is
+60 px. The mockup's top bar is 48 px, built as a new keyed container below the
+native header. The main block container's `padding-top` is raised to 120 px
+(60 px header + 48 px top bar + 12 px breathing room), up from the pre-Task-28
+96 px. The max content width stays 1360 px.
 
 ## 10. Charts and exports
 
@@ -555,7 +562,7 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 |---|---|---|
 | Inline-SVG nav and brand glyphs | A CSS-drawn shape or a Material/Unicode glyph | DOMPurify strips `<svg>` (`st.html` HTML profile) |
 | Callout glyph | A CSS-drawn ring with the "i" dot and stem | The native alert ships no icon element |
-| 48 px top bar | The native header stays 60 px; the mockup's bar is a new element | Task 28 |
+| 48 px top bar | The native header stays 60 px; the mockup's bar is a new keyed container | Task 28 — the bar is `st.container(key="top-bar")` with `st.columns`; `padding-top: 120px` on the main block clears it |
 | Metric/subheader type scale | The theme's own scale | `tokens.py` holds no type-scale tokens; the scale belongs to the `[theme]` layer |
 | KPI tag placement | A real `st.badge` beneath the metric | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
@@ -564,7 +571,7 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 ## 15. Open items
 
 - **Task 27** records which sidebar-brand fallback shipped and extends section 6.
-- **Task 28** builds the top bar/breadcrumb and the last-collection stamp.
+- **Task 28** ships the top bar/breadcrumb and the last-collection stamp (done).
 - **Task 33** lands the D11 AST guard with its first `MIGRATED_PAGES` entry.
 - **Task 47** extends this document with the top bar, the sidebar shell and the
   screenshot script, plus the per-archetype review outcomes.

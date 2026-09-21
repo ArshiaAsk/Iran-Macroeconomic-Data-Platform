@@ -8,7 +8,7 @@ still be driven directly by ``AppTest``.
 import streamlit as st
 
 from dashboard.components.direction import inject_direction_css
-from dashboard.components.layout import render_status_dot
+from dashboard.components.layout import render_status_dot, render_top_bar
 from dashboard.connection import get_connection
 from dashboard.i18n import t
 from dashboard.navigation import GROUPS, PAGES, PageSpec
@@ -53,6 +53,32 @@ def render_database_status() -> None:
         render_status_dot(t("app.db_status_offline"), tone="err")
 
 
+def _current_page_spec(selected_page: st.Page) -> PageSpec:
+    """Find the registry spec matching the page currently selected by the router.
+
+    ``st.navigation`` returns the current :class:`Page`, and ``Page.title`` is set
+    to ``t(f"nav.{spec.key}")`` by :func:`_build_page`, so the selected page maps
+    back to exactly one :class:`PageSpec`.
+
+    Args:
+        selected_page: The :class:`Page` returned by ``st.navigation``.
+
+    Returns:
+        The matching :class:`PageSpec` from the registry.
+
+    Raises:
+        RuntimeError: When the selected page title does not match any registry
+            entry (this should never happen because the router builds its pages
+            from the registry).
+    """
+    selected_title = selected_page.title
+    for spec in PAGES:
+        if t(f"nav.{spec.key}") == selected_title:
+            return spec
+    message = f"could not find PageSpec for selected page title: {selected_title!r}"
+    raise RuntimeError(message)
+
+
 def main() -> None:
     """Configure the shell and run the page selected by the router."""
     st.set_page_config(
@@ -69,6 +95,12 @@ def main() -> None:
         # before interpolation by brand_sidebar_css().
         inject_direction_css(brand_text=t("app.brand"))
         render_database_status()
+
+    spec = _current_page_spec(navigation)
+    render_top_bar(
+        group_label=t(f"group.{spec.group}"),
+        page_label=t(f"page.{spec.key}"),
+    )
     navigation.run()
 
 
