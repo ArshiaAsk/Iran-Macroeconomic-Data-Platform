@@ -14,6 +14,7 @@ from streamlit.testing.v1 import AppTest
 
 from dashboard.components.direction import CSS_SELECTORS, direction_css
 from dashboard.components.html_table import Dot, StatusChip, Text, TwoLine
+from dashboard.components.layout import BarRow
 from dashboard.formatting import (
     format_number,
     jalali_date_label,
@@ -21,12 +22,13 @@ from dashboard.formatting import (
     tehran_clock_label,
 )
 from dashboard.i18n import t
-from dashboard.labels import source_label
+from dashboard.labels import domain_label, source_label
 from dashboard.navigation import page_for_domain
 from dashboard.page_view import (
     build_freshness_rows,
     freshness_display,
     freshness_summary,
+    ordered_domain_rows,
     overview_kpi_cells,
     series_inventory_counts,
 )
@@ -414,17 +416,62 @@ def test_overview_domain_bars_link_each_owned_domain(
 
     bars = [body for body in html_texts(app) if "bar-rail" in body]
     assert len(bars) == len(domain_counts)
-    # Proportional to the counts: the largest domain fills its rail and every
-    # other rail is that domain's share of it.
+    # Proportional to the counts, in the count-descending display order (P1): the
+    # largest domain fills its rail and every other rail is that domain's share.
     widths = [float(match) for body in bars for match in re.findall(r"width:([\d.]+)%", body)]
     largest = int(domain_counts["indicator_count"].max())
     assert widths.count(100.0) == int((domain_counts["indicator_count"] == largest).sum())
-    for width, count in zip(widths, domain_counts["indicator_count"], strict=True):
-        assert abs(width - int(count) / largest * 100) < 0.05
+    for width, row in zip(widths, ordered_domain_rows(domain_counts), strict=True):
+        assert abs(width - row.indicator_count / largest * 100) < 0.05
 
     footer = next(body for body in html_texts(app) if "bar-list-foot" in body)
     assert t("section.indicators_by_domain_total") in footer
     assert t("metric.indicator_count", count=format_number(total)) in footer
+
+
+def test_ordered_domain_rows_sort_count_descending_then_name_ascending() -> None:
+    """P1: the mockup's bar order is count-descending, ties by domain name."""
+    frame = pd.DataFrame(
+        {
+            "domain": ["energy", "gdp", "gold", "inflation", "labor", "fx", "market"],
+            "indicator_count": [3, 8, 2, 15, 1, 1, 1],
+        }
+    )
+
+    rows = ordered_domain_rows(frame)
+
+    # 15, 8, 3, 2, then the three 1s in Persian display-name order
+    # (ارز < بازار سرمایه < بازار کار).
+    assert rows == [
+        BarRow("inflation", 15),
+        BarRow("gdp", 8),
+        BarRow("energy", 3),
+        BarRow("gold", 2),
+        BarRow("fx", 1),
+        BarRow("market", 1),
+        BarRow("labor", 1),
+    ]
+
+
+def test_ordered_domain_rows_are_stable_and_keep_an_unknown_count_as_zero() -> None:
+    frame = pd.DataFrame({"domain": ["gdp", "inflation"], "indicator_count": [None, 5]})
+
+    # A missing count renders zero (never dropped) and sorts last; the single
+    # non-zero row keeps its place.
+    assert ordered_domain_rows(frame) == [BarRow("inflation", 5), BarRow("gdp", 0)]
+
+
+def test_overview_domain_bars_render_in_count_descending_order(
+    fake_streamlit_connection,
+) -> None:
+    """The rendered bars follow the sorted order, not the frame's row order."""
+    app = _overview_app()
+    domain_counts = FakeDashboardRepository().available_domains()
+    expected = [domain_label(row.domain) for row in ordered_domain_rows(domain_counts)]
+
+    assert not app.exception
+    labels = [link.proto.label for link in app.get("page_link")]
+    assert labels == expected
 
 
 def test_overview_domain_bars_section_header_carries_the_count_label(

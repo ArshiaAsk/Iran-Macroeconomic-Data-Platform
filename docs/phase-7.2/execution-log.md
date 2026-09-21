@@ -1692,3 +1692,31 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none new. Carry items restated for Tasks 32–34: (1) top bar has
   no surface/border; (2) English `Choose options` placeholder (adopt
   `render_filter_bar`); (3) chart legend title `label`.
+
+## Wave C part 2 — Scope A polish (P1–P5) and Task 32
+
+### P1 — bar order (count-descending)
+
+- **Files:** `dashboard/page_view.py` (new pure `ordered_domain_rows` +
+  `_domain_count`; `_render_domain_counts` now delegates),
+  `tests/unit/dashboard/test_app_overview.py`, `docs/phase-7.2/design-system.md`
+  (§14 row updated from "flagged for review" to "resolved by P1").
+- **Build:** `ordered_domain_rows(domain_counts) -> list[BarRow]` sorts by
+  indicator count descending, ties by the domain's **Persian display name**
+  ascending (`domain_label`), which reproduces the mockup's own tie order
+  (`تورم` before `رفاه` at 15; `ارز` before `بازار …` at 1). A missing or
+  non-numeric count is treated as zero and never dropped; the sort is stable.
+  `_render_domain_counts` keeps its name and signature (the Task 20 owner-link
+  test monkeypatches it) and calls the helper.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_app_overview.py test_layout.py
+    -q --no-cov` → **81 passed** (3 new: count-desc/name-asc fixture order,
+    missing-count-as-zero stability, and the rendered `page_link` label order
+    against the fake repository). The existing proportional-width test was
+    updated to compare the widths against the sorted rows (they were previously
+    zipped with the frame's own order).
+  - `poetry run ruff check` / `ruff format --check` / `mypy dashboard/page_view.py`
+    → clean.
+- **Deviations:** none. The bar order now matches the mockup; the §14 note is
+  resolved rather than carried.
+- **Commit:** recorded in the "Wave C part 2a gate" entry below.

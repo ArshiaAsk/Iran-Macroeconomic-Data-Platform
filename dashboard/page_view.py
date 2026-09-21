@@ -899,21 +899,52 @@ def overview_kpi_cells(
     ]
 
 
-def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
-    """Render the indicators-by-domain bar list, one row per domain.
+def ordered_domain_rows(domain_counts: pd.DataFrame) -> list[BarRow]:
+    """Turn the ``available_domains`` frame into bar rows, count-descending.
 
-    Rows come from ``available_domains``. :func:`render_bar_list` reads each
-    domain's owner from the navigation registry (:func:`page_for_domain`, the
-    single declaration of domain ownership) and keeps it a native ``st.page_link``
-    beside the bar, so an owned domain stays navigable and visible to ``AppTest``;
-    a domain without an owner stays visible as plain text rather than being
-    dropped. The footer total is the sum of the row counts, computed from the
-    data and formatted with Persian digits.
+    The mockup's bars are ordered by indicator count, largest first, and ties are
+    broken by the domain's Persian display name ascending (the mockup's own tie
+    order: ``تورم`` before ``رفاه`` at 15, ``ارز`` before ``بازار …`` at 1). A
+    domain whose count is missing or non-numeric is treated as zero, never
+    dropped, and the sort is stable so equal keys keep the frame's order.
+
+    Args:
+        domain_counts: Frame from ``available_domains`` with ``domain`` and
+            ``indicator_count`` columns
+
+    Returns:
+        One :class:`BarRow` per domain, in display order
     """
     rows: list[BarRow] = []
     for row in domain_counts.itertuples(index=False):
         count = row.indicator_count
-        rows.append(BarRow(str(row.domain), int(count) if isinstance(count, int | float) else 0))
+        rows.append(BarRow(str(row.domain), _domain_count(count)))
+    rows.sort(key=lambda row: (-row.indicator_count, domain_label(row.domain)))
+    return rows
+
+
+def _domain_count(value: object) -> int:
+    """A domain's indicator count as an int, treating a missing value as zero."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return 0
+    if isinstance(value, float) and not math.isfinite(value):
+        return 0
+    return int(value)
+
+
+def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
+    """Render the indicators-by-domain bar list, one row per domain.
+
+    Rows come from ``available_domains`` through :func:`ordered_domain_rows`
+    (count-descending, ties by domain display name ascending, as in the mockup).
+    :func:`render_bar_list` reads each domain's owner from the navigation
+    registry (:func:`page_for_domain`, the single declaration of domain ownership)
+    and keeps it a native ``st.page_link`` beside the bar, so an owned domain stays
+    navigable and visible to ``AppTest``; a domain without an owner stays visible
+    as plain text rather than being dropped. The footer total is the sum of the
+    row counts, computed from the data and formatted with Persian digits.
+    """
+    rows = ordered_domain_rows(domain_counts)
     total = sum(row.indicator_count for row in rows)
     render_bar_list(rows, t("metric.indicator_count", count=format_number(total)))
 
