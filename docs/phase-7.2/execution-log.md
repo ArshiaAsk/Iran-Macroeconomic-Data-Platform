@@ -2899,3 +2899,17 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   below the fold and evidenced in `wave-f-assets/step-0b/`.
 - **Deviations:** none.
 - **Commit:** Scope A gate commit.
+
+## Wave G — Step 0c (record the Wave F decision; proceed while it is pending)
+
+- **Context read:** `docs/phase-7.2/README.md` (status "Wave F awaiting owner
+  review") and `docs/phase-7.2/validation/archetype-correlation.md`
+  (`Owner sign-off: PENDING`). The Wave F owner sign-off is **not recorded yet**.
+- **Decision:** Wave G is **independent of Wave F** (the catalog page shares no
+  surface with the correlation page beyond the global shell and the shared
+  components), so Wave G proceeds while the Wave F review is pending. **Task 43 is
+  not ticked** and its plan acceptance box stays open; the Wave F review remains
+  `PENDING` for the owner.
+- **Verify:** docs-only; no test run.
+- **Deviations:** none.
+- **Commit:** Step 0c commit.
