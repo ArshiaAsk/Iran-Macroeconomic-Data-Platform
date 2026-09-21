@@ -1189,4 +1189,4 @@ were never staged or committed (Task 7 owns them).
     brand asset exists and `st.html` strips inline SVG.
   - The brand text wraps in the 256px sidebar; the mark and first line sit on
     one row, and the remaining text wraps below.
-- **Commit hash:** pending
+- **Commit hash:** `59e1a25`
