@@ -1373,3 +1373,34 @@ were never staged or committed (Task 7 owns them).
     `url_path`-less stub both fall back to the default spec.
 - **Deviations:** none. The prior `RuntimeError` on a lookup miss is replaced by
   a documented fallback, which is the intended robustness change.
+
+## Step 0d — Wave B gate records
+
+- **Files:** `docs/phase-7.2/VALIDATION.md` (new "Wave B" section + status),
+  `docs/phase-7.2/README.md` (status → "Wave B complete"),
+  `docs/phase-7.2/wave-b-assets/all-pages/` (10 PNGs).
+- **Build:**
+  - **Gate runs.** `make check` → **1347 passed, 3 skipped, 136 deselected** in
+    167.4 s, coverage **89.22 %**; `poetry run mypy src dashboard` → **0 errors**;
+    dashboard subset → **531 passed**; export integration smoke
+    (`test_exports.py -m integration`) → **1 passed**; ten-page AppTest smoke
+    (`test_all_pages_smoke.py`) → **10 passed**.
+  - **All-pages capture.** Restarted the Streamlit server on the 0c tree, then
+    `poetry run python scripts/dashboard_screenshots.py --out-dir
+    docs/phase-7.2/wave-b-assets/all-pages` → 10 PNGs at 1440×900, one per
+    registered page. Each page shows the full shell (single-line brand, nav
+    icons, active item, pinned DB status, seated top bar with the correct
+    breadcrumb + stamp). Per-page pass/defect lines and the breadcrumb text are
+    recorded in `VALIDATION.md`.
+  - **Observations (not Wave B defects).** Filter multiselects still show the
+    untranslated `Choose options` placeholder (page-composition, Waves C–G);
+    the GDP chart legend title still reads `label` (already filed Wave A defect
+    1); `welfare.png` was captured mid-run and shows the transient `Stop` widget
+    (capture timing, not a page defect).
+  - **Plan checkboxes.** Tasks 25–28 acceptance boxes are all `[x]` in
+    `docs/plans/phase-7.2-dashboard-redesign.md`; Tasks 29–31 remain `[ ]` (Wave
+    C, not started).
+- **Verify:** all gate commands above are green; `git status --short` clean apart
+  from the new assets/docs being committed.
+- **Deviations:** none new. The Wave B accepted deviations (48 px non-bleed top
+  bar; CSS-pinned text brand) are restated in `VALIDATION.md`.

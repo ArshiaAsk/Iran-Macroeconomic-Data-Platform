@@ -2,12 +2,12 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave A complete** (foundation — Tasks 1–24). Wave 0 is recorded in
-[`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change baseline and the
-per-wave gate rule). Per-task evidence lives in
-[`execution-log.md`](execution-log.md); the Wave A visual review and gate are in
-[`VALIDATION.md`](VALIDATION.md). Implementation waves B–H follow, starting at
-Task 25 (Wave B — shell).
+Status: **Wave B complete** (shell — Tasks 25–28 plus Step 0 close-out). Wave 0 is
+recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
+baseline and the per-wave gate rule). Per-task evidence lives in
+[`execution-log.md`](execution-log.md); the Wave A and Wave B visual reviews and
+gates are in [`VALIDATION.md`](VALIDATION.md). Wave C (Overview reference
+implementation) follows, starting at Task 29.
 
 Documents:
 

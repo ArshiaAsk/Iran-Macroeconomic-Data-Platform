@@ -1,7 +1,8 @@
 # Phase 7.2 Validation Report
 
-**Status:** Wave A complete (Tasks 1–24) — the visual review recorded here is
-2026-09-21 against a populated local database.
+**Status:** Wave B complete (shell — Tasks 25–28 + Step 0 close-out); Wave C not
+started. The visual review recorded here is 2026-09-21 against a populated local
+database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
 **Wave 0 evidence:** [wave-0-spike.md](wave-0-spike.md) ·
@@ -158,3 +159,96 @@ run collects. The dashboard subset grew **+65** across this stretch (Tasks 17–
 (coverage is measured on `src`, so a dashboard-only run would fail the gate for
 the wrong reason); the export smoke is deselected by `make check` because it needs
 a Chromium binary, which is why it is run explicitly above.
+
+---
+
+## Wave B — shell (Tasks 25–28 + Step 0 close-out)
+
+Wave B adds the sidebar shell (brand, DB status, active item), the nav icon map,
+the freshness TTL fix and the top bar/breadcrumb with the last-collection stamp.
+Step 0 then closed three shell defects found in review: the brand wrapped to two
+lines (0a), the top bar sat 67.5 px below the native header (0b), and the
+page-spec lookup depended on display text (0c).
+
+### Method
+
+```bash
+poetry run streamlit run dashboard/app.py --server.port 8501 --server.headless true
+poetry run python scripts/dashboard_screenshots.py \
+    --out-dir docs/phase-7.2/wave-b-assets/all-pages
+```
+
+Ten PNGs, 1440×900, viewport-only, one per registered page, captured through the
+sidebar in registry order. Baseline: the Wave A set in
+`docs/phase-7.2/wave-a-assets/after-global-look/`. This is the Wave B gate
+screenshot set; the element-by-element mockup comparison is Task 34 (Wave C).
+
+### Per-page shell check
+
+Every page renders the full shell: the single-line brand block
+(`سامانهٔ دادهها` + accent mark) in `stSidebarHeader`, the native Material nav
+icons, the active item highlighted, the pinned DB-status dot at the sidebar
+bottom, and the top bar (breadcrumb from the registry group + page label on one
+side, `آخرین گردآوری: … · … · منطقهٔ زمانی تهران` on the other) seated directly
+under the native header.
+
+| Page | Breadcrumb (group → page) | Status |
+|---|---|---|
+| `overview` | `سامانه ، مرور و تحلیل ، مرور کلی` | PASS |
+| `correlation` | `سامانه ، مرور و تحلیل ، مقایسه و همبستگی` | PASS |
+| `catalog` | `سامانه ، مرور و تحلیل ، فهرست دادهها` | PASS |
+| `inflation` | `سامانه ، حوزهها ، تورم` | PASS |
+| `gdp` | `سامانه ، حوزهها ، تولید ناخالص داخلی و اقتصاد` | PASS |
+| `trade_energy` | `سامانه ، حوزهها ، تجارت و انرژی` | PASS |
+| `welfare` | `سامانه ، حوزهها ، رفاه و آمارگیری خانوار` | PASS |
+| `fx_gold` | `سامانه ، حوزهها ، ارز و طلا` | PASS |
+| `market` | `سامانه ، حوزهها ، بازار سرمایه` | PASS |
+| `labor` | `سامانه ، حوزهها ، بازار کار` | PASS |
+
+**Shell pass on all ten pages.** The Wave B delta is the shell only; the page
+bodies are unchanged from Wave A and are redesigned in Waves C–G.
+
+### Observations (not Wave B defects)
+
+- **`Choose options` placeholder** — the filter `st.multiselect` controls on the
+  data pages show Streamlit's untranslated default placeholder. It is a
+  page-composition concern (Wave C–G adopt `render_filter_bar`), not shell; filed
+  as an open item for the page waves.
+- **`label` chart-legend title** — the GDP chart legend title reads `label`
+  (already filed under Wave A defects 1; the builders pass `color="label"`). A
+  chart-builder change for its own task, unchanged here.
+- **`welfare.png` captured mid-run** — the capture shows the transient `Stop`
+  status widget while a chart finished rendering. A capture-timing artifact, not a
+  page defect.
+
+### Wave B gate
+
+Run after Step 0e, against the Wave 0 baseline and the Wave A gate above. The
+per-wave rule is **no new errors and no regressions**.
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1347 passed, 3 skipped, 136 deselected** in 167.4 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **531 passed** |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** (PNG + SVG render through Kaleido 1.4.0) |
+| Ten-page AppTest smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed**, no page raises |
+| Working tree | `git status --short` | clean |
+
+**Against the baseline.** The Wave B start-of-wave baseline was **1341 passed /
+3 skipped** (full) and **525 passed** (dashboard subset); after Step 0 the counts
+are **1347 / 3 skipped** and **531**. The +6 is the Step 0 tests (0a: brand
+single-line + no-wrap; 0b: top-bar row `min-height`; 0c: four page-spec-lookup
+tests), so **nothing regressed**.
+
+### Accepted deviations carried in Wave B
+
+- **Top bar is 48 px, inside the 1360 px content column (non-bleed)** — the
+  mockup draws a full-bleed white strip with a `border-bottom`. The shipped bar is
+  the main container's first child (inside the column) and has no surface
+  background or border; this is not visible at 1440 px (main area 1184 px < 1360 px
+  cap). Recorded in `design-system.md` §9/§14 (see also Step 0b).
+- **Brand is a CSS-pinned sidebar block (fallback 2)** — `st.logo` is image-only,
+  so the text brand is emitted from `t("app.brand")` via a
+  `[data-testid="stSidebarHeader"]` `::after` rule; the mark is a CSS `::before`.
+  Recorded in `design-system.md` and Task 27.
