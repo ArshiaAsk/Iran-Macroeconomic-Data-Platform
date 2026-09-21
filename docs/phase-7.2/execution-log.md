@@ -2680,3 +2680,67 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** none — the panel is the `default` variant by measurement
   (957 px in a 1042 px column).
 - **Commit:** this entry is committed with the Task 39 commit.
+
+## Wave E — Task 40 (Market page emphasis sections)
+
+- **Files:** `dashboard/components/layout.py` (new `render_callout_stack` +
+  `__all__`), `dashboard/page_view.py` (`render_market_page`,
+  `_render_market_notes`, `_render_market_level`, `_render_market_derived_panels`;
+  import of `render_callout_stack`),
+  `tests/unit/dashboard/test_layout_guard.py` (MIGRATED_PAGES += the four Market
+  functions), `tests/unit/dashboard/test_layout.py` (+2 `render_callout_stack`
+  tests), `docs/phase-7.2/design-system.md` (§4.1 component row, §11 testing
+  rule, §12 whitelist mention).
+- **Build (Task 35 pattern):**
+  - New `render_callout_stack(callouts)`: renders a sequence of
+    `(catalog_key, tone)` pairs, each through `render_callout`. The container key
+    derives from the catalog key, so the stack is safe while no key repeats.
+  - `render_market_page` opens with `render_page_header("page.market")`; the
+    catalog-empty `st.info` is `render_empty`; the no-selection and no-observation
+    `st.info`s are `render_callout(..., tone="info", container_key=...)` with
+    distinct keys.
+  - `_render_market_notes`: the five TSETMC caveats become one
+    `render_callout_stack` (one `warn` + four `info`) — the page header's caveat
+    block is now the D11 shared component.
+  - `_render_market_level`: `st.subheader` → `render_section_header`; the
+    sessions `st.metric` → a one-cell `render_kpi_band`; the empty `st.info` →
+    `render_callout(..., container_key="market-level")`.
+  - `_render_market_derived_panels` is listed in the guard; its per-series
+    `st.subheader(market_series_label(rows))` stays (the label is a **resolved**
+    display string, not a catalog key, so it cannot go through
+    `render_section_header`'s `t(title_key)`; `st.subheader` is not a banned
+    call, so the guard is satisfied and the labels are unchanged).
+  - The quality table already uses `render_html_table` (`render_quality_summary`,
+    `coverage` variant) from Task 35 — confirmed, no change needed.
+- **Changed assertions in `test_app_market.py`:** **none.** Every existing
+  assertion still passes unchanged:
+  - `test_market_page_renders_a_labelled_panel_per_tsetmc_series` reads
+    `app.title`/`app.subheader`/`app.get("plotly_chart")` — `render_page_header`
+    keeps the native `st.title`, and `_render_market_level` /
+    `_render_market_derived_panels` keep the native `st.subheader`, so the panel
+    count and labels are unchanged.
+  - `test_market_page_states_the_tsetmc_semantics` reads `app.warning`/`app.info`
+    — `render_callout_stack` calls `render_callout`, which calls the native
+    `st.warning`/`st.info`, so the five caveats are still seen.
+  - `test_market_page_reports_the_observed_session_count` reads `app.metric` —
+    `render_kpi_band` calls `st.metric` inside its columns/containers, which
+    `AppTest` still surfaces.
+- **New component tests:** `test_callout_stack_renders_each_pair_with_its_tone`
+  and `test_callout_stack_keeps_distinct_container_keys` in `test_layout.py`.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_app_market.py
+  tests/unit/dashboard/test_layout_guard.py
+  tests/unit/dashboard/test_design_system_doc.py tests/unit/dashboard/test_states.py
+  -q --no-cov` → **44 passed**; `test_layout.py` → **59 passed** (was 57; +2);
+  dashboard subset → **637 passed**; `poetry run mypy src dashboard` → **0
+  errors**, 68 source files; `ruff format --check`/`ruff check` → clean.
+- **Visual evidence:** `docs/phase-7.2/wave-e-assets/task-40/` — `before-top/`
+  (copied from `wave-d-assets/partB-all-pages/market.png`), `after-top/market.png`
+  (page header + five TSETMC caveats with accent bars/glyphs + filter bar) and
+  `after-scroll/market-level.png` (the level section header, the one-cell KPI
+  band and the level chart).
+- **Note:** the dev Streamlit server was restarted once for the capture.
+- **Deviations:** the derived-panel subheaders stay raw `st.subheader` because
+  their titles are resolved display strings, not catalog keys (recorded for the
+  owner). The `render_callout_stack` component and the design-system doc rows are
+  new public surface.
+- **Commit:** this entry is committed with the Task 40 commit.

@@ -128,6 +128,39 @@ def test_callout_css_hook_is_registered_and_emitted() -> None:
     assert f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"]::before' in css
 
 
+def test_callout_stack_renders_each_pair_with_its_tone() -> None:
+    app = _run(
+        "from dashboard.components.layout import render_callout_stack\n"
+        "render_callout_stack((\n"
+        '    ("warn.tsetmc_derived_not_official", "warn"),\n'
+        '    ("warn.tsetmc_trading_days_absent", "info"),\n'
+        '    ("warn.tsetmc_ma30_warmup", "info"),\n'
+        "))\n"
+    )
+
+    assert not app.exception
+    assert [warning.value for warning in app.warning] == [t("warn.tsetmc_derived_not_official")]
+    assert [info.value for info in app.info] == [
+        t("warn.tsetmc_trading_days_absent"),
+        t("warn.tsetmc_ma30_warmup"),
+    ]
+
+
+def test_callout_stack_keeps_distinct_container_keys() -> None:
+    """Each catalog key is its own container, so the stack does not collide."""
+    app = _run(
+        "from dashboard.components.layout import render_callout_stack\n"
+        "render_callout_stack((\n"
+        '    ("warn.tsetmc_trading_days_absent", "info"),\n'
+        '    ("warn.tsetmc_ma30_warmup", "info"),\n'
+        '    ("warn.tsetmc_month_end", "info"),\n'
+        "))\n"
+    )
+
+    assert not app.exception
+    assert len(app.info) == 3
+
+
 # --- Task 18: page header --------------------------------------------------
 
 

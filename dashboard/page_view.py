@@ -35,6 +35,7 @@ from dashboard.components.layout import (
     KpiCell,
     render_bar_list,
     render_callout,
+    render_callout_stack,
     render_filter_bar,
     render_kpi_band,
     render_page_header,
@@ -545,25 +546,32 @@ def render_market_page(repository: DashboardRepository | None = None) -> None:
     Nothing is interpolated, forward-filled, resampled or zero-filled: an absent
     trading session is an absent observation, and the ``.ME`` rows are presented
     exactly as the ETL stamped them (calendar month end, monthly frequency).
+
+    The composition follows the D11 layout contract (Task 40): the page header
+    and the five TSETMC caveats through shared components (``render_page_header``
+    + ``render_callout_stack``), the sessions metric through a small KPI band,
+    the level section header through ``render_section_header``, and the empty
+    states through shared callouts. The filter set is unchanged, so the selection
+    and every value are exactly as before.
     """
-    st.title(t("page.market"))
+    render_page_header("page.market")
     _render_market_notes()
     if repository is None:
         catalog = cached_list_indicators(domains=(MARKET_DOMAIN,))
     else:
         catalog = repository.list_indicators(domains=[MARKET_DOMAIN])
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     filters = render_filters(catalog, "market", list(catalog["indicator_id"]))
     if not filters.indicator_ids:
-        st.info(t("empty.select_indicators"))
+        render_callout("empty.select_indicators", tone="info", container_key="market-select")
         return
     if filters.start_date > filters.end_date:
         return
     series = _load_market_series(filters, repository)
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="market-no-obs")
         return
     level, daily_derived, month_end = market_series_groups(series)
     _render_market_level(level)
@@ -604,12 +612,21 @@ def market_series_groups(
 
 
 def _render_market_notes() -> None:
-    """Render the TSETMC caveats: derivedness, absent sessions, warm-up, downsample."""
-    st.warning(t("warn.tsetmc_derived_not_official"))
-    st.info(t("warn.tsetmc_trading_days_absent"))
-    st.info(t("warn.tsetmc_ma30_warmup"))
-    st.info(t("warn.tsetmc_month_end"))
-    st.info(t("warn.tsetmc_deferred_metrics"))
+    """Render the TSETMC caveats: derivedness, absent sessions, warm-up, downsample.
+
+    The five caveats are a ``render_callout_stack`` (one warning + four info
+    callouts), so the page header's caveat block is the D11 shared component
+    rather than five raw ``st.warning``/``st.info`` calls.
+    """
+    render_callout_stack(
+        (
+            ("warn.tsetmc_derived_not_official", "warn"),
+            ("warn.tsetmc_trading_days_absent", "info"),
+            ("warn.tsetmc_ma30_warmup", "info"),
+            ("warn.tsetmc_month_end", "info"),
+            ("warn.tsetmc_deferred_metrics", "info"),
+        )
+    )
 
 
 def _load_market_series(
@@ -626,11 +643,14 @@ def _load_market_series(
 
 def _render_market_level(level: pd.DataFrame) -> None:
     """Render the daily index level with the session expectation it defines."""
-    st.subheader(t("section.market_level"))
+    render_section_header("section.market_level")
     if level.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="market-level")
         return
-    st.metric(t("metric.market_sessions"), format_number(len(level)))
+    render_kpi_band(
+        [KpiCell("metric.market_sessions", format_number(len(level)))],
+        key="market-level",
+    )
     _render_market_figure_and_rows(level, "market_level")
     # The trading-session expectation describes the collection itself, so it is
     # computed on the level series only. A derived series legitimately starts

@@ -1092,8 +1092,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `warn.tsetmc_*`, `metric.market_sessions`, `section.market_level`.
 - **Depends:** Tasks 19–22, 34, 36.
 - **Acceptance:**
-  - [ ] Market renders through the shared components; panel count and labels unchanged.
-  - [ ] Guard enabled for the Market functions.
+  - [x] Market renders through the shared components; panel count and labels unchanged.
+  - [x] Guard enabled for the Market functions.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_market.py tests/unit/dashboard/test_layout_guard.py -q`.
 
 ### 41. (E) OWNER VISUAL REVIEW — emphasis-domain pages

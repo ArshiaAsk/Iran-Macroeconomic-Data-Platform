@@ -58,6 +58,7 @@ __all__ = [
     "kpi_column_weights",
     "render_bar_list",
     "render_callout",
+    "render_callout_stack",
     "render_filter_bar",
     "render_kpi_band",
     "render_page_header",
@@ -218,6 +219,22 @@ def render_callout(
         text = f"{text}\n\n{detail}"
     with st.container(key=f"callout-{container_key if container_key is not None else key}"):
         renderer(text)
+
+
+def render_callout_stack(callouts: Sequence[tuple[str, str]]) -> None:
+    """Render a stack of callouts (the Market page's TSETMC caveats).
+
+    Each pair is ``(catalog_key, tone)``. The container key is derived from the
+    catalog key, so the stack is safe as long as no key repeats (a repeated key
+    raises in Streamlit). The stack is the D11 way to render a page's multiple
+    caveats under one ``render_page_header`` rather than calling
+    ``st.warning``/``st.info`` directly.
+
+    Args:
+        callouts: One ``(catalog_key, tone)`` pair per callout, in display order
+    """
+    for key, tone in callouts:
+        render_callout(key, tone=tone)
 
 
 def render_page_header(

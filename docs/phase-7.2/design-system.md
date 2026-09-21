@@ -164,7 +164,8 @@ needs no `unsafe_allow_html`.
 | Component | Signature | Purpose |
 |---|---|---|
 | `render_page_header` | `(title_key, *, callout_key=None, label_key=None, tone="warn")` | The one page-header pattern: a native `st.title` plus an optional callout (with an optional bold label, e.g. the methodology note). |
-| `render_callout` | `(key, *, tone="warn", label_key=None, detail=None, container_key=None)` | The mockup's callout as a native `st.warning`/`st.info`/`st.error`. |
+| `render_callout` | `(key, *, tone="warn", label_key=None, detail=None, container_key=None, body=None)` | The mockup's callout as a native `st.warning`/`st.info`/`st.error`. |
+| `render_callout_stack` | `(callouts)` | A stack of callouts from `(catalog_key, tone)` pairs, each through `render_callout`. The D11 way to render a page's several caveats (the Market page's five TSETMC notes) under one `render_page_header`. |
 | `render_kpi_band` | `(cells, *, key="default")` | One bordered row of metric cells, with an optional separated secondary group. |
 | `render_section_header` | `(title_key, *, subtitle=None, trailing=None, key=None)` | A native `st.subheader` with optional secondary text, laid out as one baseline-aligned row. |
 | `render_filter_bar` | `(controls, *, trailing=(), key="default")` | One filter-bar row over an arbitrary number of control callables. |
@@ -586,6 +587,7 @@ poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-co
 | **`st.badge` surfaces as Markdown.** | `st.badge("tag", color="orange")` appears to `AppTest` as `app.markdown == [":orange-badge[tag]"]`. |
 | **The literal guard scans the dashboard tree.** | `test_literal_guard.py` fails on `st.<display>(<literal>)`, so every user-visible string resolves through `t()`. The shared-component modules are whitelisted for the D11 guard but **not** for the literal guard. |
 | **The D11 layout guard is function-scoped.** | Every page composition lives in one large module, so `MIGRATED_PAGES` maps module → migrated function names and grows per wave. It landed in Task 33 as `tests/unit/dashboard/test_layout_guard.py`. |
+| **A callout stack needs distinct keys.** | `render_callout_stack` derives each container key from its catalog key, so a repeated key raises in Streamlit. A stack whose members share a key must pass explicit `container_key` values through `render_callout` instead (the Welfare/Market empty-state pattern). |
 
 ## 12. The page-layout contract (D11)
 
@@ -605,9 +607,10 @@ MIGRATED_PAGES = {"dashboard/page_view.py": {"render_overview_page", ...}}
 
 The whitelist is the shared-component modules —
 `components/layout.py` (including `render_page_header`, `render_callout`,
-`render_kpi_band`, `render_section_header`, `render_filter_bar`),
-`components/states.py`, `components/html_table.py` and `components/direction.py` —
-not the page modules, because the components themselves must call those APIs.
+`render_callout_stack`, `render_kpi_band`, `render_section_header`,
+`render_filter_bar`), `components/states.py`, `components/html_table.py` and
+`components/direction.py` — not the page modules, because the components
+themselves must call those APIs.
 
 **Status:** the contract above is ratified (D11) and **enforced** since Task 33 by
 `tests/unit/dashboard/test_layout_guard.py`, whose `MIGRATED_PAGES` map starts
