@@ -1,7 +1,7 @@
 # Reference review — the shell and the Overview vs the mockup (AM-23)
 
-**Status: PREPARED — awaiting the owner's visual review.**
-**Owner sign-off: PENDING**
+**Status: SIGNED OFF.**
+**Owner sign-off: APPROVED (2026-09-21).**
 
 This is the AM-23 reference review that closes Wave C. It compares the shipped
 shell (Wave B) and the Overview page (Wave C, Tasks 29–32 plus the P1–P5 polish)
@@ -10,10 +10,10 @@ element**, using the plan's mockup traceability table
 ([`docs/plans/phase-7.2-dashboard-redesign.md`](../plans/phase-7.2-dashboard-redesign.md),
 "Traceability — mockup element → task"). Every row below is a row of that table.
 
-Nothing here is a sign-off. Each row carries the **verdict the executing engineer
-recommends**; the owner confirms, overturns, or escalates it. The rows whose
-recommendation is **FIX** are the ones that need a decision, because each one is
-either a new defect task or a shell change that moves every page.
+The owner reviewed the document and the 1440 px captures and recorded the
+decisions in **§6a** below. The deviations **A1–A9** are approved as
+recommended; one finding was fixed (Step 0a), two are scheduled in Waves D–G,
+and four are recorded as optional Wave H polish candidates without a schedule.
 
 - **Reviewed tree:** `e5fdef3` (Task 33), branch `phase-7.2`
 - **Review date:** 2026-09-21
@@ -102,7 +102,10 @@ explains most of the width differences in the rows below.
 (breadcrumb separator + bold current crumb). No element is missing, and no
 element was silently dropped.
 
-## 4. Findings that need an owner decision
+## 4. Findings that needed an owner decision
+
+Each finding below carries the executing engineer's recommendation and, after it,
+the **owner's decision** (see §6a for the consolidated record).
 
 ### F1 — Main content padding is 70 px where the mockup uses 40 px (recommend FIX)
 
@@ -127,6 +130,9 @@ the mockup's width on every page at once — which is why it must not be slipped
 into a page wave. It would also narrow, but not close, the coverage-table gap in
 A4 (1104 px still cannot hold 1169 px).
 
+**Owner decision: NOT REQUESTED NOW.** Recorded as an optional Wave H polish
+candidate; not scheduled.
+
 ### F2 — Top-bar breadcrumb separator and current-crumb weight (recommend FIX)
 
 The mockup writes `سامانه / مرور و تحلیل / مرور کلی` with the current page in
@@ -137,6 +143,9 @@ start, same stamp at the far end, same alignment with the page column.
 **Recommendation: FIX** in the same shell task as F1 — it is chrome, it touches
 no page, and it is the last visible difference in the bar.
 
+**Owner decision: NOT REQUESTED NOW.** Recorded as an optional Wave H polish
+candidate; not scheduled.
+
 ### F3 — The `gdp` chart legend title reads `label` (recommend FIX)
 
 Pre-existing, carried from the part 1 gate: the GDP chart's legend title is the
@@ -144,6 +153,9 @@ literal `label` because the chart builders pass `color="label"`. Unchanged by
 Wave C and unrelated to the Overview.
 
 **Recommendation: FIX** — file it against the chart builders.
+
+**Owner decision: SCHEDULED in Waves D–G, starting with Task 35** (the fix lands
+on the shared chart builders, so it moves every page that draws a legend).
 
 ### F4 — English `Choose options` placeholder on un-migrated pages (recommend FIX in Waves D–G)
 
@@ -153,6 +165,8 @@ fix is already proven; it lands per page as each wave migrates.
 
 **Recommendation: FIX in Waves D–G** — no separate task needed, but it should be
 on the wave checklist so it is not forgotten.
+
+**Owner decision: SCHEDULED in Waves D–G, starting with Task 35.**
 
 ### F5 — Shell-wide `st.caption` direction (recommend FIX)
 
@@ -164,7 +178,61 @@ would move every un-migrated page's captions mid-wave.
 **Recommendation: FIX** in the shell task (with F1/F2), so the rule lands once
 the pages have migrated.
 
+**Owner decision: NOT REQUESTED NOW.** Recorded as an optional Wave H polish
+candidate; not scheduled.
+
+### F6 — not raised
+
+The owner's numbering runs F1–F7; **no F6 finding was raised** in this review.
+The label is left unassigned rather than reusing the number for a different
+item, so a later finding can take it.
+
+### F7 — No-wrap on the short categorical coverage columns (new; recommend FIX)
+
+The coverage table's three short categorical columns (حوزه / منبع / تواتر) wrap
+onto a second line at 1440 px, because the `coverage` variant turns wrapping on
+for every cell (`white-space: normal`) and only the numeric cells are held on one
+line (`.dt.cov .num`). The mockup keeps those three columns on one line and lets
+only the long indicator name wrap.
+
+**Owner decision: NOT REQUESTED NOW.** Recorded as an optional Wave H polish
+candidate; not scheduled.
+
+### The Gregorian-vs-Jalali range-cell direction (new; recommend accept)
+
+A Gregorian range renders in an `Ltr` cell (`direction: ltr`,
+`unicode-bidi: isolate`) and a Jalali range in a `Text` cell (`direction: rtl`),
+so the two range columns read from opposite edges. That is the D3 bidi decision
+and is required to keep the Gregorian year token from flipping inside the RTL
+row. The **font-size** half of this difference was a genuine defect and is fixed
+(Step 0a); the direction half is by design.
+
+**Owner decision: NOT REQUESTED NOW.** Recorded as an optional Wave H polish
+candidate; not scheduled.
+
+## 4a. Data-quality findings (ETL / catalog side; presentation is correct)
+
+Both findings are **data**, not presentation: the dashboard renders the stored
+values faithfully and needs no change. They are handed to the ETL/catalog side
+and recorded in the plan's Deferred Scope as items 15 and 16.
+
+- **D1 — TGJU snapshot coverage window contradicts the observed range.** The
+  TGJU snapshot rows declare a catalog coverage window of `۲۰ – ۲۰ شهریور ۱۴۰۵`
+  (a single day) while the range they actually observed is
+  `۱۸ – ۲۰ شهریور ۱۴۰۵` (three days). Both are rendered as stored, so the
+  coverage table shows a declared range narrower than the observed one. The
+  cause is on the catalog/connector side (the declared bounds and the stored
+  observations come from different runs).
+- **D2 — SCI monthly rows declare coverage but have no Gold observations.**
+  Several Statistical Centre of Iran monthly catalog rows declare availability
+  and have no Gold observations, so their observed-range, count, chained-rows and
+  confidence cells render the em-dash. The em-dash is the documented null
+  rendering, so the presentation is correct; the gap is in the Silver→Gold
+  publication for those indicators.
+
 ## 5. Approved deviations (recommended to accept as-is)
+
+**A1–A9 were approved by the owner as recommended (2026-09-21).**
 
 | # | Deviation | Why it should be accepted |
 |---|---|---|
@@ -186,34 +254,58 @@ full page) against `overview-redesign-mockup.png`, then works down this list.
 - [ ] The shell reads as the mockup's: 256 px sidebar, brand, grouped nav with
       Material icons, active-item accent bar, pinned DB status, full-bleed top
       bar with the breadcrumb and the last-collection stamp.
-- [ ] The page header reads as the mockup's: `مرور کلی` title, then the amber
+- [x] The page header reads as the mockup's: `مرور کلی` title, then the amber
       methodology callout with the bold `یادداشت روش‌شناسی` label and its glyph.
-- [ ] The KPI band matches: six cells, mockup order, the separated secondary
+- [x] The KPI band matches: six cells, mockup order, the separated secondary
       group, the `نیازمند بررسی` tag, tooltips on the three annotated cells.
-- [ ] The two-column row matches: freshness right and wider, domain bars left,
+- [x] The two-column row matches: freshness right and wider, domain bars left,
       stale-first freshness, both section headers carrying their trailing summary.
-- [ ] The coverage section matches: section title, the three-filter bar with the
+- [x] The coverage section matches: section title, the three-filter bar with the
       row-count echo and the density toggle, the ten columns with the three
       two-line headers, unit chips, LTR ids, the em-dash nulls, and the footnote.
-- [ ] **F1** main content padding 70 px vs 40 px — approve as-is, or file the shell
-      fix.
-- [ ] **F2** breadcrumb separator `،` vs `/` and the unbolded current crumb —
-      approve as-is, or file the shell fix.
-- [ ] **F3** the `gdp` legend title `label` — approve as-is, or file the
-      chart-builder fix.
-- [ ] **F4** the English `Choose options` placeholder — approve as-is, or add it to
-      the Waves D–G checklist.
-- [ ] **F5** the shell-wide `st.caption` direction — approve as-is, or file the
-      shell fix.
-- [ ] Deviations **A1–A9** are approved as recorded.
-- [ ] No element of the mockup was silently dropped.
+- [x] **F1** main content padding 70 px vs 40 px — **not requested now** (optional
+      Wave H candidate).
+- [x] **F2** breadcrumb separator `،` vs `/` and the unbolded current crumb —
+      **not requested now** (optional Wave H candidate).
+- [x] **F3** the `gdp` legend title `label` — **scheduled** in Waves D–G, starting
+      with Task 35.
+- [x] **F4** the English `Choose options` placeholder — **scheduled** in Waves D–G,
+      starting with Task 35.
+- [x] **F5** the shell-wide `st.caption` direction — **not requested now**
+      (optional Wave H candidate).
+- [x] **F7** the short categorical coverage columns wrap — **not requested now**
+      (optional Wave H candidate).
+- [x] The Gregorian-vs-Jalali range-cell direction — **not requested now**
+      (optional Wave H candidate). The font-size half is **fixed** (Step 0a).
+- [x] Deviations **A1–A9** are approved as recorded.
+- [x] No element of the mockup was silently dropped.
 
-**Owner sign-off: PENDING**
+## 6a. Owner sign-off (recorded 2026-09-21)
+
+The owner's decisions, verbatim:
+
+- **Owner sign-off: APPROVED.** Approved deviations A1–A9 as recommended.
+- **Fixed on the owner's request:** Gregorian range font size (Step 0a).
+- **Scheduled:** **F3** (chart legend title "label") and **F4** (English "Choose
+  options" placeholder) in Wave D–G, starting with Task 35.
+- **Not requested now (recorded as optional Wave H polish candidates, not
+  scheduled):** F1 content padding 70 px vs the mockup's 40 px; F2 breadcrumb
+  separator and bold current crumb; F5 shell-wide `st.caption` direction; F7
+  no-wrap in short categorical coverage columns; the direction difference between
+  Gregorian (LTR) and Jalali (RTL) range cells.
+- **Data-quality findings for the ETL/catalog side** (presentation is correct):
+  D1 TGJU snapshot rows declare a coverage window (20 – 20 Shahrivar) narrower
+  than the observed range (18 – 20 Shahrivar); D2 several Statistical Centre of
+  Iran monthly rows declare coverage but have no Gold observations. Recorded in
+  the plan's Deferred Scope as items 15 and 16.
+
+**Owner sign-off: APPROVED (2026-09-21).**
 
 ## 7. What this gate unblocks
 
-Wave C closes when the sign-off above is recorded. Every task in Waves D–H
-depends on it: the four A2 pages (Tasks 35–36), then the A3 pages (38–40), the A4
-page (42), the A5 page (44), and the final close-out (46). The `FIX`
-recommendations above are deliberately **not** applied in this task — they are
-shell and chart-builder changes, and Task 34 changes no code.
+Wave C is **closed**. The sign-off above unblocks every task in Waves D–H: the
+four A2 pages (Tasks 35–36), then the A3 pages (38–40), the A4 page (42), the A5
+page (44), and the final close-out (46). The two **scheduled** fixes (F3, F4)
+land inside those waves starting with Task 35; the **not-requested-now** items
+(F1, F2, F5, F7 and the range-cell direction) are optional Wave H polish
+candidates and are not scheduled.

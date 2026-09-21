@@ -2169,3 +2169,39 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   decision and stays as recorded (the owner lists it as an optional Wave H
   polish candidate).
 - **Commit:** this entry is committed with the Step 0a commit.
+
+## Step 0b — Wave C AM-23 sign-off recorded
+
+- **Files:** `docs/phase-7.2/validation/reference-overview.md`,
+  `docs/phase-7.2/VALIDATION.md`, `docs/phase-7.2/README.md`,
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Task 34 boxes + Deferred Scope
+  items 15–16), `docs/phase-7.2/execution-log.md`.
+- **Build (docs only, no code):** the owner's Task 34 decisions are recorded
+  verbatim in a new `reference-overview.md` §6a and summarised in a new
+  `VALIDATION.md` "Wave C part 2c" section:
+  - **Owner sign-off: APPROVED**; deviations **A1–A9** approved as recommended.
+  - **Fixed on the owner's request:** Gregorian range font size (Step 0a,
+    `a239d2f`).
+  - **Scheduled:** **F3** (chart legend title `label`) and **F4** (English
+    "Choose options" placeholder) in Waves D–G, starting with Task 35.
+  - **Not requested now** (optional Wave H polish candidates, **not scheduled**):
+    F1 content padding 70 px vs 40 px; F2 breadcrumb separator and bold current
+    crumb; F5 shell-wide `st.caption` direction; F7 no-wrap in the short
+    categorical coverage columns; the direction difference between Gregorian
+    (LTR) and Jalali (RTL) range cells.
+  - **ETL/catalog findings** (presentation correct, recorded as plan Deferred
+    Scope 15–16): D1 the TGJU snapshot rows declare a coverage window
+    (`۲۰ – ۲۰ شهریور`) narrower than the observed range (`۱۸ – ۲۰ شهریور`);
+    D2 several SCI monthly rows declare coverage but have no Gold observations.
+  - The plan's Task 34 boxes 2 and 3 are ticked; the README status is now
+    "Wave C complete; Wave D in progress".
+  - **F7 is introduced by this record** (it was not in the prepared review) and
+    the owner's numbering **skips F6**; no F6 finding was raised, so the label is
+    left unassigned rather than reused. Flagged in §4 "F6 — not raised" and in
+    the final report.
+- **Verify:** docs-only; `git status --short` shows only the four documents and
+  this log. The Step 0a gate results (mypy 0 errors, dashboard subset 623
+  passed, ruff clean) stand unchanged.
+- **Deviations:** none new in code. The `F6` numbering gap is recorded rather
+  than invented.
+- **Commit:** this entry is committed with the Step 0b commit.

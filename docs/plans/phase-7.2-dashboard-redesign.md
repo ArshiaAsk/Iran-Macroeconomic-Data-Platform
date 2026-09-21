@@ -1011,15 +1011,19 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **Depends:** Tasks 28, 33.
 - **Acceptance:**
   - [x] Element-by-element comparison against the mockup recorded, using the mockup traceability table.
-  - [ ] Every deviation is marked approved (accepted deviation recorded) or fixed (defect filed).
-  - [ ] Owner sign-off recorded.
+  - [x] Every deviation is marked approved (accepted deviation recorded) or fixed (defect filed).
+  - [x] Owner sign-off recorded.
 - **Verify:** Manual browser comparison at 1440 px + review of `docs/phase-7.2/validation/reference-overview.md`.
 
-> **Prepared, not signed off.** The review document, the 1440×2200 capture and the
-> per-region crops are in place, and every traceability row carries a verdict with
-> the deviations recorded as A1–A9 and the five `FIX` recommendations as F1–F5.
-> The two remaining boxes are the **owner's** act: approving the deviations and
-> recording the sign-off. Nothing after this task starts until they are ticked.
+> **Owner sign-off: APPROVED (2026-09-21).** The deviations **A1–A9** are approved
+> as recommended. One item is **fixed** on the owner's request — the Gregorian
+> range font size (Step 0a, `a239d2f`). **F3** (chart legend title `label`) and
+> **F4** (English "Choose options" placeholder) are **scheduled** in Waves D–G,
+> starting with Task 35. **F1, F2, F5, F7** and the Gregorian-vs-Jalali range-cell
+> direction difference are **not requested now** and are recorded as optional
+> Wave H polish candidates (not scheduled). Two data-quality findings are handed
+> to the ETL/catalog side (D1, D2 in the Deferred Scope below). See
+> `docs/phase-7.2/validation/reference-overview.md` §6a.
 
 ---
 
@@ -1235,6 +1239,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 12. **Dark-mode support** (D14 ships light-only; `theme.dark.*` options exist but are out of scope).
 13. **Per-page module split of `page_view.py`** — the D11 guard is function-scoped in 7.2 (AM-14); splitting into per-page modules is a 7.3 candidate.
 14. Carried forward: OPEC basket, CBI TSD, TSETMC trading value / P/E / market cap, monetary-domain page.
+15. **Coverage-window metadata for TGJU snapshot rows (D1, found in the Task 34 owner review).** The TGJU snapshot indicators declare a catalog coverage window (`۲۰ – ۲۰ شهریور ۱۴۰۵`) **narrower** than the range they actually observed (`۱۸ – ۲۰ شهریور ۱۴۰۵`), so the Overview coverage table shows a declared range that contradicts the observed one. The dashboard renders both as stored — this is a **catalog/ETL** finding (the TGJU connector writes one observation per run while the catalog bounds come from a different run), not a presentation defect.
+16. **SCI monthly rows with declared coverage and no Gold observations (D2, found in the Task 34 owner review).** Several Statistical Centre of Iran monthly catalog rows declare availability but have no Gold observations, so their observed-range, count, chained-rows and confidence cells render the em-dash. Presentation is correct (the em-dash is the documented null); the gap is in the ETL's Silver→Gold publication for those indicators.
 
 ---
 

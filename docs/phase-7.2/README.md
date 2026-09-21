@@ -2,16 +2,26 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave C awaiting owner review** (Overview reference implementation —
-Step 0f, Tasks 29–33 and the P1–P5 polish are complete; Task 34's AM-23 visual
-review is prepared in
-[`validation/reference-overview.md`](validation/reference-overview.md) and its
-sign-off is **pending**). Wave 0 is
+Status: **Wave C complete; Wave D in progress** (Overview reference
+implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
+Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
+deviations A1–A9 approved as recorded; see
+[`validation/reference-overview.md`](validation/reference-overview.md) §6a and
+the "Wave C part 2c" section of [`VALIDATION.md`](VALIDATION.md)). Wave D (the
+four generic domain-explorer pages: GDP, Trade & Energy, FX & Gold, Labor) is in
+progress — Task 35 next. Wave 0 is
 recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
 [`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual
-reviews and gates are in [`VALIDATION.md`](VALIDATION.md). Waves D–H (the
-archetype page migrations) start only once the owner signs Task 34 off.
+reviews and gates are in [`VALIDATION.md`](VALIDATION.md).
+
+Sign-off carry items (2026-09-21): **F3** (chart legend title `label`) and **F4**
+(English `Choose options` placeholder) are scheduled in Waves D–G starting with
+Task 35; **F1, F2, F5, F7** and the Gregorian-vs-Jalali range-cell direction are
+recorded as optional Wave H polish candidates and are **not scheduled**; the
+Gregorian range font-size defect is **fixed** (Step 0a); two data-quality findings
+(D1 TGJU coverage window, D2 SCI rows without Gold observations) are handed to the
+ETL/catalog side and recorded in the plan's Deferred Scope.
 
 Documents:
 

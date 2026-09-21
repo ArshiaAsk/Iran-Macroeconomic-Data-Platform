@@ -621,23 +621,30 @@ Measured live (1440 px): the callout container is
 `background: rgb(251, 241, 220)` (= `--warn-bg`) with
 `border-inline-start: 3px solid currentColor`. `scrollWidth == clientWidth`.
 
-### Task 34 — the AM-23 owner visual review (prepared)
+### Task 34 — the AM-23 owner visual review (prepared, then signed off)
 
 `docs/phase-7.2/validation/reference-overview.md` compares the shipped shell and
 Overview against the mockup **element by element over the plan's mockup
 traceability table** — all 34 rows, each with live evidence and a verdict.
 **Verdict tally: 30 PASS, 4 PASS-with-approved-deviation, 1 FIX recommended.**
+The owner signed it off on 2026-09-21; see "Wave C part 2c" below for the
+decisions.
 
-Five findings need the owner's decision, and each is presented with a
+Six findings needed the owner's decision, and each was presented with a
 recommendation rather than applied, because Task 34 changes no code:
 
-| # | Finding | Recommendation |
-|---|---|---|
-| F1 | The main content padding is 70 px where the mockup's `.wrap` uses 40 px, so the content column is 60 px narrower at every width (1044 vs 1104 at 1440 px) | **FIX** as its own shell task — the 70 px restates Streamlit's own default (P5 needed to name it so the top bar's negative margin could not drift), and a one-line change moves every page at once |
-| F2 | The breadcrumb separator is `،` where the mockup writes `/`, and the current crumb is not bold | **FIX** in the same shell task |
-| F3 | The `gdp` chart legend title reads `label` (pre-existing, carried from the part 1 gate) | **FIX** against the chart builders |
-| F4 | English `Choose options` placeholder on every un-migrated page | **FIX in Waves D–G**, already proven by Task 32 |
-| F5 | A native `st.caption` inherits LTR, so Persian captions hug the left edge (fixed scoped for the coverage footnote only) | **FIX** in the shell task, once the pages have migrated |
+| # | Finding | Recommendation | Owner decision |
+|---|---|---|---|
+| F1 | The main content padding is 70 px where the mockup's `.wrap` uses 40 px, so the content column is 60 px narrower at every width (1044 vs 1104 at 1440 px) | **FIX** as its own shell task — the 70 px restates Streamlit's own default (P5 needed to name it so the top bar's negative margin could not drift), and a one-line change moves every page at once | **Not requested now** (optional Wave H) |
+| F2 | The breadcrumb separator is `،` where the mockup writes `/`, and the current crumb is not bold | **FIX** in the same shell task | **Not requested now** (optional Wave H) |
+| F3 | The `gdp` chart legend title reads `label` (pre-existing, carried from the part 1 gate) | **FIX** against the chart builders | **Scheduled** in Waves D–G, from Task 35 |
+| F4 | English `Choose options` placeholder on every un-migrated page | **FIX in Waves D–G**, already proven by Task 32 | **Scheduled** in Waves D–G, from Task 35 |
+| F5 | A native `st.caption` inherits LTR, so Persian captions hug the left edge (fixed scoped for the coverage footnote only) | **FIX** in the shell task, once the pages have migrated | **Not requested now** (optional Wave H) |
+| F7 | The short categorical coverage columns (حوزه/منبع/تواتر) wrap onto a second line at 1440 px; the mockup keeps them on one line | **FIX** the wrap rule for those three columns | **Not requested now** (optional Wave H) |
+
+The Gregorian-vs-Jalali range-cell **direction** difference is recorded the same
+way (**not requested now**); its **font-size** half was a defect and is **fixed**
+(Step 0a). The owner's numbering skips **F6** — no F6 finding was raised.
 
 Nine deviations are recommended for approval (A1–A9): the callout's native-alert
 styling, the KPI tooltip marker, the native filter selects, the coverage table's
@@ -674,9 +681,46 @@ owner's decision; **none of them is applied in Wave C.**
 
 ### Carry list for Wave D
 
-1. **AM-23 owner sign-off** on `validation/reference-overview.md` — the gate that
-   unblocks Waves D–H.
+1. ~~**AM-23 owner sign-off** on `validation/reference-overview.md`~~ — **signed
+   off 2026-09-21** (see "Wave C part 2c" below); the gate is open.
 2. The F1–F5 fixes, if the owner files them (F1/F2/F5 are one shell task; F3 is the
    chart builders; F4 lands per page in Waves D–G).
 3. `MIGRATED_PAGES` grows by one entry per wave (Task 36 for the four A2 pages,
    then 38–44).
+
+## Wave C part 2c — AM-23 owner sign-off (docs only)
+
+The owner reviewed `validation/reference-overview.md` and the 1440 px captures and
+recorded the decisions below. **No code changed in this close-out**; the one code
+change it authorises is **Step 0a**, which landed separately (`a239d2f`).
+
+| Decision | Items | Detail |
+|---|---|---|
+| **Owner sign-off: APPROVED** | A1–A9 | Approved as recommended |
+| **Fixed** | Gregorian range font size | Step 0a (`a239d2f`): the Gregorian range cells in the Overview coverage table rendered in the id's mono 11.5 px; measured live, they now compute to Vazirmatn 13.5 px, matching the Jalali range and the count cells |
+| **Scheduled** | F3, F4 | Chart legend title `label` and the English `Choose options` placeholder, in Waves D–G starting with Task 35 |
+| **Not requested now** (optional Wave H polish candidates, not scheduled) | F1, F2, F5, F7, the Gregorian-vs-Jalali range-cell direction | Content padding 70 px vs 40 px; breadcrumb separator and bold current crumb; shell-wide `st.caption` direction; no-wrap in the short categorical coverage columns; the range-cell direction difference (the font-size half is fixed) |
+
+**Data-quality findings handed to the ETL/catalog side** (the presentation is
+correct in both cases; recorded in the plan's Deferred Scope as items 15 and 16):
+
+- **D1** — the TGJU snapshot rows declare a coverage window of `۲۰ – ۲۰ شهریور
+  ۱۴۰۵` while the observed range is `۱۸ – ۲۰ شهریور ۱۴۰۵`, so the declared range
+  is narrower than what was observed.
+- **D2** — several Statistical Centre of Iran monthly catalog rows declare
+  coverage but have no Gold observations, so their observed-range, count,
+  chained-rows and confidence cells render the em-dash.
+
+**Owner checklist outcome.** Every box in `reference-overview.md` §6 is ticked,
+and the sign-off line now reads **APPROVED (2026-09-21)**.
+
+### Wave C part 2c gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Step 0a verify | `poetry run pytest tests/unit/dashboard/test_direction.py -q --no-cov` | **30 passed** |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **623 passed** (was 622; +1 = the Step 0a CSS/class pin) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+
+Wave C is **closed**; Wave D starts from this record.
