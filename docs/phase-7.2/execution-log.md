@@ -1092,3 +1092,30 @@ were never staged or committed (Task 7 owns them).
   → 501 passed (491 + 10 new), no regressions.
 - **Deviations:** none.
 - **Commit hash:** `ebf35eb`
+
+---
+
+## Task 25 — Material nav icons
+
+- **Files:** `dashboard/navigation.py`, `tests/unit/dashboard/test_navigation.py`,
+  `docs/plans/phase-7.2-dashboard-redesign.md` (checkboxes),
+  `docs/phase-7.2/wave-b-assets/task-25-icons/` (10 PNGs).
+- **Build:** Replaced all ten emoji `PageSpec.icon` values with validated
+  `:material/<name>:` shortcodes: `overview`, `compare_arrows`, `menu_book`,
+  `show_chart`, `analytics`, `swap_horiz`, `home`, `currency_exchange`,
+  `trending_up`, `work`. Each name was validated against
+  `streamlit.material_icon_names.ALL_MATERIAL_ICONS` and
+  `streamlit.string_util.validate_material_icon`.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_navigation.py -q --no-cov` → 13 passed
+    (10 existing + 3 new: shortcode validation, uniqueness, fx_gold/trade_energy
+    distinctness).
+  - `poetry run mypy src dashboard` → 0 errors.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → 504 passed, no regressions.
+  - `poetry run python scripts/dashboard_screenshots.py --out-dir
+    docs/phase-7.2/wave-b-assets/task-25-icons` → all 10 PNGs produced; the
+    `[data-testid="stSidebarNavLink"]:has-text(...)` selector still works with the
+    new icon element present in the link markup.
+- **Deviations:** none. `trade_energy` uses `swap_horiz` rather than `bolt`; both
+  are distinct from `fx_gold`'s `currency_exchange`.
+- **Commit hash:** `1f06944`
