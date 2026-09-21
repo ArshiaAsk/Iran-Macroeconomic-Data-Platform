@@ -1,8 +1,8 @@
 # Phase 7.2 Validation Report
 
-**Status:** Wave D complete (owner sign-off APPROVED); **Wave E part A complete**
-(Step 0 + Tasks 38–39: Inflation and Welfare emphasis sections on the layout
-contract); part B (Task 40: Market; Task 41: emphasis owner review) pending.
+**Status:** Wave D complete (owner sign-off APPROVED); **Wave E complete through
+Task 40**, with the emphasis owner review **prepared and awaiting sign-off**
+(`validation/archetype-emphasis.md`). Wave F is next.
 The visual review recorded here is 2026-09-21 against a populated local database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
@@ -908,15 +908,75 @@ Ten PNGs, 1440×900, viewport-only, captured to
 
 **Against the Wave D part B gate.** Wave D part B ended at **630 passed**
 (dashboard subset); part A ends at **637**. The **+7** is the Step 0b
-source-neutrality test (+1), the four Inflation tests (+4) and the three Welfare
-tests (+3), minus one removed `app.dataframe` assertion that was rewritten to
-the markup strategy (−1). **Nothing regressed.**
+source-neutrality test (+1), the three Inflation tests (+3) and the three Welfare
+tests (+3). **Nothing regressed.**
 
 ### Carry-forward items for Wave E part B
 
 - The Market page (Task 40) is not yet migrated; its five TSETMC caveats and
   sessions metric are still raw `st.warning`/`st.info`/`st.metric`.
 - The emphasis owner review (Task 41) is not yet prepared.
+- The Wave H carry list from Wave D (F1, F2, F5, F7, filter-bar shape,
+  Gregorian/Jalali range direction, `neutralise()` scroll no-op Task 47) is
+  unchanged.
+
+## Wave E part B — Task 40 (Market) + Task 41 (emphasis review prepared)
+
+**Scope.** Wave E part B is the third emphasis-domain page and the archetype
+review: Task 40 migrates the Market page (new `render_callout_stack` component),
+and Task 41 prepares the emphasis owner review doc (not signed off).
+
+| Item | Commit | Delta |
+|---|---|---|
+| Task 40 | `fb58ae8` | Market page: `render_page_header` + new `render_callout_stack` (five TSETMC caveats), one-cell `render_kpi_band` (sessions), `render_section_header` (level), shared empty states; design-system §4.1/§11/§12 updated |
+| Task 41 | `6981991` | `validation/archetype-emphasis.md` prepared (owner sign-off **PENDING**); README status → "Wave E awaiting owner review" |
+
+### Per-page pixel diff (wave-e part B vs wave-e part A and vs wave-d part B)
+
+Ten PNGs, 1440×900, viewport-only, captured to
+`docs/phase-7.2/wave-e-assets/partB-all-pages/`.
+
+| Page | vs wave-d baseline | vs wave-e part A | What changed |
+|---|---|---|---|
+| `overview` | 0.0 % (51×12 px) | IDENTICAL | timing artifact |
+| `correlation` | 0 | IDENTICAL | nothing |
+| `catalog` | 0 | IDENTICAL | nothing |
+| `inflation` | 0 | IDENTICAL | nothing in part B |
+| `gdp` | 0 | IDENTICAL | nothing |
+| `trade_energy` | 0 | IDENTICAL | nothing |
+| `welfare` | 30.2 % | IDENTICAL | (part A's Task 39 change; nothing in part B) |
+| `fx_gold` | 0 | IDENTICAL | nothing |
+| `market` | 3.0 % (y 198–549) | 3.0 % | the five TSETMC caveats gain the scoped accent bars/glyphs (Task 40) |
+| `labor` | 0.0 % (3×68 px at x≈326) | 0.0 % | timing artifact (a filter-area caret), not a layout change |
+
+**No regressions.** Part B differs from part A on **only** `market` (the Task 40
+change); every other page is byte-identical between the two captures. Against the
+Wave D baseline, the only real changes are `welfare` (part A) and `market`
+(part B); the `labor`/`overview` 0.0 % strips are sub-0.1 % timing artifacts.
+
+### Wave E part B gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1455 passed, 3 skipped, 136 deselected** in 188.7 s; ruff format/lint and mypy clean; coverage **89.22 %** |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **637 passed** |
+| Export + all-pages smoke | `poetry run pytest test_all_pages_smoke.py test_exports.py -q --no-cov` | **26 passed** (10 pages + 16 exports) |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+| Working tree | `git status --short` | clean (assets committed) |
+
+**Against the Scope A gate.** Part A ended at **1453 passed** (full suite); part B
+ends at **1455**. The **+2** is the two `render_callout_stack` component tests in
+`test_layout.py`. The dashboard subset is unchanged at **637** — Task 40 changed
+no page test (every Market assertion passes unchanged), so the component tests
+are the only new tests. **Nothing regressed.**
+
+### Carry-forward items for Wave F
+
+- The emphasis owner review (Task 41) is **prepared, awaiting sign-off**
+  (`validation/archetype-emphasis.md`). The three carried decisions (row 4 filter
+  set, row 3 Market panel titles, §4 Welfare callout-stack observation) are
+  recorded there.
 - The Wave H carry list from Wave D (F1, F2, F5, F7, filter-bar shape,
   Gregorian/Jalali range direction, `neutralise()` scroll no-op Task 47) is
   unchanged.
