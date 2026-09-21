@@ -409,6 +409,46 @@ it that way when adding a page or a feature:
   or `airflow/`. If a dashboard feature seems to need an ETL change (e.g. IMF
   forecast labeling), it is a new phase, not a dashboard change.
 
+### Dashboard UI conventions (Phase 7.2)
+
+Phase 7.2 added the design system. These rules are enforced by tests and the plan
+is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
+`docs/phase-7.2/design-system.md`:
+
+- **Layering is native → CSS → HTML (D6/D13).** Prefer a native Streamlit element
+  themed by `.streamlit/config.toml`; only fall through when the layer above
+  cannot express it. `st.html` strips `<svg>`, so a glyph is a CSS shape or an
+  icon-font/Material glyph — never inline SVG.
+- **The D11 layout contract.** A migrated page opens with `render_page_header`,
+  renders KPI values through `render_kpi_band`, section titles through
+  `render_section_header`, filters through `render_filter_bar`, and
+  empty/error/loading through `dashboard/components/states.py`. It does **not**
+  call raw `st.title`/`st.metric`/`st.warning`/`st.info`/`st.error` or pass
+  `unsafe_allow_html` where a shared component exists.
+  `tests/unit/dashboard/test_layout_guard.py` is the AST guard: it maps each
+  migrated module to its migrated functions (`MIGRATED_PAGES`), and two
+  completeness tests keep that map equal to reality (every registered page's
+  delegate is listed; every render function in `page_view.py` is listed). Add a
+  new render function to `MIGRATED_PAGES` or the guard fails.
+- **Every user-visible string goes through `t()`.** `tests/unit/dashboard/test_literal_guard.py`
+  fails on a literal passed to a Streamlit display function. Data-level English
+  values (catalog names, source slugs) use its documented allowlist.
+- **CSS lives only in `dashboard/components/direction.py`**, scoped by stable
+  hooks (`data-testid`, `st-key-*`, `aria-current`) — never a hashed
+  `st-emotion-cache-*` class. A new container that renders RTL text declares
+  `direction: rtl`. New colours/radii/sizes are tokens in
+  `dashboard/components/tokens.py`, read by the theme and the Plotly template.
+- **Charts use the shared template** (`dashboard/components/charts.py`); the grid
+  and the Plotly time axis stay LTR. Exports render PNG + SVG through
+  `serialize_figure_images` (smoke: `test_exports.py -m integration`).
+- **The dev-only screenshot script** (`scripts/dashboard_screenshots.py`) captures
+  one PNG per registered page; it is **not** a CI gate. Restart the dev server
+  before a capture set and record the commit under capture.
+- **Gate per wave:** `make check` plus `poetry run mypy src dashboard` (the
+  typecheck target covers `src/` only) and the ten-page router smoke
+  (`tests/unit/dashboard/test_all_pages_smoke.py`).
+- **Do not touch `src/`, `alembic/` or `airflow/` for a presentation change.**
+
 ## Code Patterns
 
 ### Naming Conventions

@@ -42,6 +42,14 @@ from dashboard.repository import SERIES_KIND_BASE, SERIES_KIND_DERIVED
 #: data, the quality summary or the exports.
 OBSERVATIONS_ROW_LIMIT: Final[int] = 500
 
+#: Row height (px) of the observations ``st.dataframe`` (D1): the ``st.dataframe``
+#: class uses ``row_height`` as its density control, exactly as the RTL HTML table
+#: uses a density class. The value matches the HTML table's **compact** row height
+#: (``.dt.compact td { height: 40px }`` in :mod:`dashboard.components.direction`),
+#: so a dense observation grid and a dense HTML table read at one density. It
+#: changes nothing about which rows or values are shown.
+OBSERVATIONS_ROW_HEIGHT: Final[int] = 40
+
 #: Raw column name -> ``dashboard.i18n`` key for its Persian header. Shared by the
 #: on-screen grids and the exports; an unmapped column keeps its raw name (a
 #: data-level English identifier, never a UI literal).

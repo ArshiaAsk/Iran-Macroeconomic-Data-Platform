@@ -11,9 +11,11 @@ rules keep that survivable across Streamlit releases:
   applied later, but column order and the grid itself remain LTR and are
   documented as a known limitation rather than fought).
 
-The dashboard is local-only, so there is no ``@font-face``, no CDN, no downloaded
-font asset and no new dependency: the family stack falls back through whatever the
-analyst's OS provides.
+Phase 7.2 (D4, ratified) vendors Vazirmatn locally: the font is declared in
+``.streamlit/config.toml`` via ``[[theme.fontFaces]]`` and served by Streamlit's
+static serving from ``dashboard/static/`` at ``app/static/Vazirmatn.ttf`` (no CDN,
+no webfont fetch). :data:`FONT_STACK` keeps a Persian-capable OS fallback after
+``Vazirmatn`` so the UI still renders Persian if the vendored file is unavailable.
 
 Nothing here localizes a chart. :func:`plotly_template` is the single helper later
 chart work will inherit from; existing chart builders are untouched.
@@ -27,17 +29,21 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.basedatatypes import BaseFigure
 
+from dashboard.components.tokens import CHART_CATEGORICAL_COLORS, css_custom_properties, token
+
 __all__ = [
     "CSS_SELECTORS",
     "FONT_STACK",
     "apply_plotly_typography",
+    "brand_sidebar_css",
     "direction_css",
     "inject_direction_css",
     "plotly_template",
 ]
 
 FONT_STACK: Final[str] = '"Vazirmatn", "IRANSans", "Tahoma", "Segoe UI", sans-serif'
-"""OS-only Persian-capable stack; no webfont is fetched or vendored."""
+"""Persian-capable stack; ``Vazirmatn`` is vendored and served by static serving,
+the rest are OS fallbacks so the UI still renders Persian if the file is absent."""
 
 PLOTLY_FONT_SIZE: Final[int] = 13
 PLOTLY_TITLE_FONT_SIZE: Final[int] = 17
@@ -48,15 +54,67 @@ PLOTLY_TITLE_FONT_SIZE: Final[int] = 17
 CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "sidebar": '[data-testid="stSidebar"]',
+        "sidebar_content": '[data-testid="stSidebarContent"]',
+        "sidebar_header": '[data-testid="stSidebarHeader"]',
         "sidebar_nav": '[data-testid="stSidebarNav"]',
+        "sidebar_nav_link_active": '[data-testid="stSidebarNavLink"][aria-current="page"]',
+        "sidebar_user_content": '[data-testid="stSidebarUserContent"]',
         "markdown": '[data-testid="stMarkdownContainer"]',
         "heading": '[data-testid="stHeading"], h1, h2, h3, h4, h5, h6',
         "metric": '[data-testid="stMetric"]',
         "metric_label": '[data-testid="stMetricLabel"]',
+        # Task 29: the mockup's heading line-heights (h1 1.4, section title 1.5)
+        # are not theme options, and Streamlit's own heading rule (line-height
+        # 1.2) outranks a bare `h1`/`h3`. Scoped to the main block so the
+        # sidebar's own headings are untouched.
+        "main_block_heading_1": '[data-testid="stMainBlockContainer"] h1',
+        "main_block_heading_3": '[data-testid="stMainBlockContainer"] h3',
         "widget_label": '[data-testid="stWidgetLabel"]',
         "form_label": '[data-testid="stForm"] label',
         "dataframe": '[data-testid="stDataFrame"]',
         "plotly_chart": '[data-testid="stPlotlyChart"]',
+        "main_block_container": '[data-testid="stMainBlockContainer"]',
+        # Shared-component hooks (Tasks 17-22). These are the keyed-container
+        # classes Streamlit adds for `st.container(key=...)`: the class attribute
+        # carries `st-key-<sanitized key>`, so an attribute substring selector
+        # scopes a rule to one component without a hashed `st-emotion-cache-*`.
+        "callout": '[class*="st-key-callout-"]',
+        "kpi_band": '[class*="st-key-kpi-band-"]',
+        "kpi_secondary_group": '[class*="st-key-kpi-"][class*="-secondary-0-tone-"]',
+        # Every secondary cell, not just the boundary one (the value-size rule).
+        "kpi_secondary_cell": '[class*="st-key-kpi-"][class*="-secondary-"]',
+        "kpi_column": '[data-testid="stColumn"]',
+        "kpi_value": '[data-testid="stMetricValue"]',
+        "kpi_label": '[class*="st-key-kpi-band-"] [data-testid="stMetricLabel"]',
+        "kpi_tone_muted": '[class*="st-key-kpi-"][class*="-tone-muted"]',
+        "kpi_tone_ok": '[class*="st-key-kpi-"][class*="-tone-ok"]',
+        "kpi_tone_warn": '[class*="st-key-kpi-"][class*="-tone-warn"]',
+        "kpi_tone_err": '[class*="st-key-kpi-"][class*="-tone-err"]',
+        "kpi_tone_accent": '[class*="st-key-kpi-"][class*="-tone-accent"]',
+        "bar_list": '[class*="st-key-bar-list-"]',
+        "bar_rail": ".bar-rail",
+        "bar_fill": ".bar-fill",
+        "bar_list_foot": ".bar-list-foot",
+        # Section header (Task 21). These are the styled hooks; the component also
+        # wraps the title/subtitle pair in a `section-title-<suffix>` container so
+        # the row below sees it as one child, and that container needs no rule of
+        # its own. The three keys here diverge from the header's stem before the
+        # `header`/`subtitle`/`trailing` part, so the row rule cannot match them.
+        "section_header": '[class*="st-key-section-header-"]',
+        "section_subtitle": '[class*="st-key-section-subtitle-"]',
+        "section_trailing": '[class*="st-key-section-trailing-"]',
+        "filter_bar": '[class*="st-key-filter-bar-"]',
+        "top_bar": '[class*="st-key-top-bar"]',
+        # Overview's two-column row (Task 31): the mockup's 7fr/5fr grid.
+        "overview_row": '[class*="st-key-overview-row"]',
+        # Native captions (Wave H P2). A native `st.caption` inherits the main
+        # block's LTR direction, so a Persian sentence hugs the left edge. This
+        # shell-level rule is scoped to the main block (never the sidebar) and
+        # covers every page's captions; it replaced the earlier scoped
+        # `coverage_footnote` workaround, which is no longer needed.
+        "main_block_caption": (
+            '[data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"]'
+        ),
     }
 )
 
@@ -65,12 +123,21 @@ _RULES: Final[tuple[tuple[str, str], ...]] = (
     ("sidebar", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
     ("sidebar_nav", "direction: rtl; text-align: right;"),
     # Generous line-height keeps Persian ascenders/descenders and the mixed
-    # Persian-digit runs readable in the RTL text blocks (Task 22 polish).
+    # Persian-digit runs readable in the RTL text blocks (Task 22 polish). Task 29
+    # pinned it to the mockup's body line-height (1.85): measured 1.9 before, so
+    # the mockup value was not in effect.
     (
         "markdown",
-        f"direction: rtl; text-align: right; line-height: 1.9; font-family: {FONT_STACK};",
+        f"direction: rtl; text-align: right; line-height: 1.85; font-family: {FONT_STACK};",
     ),
     ("heading", f"direction: rtl; text-align: right; line-height: 1.7; font-family: {FONT_STACK};"),
+    # Task 29: the mockup's heading line-heights, which the theme cannot express.
+    # Measured before: h1 33.6 px (1.2) and h3 21.6 px (1.2) — Streamlit's own
+    # heading rule wins over the bare-element `heading` rule above. The
+    # main-block-scoped selectors are specific enough to take effect (verified
+    # live; see the execution log).
+    ("main_block_heading_1", "line-height: 1.4;"),
+    ("main_block_heading_3", "line-height: 1.5;"),
     ("metric", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
     ("metric_label", "direction: rtl; text-align: right;"),
     ("widget_label", f"direction: rtl; text-align: right; font-family: {FONT_STACK};"),
@@ -82,34 +149,447 @@ _RULES: Final[tuple[tuple[str, str], ...]] = (
     ("plotly_chart", "direction: ltr;"),
 )
 
+#: Streamlit-chrome selectors verified on Streamlit 1.61.1
+#: (``docs/phase-7.2/wave-0-spike.md`` §4.3/§4.4). Every hook here is a stable
+#: ``data-testid`` or the ``[aria-current="page"]`` attribute; the hashed
+#: ``st-emotion-cache-*`` active-link class is deliberately **not** used.
+#: Widths need ``!important`` against Streamlit's inline styles. The native
+#: ``[data-testid="stHeader"]`` is **52.5 px** at the themed 14 px base
+#: (3.75 rem; the older 60 px figure is the same 3.75 rem at the browser's 16 px
+#: default root — Step 0b reconciled the two). The main container's top padding
+#: clears the header and seats the top bar 12 px below it. Brand and top-bar
+#: rules land in Tasks 27/28.
+_CHROME_COMMENT: Final[str] = (
+    "/* Streamlit-chrome selectors — verified on Streamlit 1.61.1 "
+    "(wave-0-spike.md §4.3/§4.4). Stable data-testid hooks + "
+    '[aria-current="page"]; widths need !important. Native header '
+    '[data-testid="stHeader"] is 52.5 px at the 14 px themed base '
+    "(mockup top bar 48 px → Task 28). "
+    "Do not extend without re-running the selector probe. */"
+)
+
+#: Chrome rules as ``(selector key, declarations)`` in stylesheet order.
+_CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
+    ("sidebar", "width: 256px !important; min-width: 256px !important;"),
+    ("sidebar_content", "display: flex !important; flex-direction: column;"),
+    (
+        "sidebar_header",
+        "order: 0; display: flex; align-items: center; gap: 8px; "
+        "flex-wrap: nowrap; padding: 1.25rem 0.75rem 0.75rem;",
+    ),
+    ("sidebar_nav", "order: 1;"),
+    ("sidebar_user_content", "order: 2; margin-top: auto;"),
+    (
+        "sidebar_nav_link_active",
+        "background: var(--accent-soft); color: var(--accent); "
+        "font-weight: 600; border-inline-start: 3px solid var(--accent);",
+    ),
+    # The main container owns the horizontal padding as one custom property
+    # (P5): the top bar's full-bleed rule reads the same `--main-pad-x` for its
+    # negative inline margin and its matching inline padding, so the two values
+    # live in one place and cannot drift. Streamlit's own padding is restated
+    # explicitly so the negative margin is guaranteed to match it.
+    (
+        "main_block_container",
+        "max-width: 1360px !important; padding-top: 64px !important; "
+        "--main-pad-x: 70px; "
+        "padding-left: var(--main-pad-x) !important; "
+        "padding-right: var(--main-pad-x) !important;",
+    ),
+)
+
+#: Brand block (Task 27, brand fallback 2). The sidebar header is empty chrome
+#: when no ``st.logo`` is used, so the mark and the brand text are CSS
+#: pseudo-elements pinned to ``stSidebarHeader``. The text comes from
+#: :func:`dashboard.i18n.t` (``app.brand``) and is escaped by
+#: :func:`_escape_css_string` before interpolation — a Persian literal cannot
+#: live in a CSS string unescaped because a stray backslash or quote would break
+#: the ``content`` declaration. The mark is a CSS-drawn accent square (no SVG:
+#: ``st.html`` strips ``<svg>`` per wave-0-spike.md §6).
+_BRAND_COMMENT: Final[str] = (
+    "/* Sidebar brand (Task 27, fallback 2): CSS-pinned mark + text on "
+    "stSidebarHeader. Brand text is escaped and interpolated from i18n. */"
+)
+
+
+def _escape_css_string(text: str) -> str:
+    """Escape a string for safe interpolation into a CSS double-quoted ``content`` value.
+
+    CSS string literals terminate on an unescaped ``"`` and interpret ``\\`` as an
+    escape sequence introducer, so both must be doubled. Control characters
+    (0x00-0x1F) are illegal in CSS strings and are emitted as hex escapes with a
+    trailing space delimiter. Persian/Arabic characters need no escaping.
+    """
+    chars: list[str] = []
+    for char in text:
+        if char == "\\":
+            chars.append("\\\\")
+        elif char == '"':
+            chars.append('\\"')
+        elif ord(char) < 0x20:
+            chars.append(f"\\{ord(char):06x} ")
+        else:
+            chars.append(char)
+    return "".join(chars)
+
+
+def brand_sidebar_css(brand_text: str) -> str:
+    """Return the CSS rules that pin the sidebar brand mark and text.
+
+    The brand lives on ``[data-testid="stSidebarHeader"]`` as two
+    pseudo-elements: ``::before`` is a CSS-drawn accent mark (no SVG), and
+    ``::after`` carries the escaped brand text. The header's own flex rule
+    (in :data:`_CHROME_RULES`) lays them out side by side at the RTL start.
+
+    The text stays on **one line**: ``::after`` is the flexible flex child
+    (``flex: 1 1 auto; min-width: 0``) with ``white-space: nowrap`` and
+    ``overflow: hidden; text-overflow: ellipsis``, so a brand longer than the
+    256 px sidebar ellipsizes instead of wrapping into the navigation below
+    (Step 0a).
+
+    Args:
+        brand_text: The already-resolved brand string (call ``t("app.brand")``
+            first). It is escaped before interpolation so it cannot break the
+            CSS ``content`` declaration.
+
+    Returns:
+        Two CSS rules (``::before`` + ``::after``) as one string, ready to
+        append to the stylesheet.
+    """
+    escaped = _escape_css_string(brand_text)
+    header = CSS_SELECTORS["sidebar_header"]
+    before = (
+        f'{header}::before {{ content: ""; flex: none; box-sizing: border-box; '
+        f"width: 24px; height: 24px; border-radius: 7px; "
+        f"background: var(--accent); }} "
+    )
+    after = (
+        f'{header}::after {{ content: "{escaped}"; '
+        f"font-family: {FONT_STACK}; font-weight: 700; font-size: 15px; "
+        f"line-height: 1.4; color: var(--text-1); "
+        f"flex: 1 1 auto; min-width: 0; white-space: nowrap; "
+        f"overflow: hidden; text-overflow: ellipsis; }} "
+    )
+    return _BRAND_COMMENT + "\n" + before + after
+
+
+#: 15). Emitted once by :func:`inject_direction_css` rather than a ``<style>`` per
+#: table. Values mirror ``docs/design/phase-7.2/overview-redesign-mockup.html``
+#: (``.dt``/``.chip``/``.dot``/``.unit``/``.ltr``) and read the design tokens, so
+#: no literal colour appears here. Tone classes are ``tone-*``; the tone is
+#: validated against a closed set in the component before it reaches a class name.
+_TABLE_COMMENT: Final[str] = (
+    "/* RTL HTML table + chip/dot/two-line cells (Task 15). Mirrors the mockup's "
+    ".dt/.chip/.dot rules with design tokens; emitted once by "
+    "inject_direction_css, never per table. */"
+)
+
+#: Table rules as complete CSS strings (class selectors, not data-testid hooks).
+_TABLE_RULES: Final[tuple[str, ...]] = (
+    ".dt-wrap { background: var(--surface); border: 1px solid var(--border); "
+    "border-radius: var(--radius-lg); overflow-x: auto; }",
+    ".dt { width: 100%; border-collapse: separate; border-spacing: 0; }",
+    ".dt th { background: var(--surface-2); color: var(--text-2); "
+    "font-size: 12.5px; font-weight: 600; text-align: start; padding: 9px 14px; "
+    "border-bottom: 1px solid var(--border-strong); white-space: nowrap; "
+    "line-height: 1.6; }",
+    ".dt td { height: 52px; padding: 0 14px; "
+    "border-bottom: 1px solid var(--border); white-space: nowrap; line-height: 1.5; }",
+    ".dt tbody tr:last-child td { border-bottom: 0; }",
+    ".dt tbody tr:hover td { background: var(--hover); }",
+    # The `coverage` variant (Task 32): the mockup's `.dt.cov`. Its ten columns
+    # are tight, so the cells wrap by default and only the numeric ones are held
+    # on one line; the indicator cell keeps a minimum width so its name wraps
+    # rather than stretching the table. Declared *before* `.dt.compact` on
+    # purpose: both selectors are equally specific, so the density override still
+    # wins for the properties it owns (height, font-size, line-height).
+    ".dt.cov th { white-space: normal; padding: 9px 10px; font-size: 12px; "
+    "vertical-align: bottom; }",
+    ".dt.cov td { padding: 0 10px; white-space: normal; font-size: 13.5px; " "line-height: 1.55; }",
+    ".dt.cov .num { white-space: nowrap; }",
+    ".dt.cov td:first-child { min-width: 230px; }",
+    ".dt.compact td { height: 40px; padding: 0 10px; font-size: 13.5px; " "line-height: 1.45; }",
+    ".dt .num { font-variant-numeric: tabular-nums; }",
+    ".dt .name { font-weight: 600; }",
+    ".dt .sm { font-size: 12px; color: var(--text-3); display: block; }",
+    # The LTR *direction* is the whole point of this rule, so it stays on every
+    # ``.ltr`` cell. The mono family and the 11.5 px size are the *id* style and
+    # apply only to the id line (``.idl``): a Gregorian range cell is also LTR and
+    # numeric, but the mockup renders it as a plain ``td.num`` that inherits the
+    # table body cell font (Step 0a). Keeping mono/11.5 px on the bare ``.ltr``
+    # made the World Bank/IMF/EIA ranges visibly smaller than the Jalali ones.
+    ".dt .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; "
+    "max-width: 24ch; overflow: hidden; text-overflow: ellipsis; "
+    "vertical-align: bottom; }",
+    ".dt .ltr.idl { font-family: var(--font-mono); font-size: 11.5px; }",
+    ".dt .idl { display: block; color: var(--text-3); margin-top: 1px; }",
+    ".unit { direction: ltr; unicode-bidi: isolate; display: inline-block; "
+    "font-family: var(--font-mono); font-size: 11.5px; background: var(--neutral-bg); "
+    "color: var(--text-2); padding: 1px 7px; border-radius: 4px; "
+    "max-width: 20ch; overflow: hidden; text-overflow: ellipsis; }",
+    ".na { color: var(--border-strong); }",
+    ".chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; "
+    "border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 22px; }",
+    '.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; '
+    "background: currentColor; }",
+    ".dot { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; "
+    "font-weight: 500; }",
+    '.dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; '
+    "background: currentColor; }",
+    ".tone-ok { color: var(--ok); }",
+    ".tone-warn { color: var(--warn); }",
+    ".tone-err { color: var(--err); }",
+    ".tone-accent { color: var(--accent); }",
+    ".tone-neutral { color: var(--text-2); }",
+    ".chip.tone-ok { background: var(--ok-bg); }",
+    ".chip.tone-warn { background: var(--warn-bg); }",
+    ".chip.tone-err { background: var(--err-bg); }",
+    ".chip.tone-accent { background: var(--accent-soft); }",
+    ".chip.tone-neutral { background: var(--neutral-bg); }",
+    ".tm { display: flex; gap: 0; }",
+    '.tm > span + span::before { content: "·"; margin: 0 7px; }',
+)
+
+#: Shared-component CSS (Tasks 17-22). Hooks are the keyed-container classes
+#: (``.st-key-<key>``) and the stable alert ``data-testid``s, both probed on
+#: Streamlit 1.61.1 and recorded in ``docs/phase-7.2/design-system.md``. Emitted
+#: once by :func:`inject_direction_css`; no component emits its own ``<style>``.
+_COMPONENT_COMMENT: Final[str] = (
+    "/* Shared-component hooks (Tasks 17-22): keyed-container classes "
+    "(.st-key-<key>) + stable alert data-testids, probed on Streamlit 1.61.1 "
+    "(design-system.md). Emitted once by inject_direction_css, never per "
+    "component. */"
+)
+
+#: KPI value tone -> design-token name (Task 19). ``default`` is deliberately
+#: absent: it inherits the metric's own colour, so no rule is needed.
+_KPI_TONE_TOKENS: Final[tuple[tuple[str, str], ...]] = (
+    ("muted", "text-2"),
+    ("ok", "ok"),
+    ("warn", "warn"),
+    ("err", "err"),
+    ("accent", "accent"),
+)
+
+#: One rule per non-default KPI tone, colouring only the metric value.
+_KPI_TONE_RULES: Final[tuple[str, ...]] = tuple(
+    f'{CSS_SELECTORS[f"kpi_tone_{tone}"]} {CSS_SELECTORS["kpi_value"]} '
+    f"{{ color: var(--{token_name}); }}"
+    for tone, token_name in _KPI_TONE_TOKENS
+)
+
+#: Component rules as complete CSS strings, in stylesheet order. Each rule's
+#: selector is built from the :data:`CSS_SELECTORS` registry so the hook has one
+#: source (``_TABLE_RULES`` predates the registry and uses plain class selectors).
+#:
+#: **Every component container declares ``direction: rtl``.** Streamlit's main
+#: block is LTR, so an inherited ``inline-start`` is the *left* edge; declaring the
+#: direction on the component's own container makes ``inline-start``/``flex-start``
+#: resolve to the right edge, as the mockup's ``body{direction:rtl}`` does. This is
+#: the same self-contained-RTL-context rule the Task 15 table follows with
+#: ``dir="rtl"`` on its wrapper, and it keeps the flip out of the un-migrated
+#: pages (a global main-block flip is not scheduled in this plan).
+_COMPONENT_RULES: Final[tuple[str, ...]] = (
+    # Callout (Task 17). The amber/blue/red tint and the text colour come from the
+    # `[theme]` alert options; this adds only the mockup's accent bar and the info
+    # glyph, both at the RTL start. The native alert renders no icon element, so
+    # the glyph is a CSS shape (a ring with the "i" dot and stem drawn as
+    # background layers) rather than the mockup's inline SVG, which DOMPurify
+    # strips.
+    f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"] {{ '
+    "direction: rtl; border-inline-start: 3px solid currentColor; "
+    "border-radius: var(--radius); "
+    "display: flex; align-items: flex-start; gap: 10px; }",
+    f'{CSS_SELECTORS["callout"]} [data-testid="stAlertContainer"]::before {{ '
+    'content: ""; flex: none; box-sizing: border-box; width: 15px; height: 15px; '
+    "margin-block-start: 7px; border: 1.5px solid currentColor; border-radius: 50%; "
+    "background: radial-gradient(circle, currentColor 0 1.1px, transparent 1.2px) "
+    "50% 26% / 100% 100% no-repeat, "
+    "linear-gradient(currentColor, currentColor) 50% 74% / 1.5px 5px no-repeat; }",
+    # KPI band (Task 19): the mockup's larger corner radius, edge-to-edge columns,
+    # a separator between every pair of cells and a stronger one at the start of
+    # the secondary group. ``direction: rtl`` is what makes "first cell" mean the
+    # *rightmost* cell, so a caller passes the cells in mockup order. The `:has()`
+    # rule must follow the `+` rule: the two have equal specificity, so source
+    # order decides the boundary cell.
+    f'{CSS_SELECTORS["kpi_band"]} {{ direction: rtl; '
+    "border-radius: var(--radius-lg) !important; padding: 0 !important; }",
+    f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]} '
+    f'+ {CSS_SELECTORS["kpi_column"]} {{ border-inline-start: 1px solid var(--border); }}',
+    f'{CSS_SELECTORS["kpi_band"]} {CSS_SELECTORS["kpi_column"]}'
+    f':has({CSS_SELECTORS["kpi_secondary_group"]}) '
+    "{ border-inline-start: 1px solid var(--border-strong); }",
+    *_KPI_TONE_RULES,
+    # KPI typography the theme cannot express (Task 29, carried from Step 0e).
+    # The theme sets one metric-label size (Streamlit computes 12.25 px / 400) and
+    # one metric-value size (28 px), so the mockup's 13 px / 500 label and 20 px
+    # secondary value are pinned here on the band's own hooks. Primary values keep
+    # the theme's 28 px / 600.
+    f'{CSS_SELECTORS["kpi_label"]} {{ font-size: 13px; font-weight: 500; }}',
+    f'{CSS_SELECTORS["kpi_secondary_cell"]} {CSS_SELECTORS["kpi_value"]} ' "{ font-size: 20px; }",
+    # Bar list (Task 20). The panel is a keyed bordered container; each row is a
+    # native st.columns trio whose middle column holds the escaped bar fragment.
+    # ``direction: rtl`` on the panel is what puts the domain label on the right,
+    # the bar in the middle and the count on the left (the mockup's
+    # `grid-template-columns:150px 1fr 34px` in an RTL grid) and what puts the
+    # footer's "جمع" caption on the right; ``direction: rtl`` on the rail anchors
+    # the fill to the right edge, so the bar grows from the RTL reading start
+    # instead of from the left.
+    f'{CSS_SELECTORS["bar_list"]} {{ direction: rtl; }}',
+    f'{CSS_SELECTORS["bar_list"]} {CSS_SELECTORS["bar_rail"]} {{ direction: rtl; '
+    "height: 8px; background: var(--neutral-bg); border-radius: 4px; overflow: hidden; }",
+    f'{CSS_SELECTORS["bar_fill"]} {{ height: 100%; background: var(--accent); '
+    "border-radius: 4px; }",
+    f'{CSS_SELECTORS["bar_list"]} [data-testid="stHorizontalBlock"] {{ align-items: center; }}',
+    f'{CSS_SELECTORS["bar_list_foot"]} {{ border-top: 1px solid var(--border); '
+    "display: flex; justify-content: space-between; color: var(--text-3); }",
+    # Section header (Task 21). The mockup's `.sec-h` is one baseline-aligned row
+    # with the title at the RTL start and the secondary text at the far end, so the
+    # container's column direction is overridden to a `space-between` row. The
+    # title/subtitle pair is one child and the trailing text the other, which is why
+    # the nested containers have keys that do not share this selector's stem.
+    f'{CSS_SELECTORS["section_header"]} {{ direction: rtl; flex-direction: row !important; '
+    "justify-content: space-between; align-items: baseline; }",
+    # The mockup's `.sec-h .sub`: muted, one step down from body text. Scoped to the
+    # subtitle/trailing containers only: `st.subheader` renders a
+    # `stMarkdownContainer` of its own, so a rule on the title container would also
+    # recolour the heading.
+    f'{CSS_SELECTORS["section_subtitle"]} [data-testid="stMarkdownContainer"], '
+    f'{CSS_SELECTORS["section_trailing"]} [data-testid="stMarkdownContainer"] '
+    "{ font-size: 12.5px; color: var(--text-3); }",
+    # Filter bar (Task 21): only the reading direction is ours; the columns, their
+    # weights and their centre alignment come from `st.columns`.
+    f'{CSS_SELECTORS["filter_bar"]} {{ direction: rtl; }}',
+    # Top bar (Task 28; Step 0b; surface/border + full-bleed in P5). The container
+    # is a keyed vertical block; the columns row inside it carries the mockup's
+    # 48 px height. The row must use `min-height`, not `height`: Streamlit's own
+    # `.stHorizontalBlock` rule sets `flex: 1 1 0%` and the keyed container is a
+    # column flex parent, so the main axis is vertical and `flex-basis: 0%`
+    # overrides a plain `height` — measured 20.8 px with `height: 48px`, 48 px
+    # with `min-height: 48px`. Breadcrumb on the RTL start and the last-collection
+    # stamp on the RTL end. The main container padding-top is 64 px = the native
+    # header (52.5 px) + a 12 px gap, so the bar sits directly under the header
+    # instead of 67.5 px below it (Step 0b).
+    #
+    # P5 gives the bar the mockup's white surface and bottom border, and makes it
+    # full-bleed. The bar's containing block is Streamlit's inner
+    # `stLayoutWrapper` (already inside the main container's padding), not the
+    # main container itself, so a negative margin alone would shift the bar left
+    # without widening it (Streamlit sets `max-width: 100%`). The width is
+    # therefore grown by the same `--main-pad-x` on both sides and the negative
+    # inline margin pulls the wider box back out to the main container's edges;
+    # the matching inline padding puts the bar's content back in line with the
+    # page content. Every value reads the one `--main-pad-x` property the main
+    # container declares, so they cannot drift. Measured: no horizontal page
+    # scroll at 1440 px or 1280 px (see the execution log).
+    f'{CSS_SELECTORS["top_bar"]} {{ direction: rtl; background: var(--surface); '
+    "border-bottom: 1px solid var(--border); "
+    "width: calc(100% + 2 * var(--main-pad-x)); "
+    "max-width: calc(100% + 2 * var(--main-pad-x)); "
+    "margin-inline: calc(-1 * var(--main-pad-x)); "
+    "padding-inline: var(--main-pad-x); }",
+    f'{CSS_SELECTORS["top_bar"]} [data-testid="stHorizontalBlock"] {{ '
+    "align-items: center; min-height: 48px; }",
+    f'{CSS_SELECTORS["top_bar"]} .top-bar-breadcrumb {{ '
+    "font-size: 13px; font-weight: 500; color: var(--text-2); "
+    "text-align: right; }",
+    f'{CSS_SELECTORS["top_bar"]} .top-bar-stamp {{ '
+    "font-size: 13px; font-weight: 500; color: var(--text-2); "
+    "text-align: left; }",
+    # Breadcrumb trail (Wave H P3, finding F2). The mockup writes the trail with
+    # a slash separator and the current page in bold; the separator span is
+    # `aria-hidden` in the markup, so it is only styled here.
+    f'{CSS_SELECTORS["top_bar"]} .crumb-sep {{ color: var(--border-strong); margin: 0 8px; }}',
+    f'{CSS_SELECTORS["top_bar"]} .crumb-current {{ font-weight: 600; color: var(--text-1); }}',
+    # Overview's two-column row (Task 31). The mockup's `.row` is a 7fr/5fr grid
+    # under `body{direction:rtl}`, so its first item (freshness) sits on the right.
+    # Streamlit's main block is LTR, so without this the first column would land on
+    # the left and the two sections would swap. The column weights themselves come
+    # from `st.columns([7, 5])`.
+    f'{CSS_SELECTORS["overview_row"]} {{ direction: rtl; }}',
+    # Native captions (Wave H P2, finding F5): a native `st.caption` inherits the
+    # LTR main block, so a Persian sentence hugs the left edge. This shell-level
+    # rule is scoped to the main block (not the sidebar) and fixes every page's
+    # captions at once; `text-align: start` resolves to the right edge under the
+    # RTL direction, exactly as the old scoped `coverage_footnote` rule did.
+    f'{CSS_SELECTORS["main_block_caption"]} {{ direction: rtl; text-align: start; }}',
+)
+
 
 def direction_css() -> str:
-    """Return the scoped RTL/typography stylesheet as a string."""
-    header = "/* dashboard RTL + Persian typography: dashboard/components/direction.py */"
+    """Return the scoped RTL/typography/chrome/table stylesheet as a string.
+
+    The stylesheet has five sections: the design-token ``:root`` block (the
+    single source for the palette/radii/fonts), the RTL typography rules, a
+    comment-marked, version-named chrome block for the Streamlit shell selectors,
+    the RTL HTML-table component rules, and the shared-component hook rules
+    (emitted once, never per component).
+    """
+    header = "/* dashboard RTL + Persian typography + chrome: dashboard/components/direction.py */"
+    root_block = css_custom_properties()
     rules = [f"{CSS_SELECTORS[selector]} {{ {declarations} }}" for selector, declarations in _RULES]
-    return "\n".join([header, *rules])
+    chrome_rules = [
+        f"{CSS_SELECTORS[selector]} {{ {declarations} }}"
+        for selector, declarations in _CHROME_RULES
+    ]
+    component_rules = list(_COMPONENT_RULES)
+    return "\n".join(
+        [
+            header,
+            root_block,
+            *rules,
+            _CHROME_COMMENT,
+            *chrome_rules,
+            _TABLE_COMMENT,
+            *_TABLE_RULES,
+            _COMPONENT_COMMENT,
+            *component_rules,
+        ]
+    )
 
 
-def inject_direction_css() -> None:
+def inject_direction_css(brand_text: str | None = None) -> None:
     """Inject the scoped stylesheet into the running app.
 
     The rules are wrapped in a ``<style>`` element: ``st.markdown`` renders a bare
     CSS string as visible page text, so without the wrapper the stylesheet source
     leaks into the DOM instead of styling it.
 
+    When ``brand_text`` is provided, the sidebar brand rules from
+    :func:`brand_sidebar_css` are appended to the stylesheet so the brand mark
+    and text land on ``stSidebarHeader``. The caller resolves the text through
+    ``t("app.brand")`` before passing it in; the CSS module never imports the
+    string catalog, keeping it a pure styling layer.
+
     Called once per script run by the entrypoint. It is intentionally not guarded
     by ``st.session_state``: Streamlit drops elements that a run does not re-emit,
     so a guard would remove the stylesheet on the next rerun.
+
+    Args:
+        brand_text: Optional already-resolved brand string. When ``None`` the
+            stylesheet omits the brand rules (used by tests and standalone runs).
     """
-    st.markdown(f"<style>{direction_css()}</style>", unsafe_allow_html=True)
+    stylesheet = direction_css()
+    if brand_text is not None:
+        stylesheet += "\n" + brand_sidebar_css(brand_text)
+    st.markdown(f"<style>{stylesheet}</style>", unsafe_allow_html=True)
 
 
 def plotly_template() -> go.layout.Template:
-    """Build the shared Plotly typography template for dashboard figures.
+    """Build the shared Plotly template for dashboard figures.
+
+    The template carries typography, the categorical palette, token grid/border
+    colours and RTL-friendly legend/title placement. Chart builders still own
+    figure sizing (``width``/``height``/``autosize``) and margins.
+
+    RTL decision (recorded in the Task 14 execution-log entry): the legend and
+    title are aligned for right-to-left reading, but the **time axis is not
+    reversed** — time flows left to right on the LTR plot canvas (the grid stays
+    LTR per AGENTS.md), so only the chrome around the plot is RTL-aware.
 
     Returns:
-        A template carrying only font/typography settings, so chart builders keep
-        their own sizing, axes and trace layout.
+        A template carrying palette, grid, legend/title placement and typography,
+        so chart builders keep their own sizing, margins and trace layout.
     """
     template = go.layout.Template()
     template.layout.font = {
@@ -118,15 +598,30 @@ def plotly_template() -> go.layout.Template:
     }
     template.layout.title = {
         "font": {"family": FONT_STACK, "size": PLOTLY_TITLE_FONT_SIZE},
+        # Right-aligned title reads naturally at the start of an RTL line.
+        "x": 1,
+        "xanchor": "right",
     }
-    template.layout.legend = {"font": {"family": FONT_STACK}}
+    template.layout.legend = {
+        "font": {"family": FONT_STACK},
+        # Horizontal, above the plot, right-aligned: the RTL reading start.
+        "orientation": "h",
+        "yanchor": "bottom",
+        "y": 1.02,
+        "xanchor": "right",
+        "x": 1,
+    }
     template.layout.hoverlabel = {"font": {"family": FONT_STACK}}
-    axis_typography = {
+    template.layout.colorway = list(CHART_CATEGORICAL_COLORS)
+    axis_layout = {
         "tickfont": {"family": FONT_STACK},
         "title": {"font": {"family": FONT_STACK}},
+        "gridcolor": token("border"),
+        "linecolor": token("border-strong"),
+        "zerolinecolor": token("border-strong"),
     }
-    template.layout.xaxis = axis_typography
-    template.layout.yaxis = axis_typography
+    template.layout.xaxis = axis_layout
+    template.layout.yaxis = axis_layout
     return template
 
 
@@ -136,6 +631,14 @@ def apply_plotly_typography(figure: BaseFigure) -> BaseFigure:
     Sizing and trace layout already set on the figure are left untouched: the
     template only supplies typography that the figure has not overridden.
 
+    The **legend title is blanked** (Task 35, finding F3). Plotly Express names
+    the legend after the ``color`` column, and every time-series builder passes
+    ``color="label"`` (the Persian display-label column), so the rendered legend
+    carried the literal English word ``label`` above the series names. The
+    series names and colours are untouched; only that title is removed, and it
+    is cleared here rather than in the template because a figure-level
+    ``legend.title`` outranks the template's.
+
     Args:
         figure: Plotly figure to style in place
 
@@ -143,4 +646,5 @@ def apply_plotly_typography(figure: BaseFigure) -> BaseFigure:
         The same figure, for chaining
     """
     figure.update_layout(template=plotly_template())
+    figure.update_layout(legend_title_text="")
     return figure

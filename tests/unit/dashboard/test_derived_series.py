@@ -8,6 +8,8 @@ the Market page, so these tests pin that it never parses an indicator id, never
 requires a catalog row and never appends an already-selected id.
 """
 
+import re
+
 import pandas as pd
 import pytest
 
@@ -27,6 +29,7 @@ from tests.unit.dashboard.app_smoke import (
     TRADE_INDICATOR,
     FakeDashboardRepository,
     app_test,
+    html_texts,
 )
 
 #: One (parent, derived) pair per source shape the ETL namespaces in
@@ -73,11 +76,15 @@ def _observations_frame(app) -> pd.DataFrame:
     )
 
 
-def _quality_frame(app) -> pd.DataFrame:
-    """The per-indicator quality table rendered by a domain page."""
-    return next(
-        frame.value for frame in app.dataframe if t("table.rows_returned") in frame.value.columns
-    )
+def _quality_indicator_ids(app) -> set[str]:
+    """Indicator ids in the quality summary's RTL HTML table (Task 35).
+
+    The summary is an HTML table now, so its id column is read off the markup
+    (``<bdi class="ltr">…</bdi>``, the isolated LTR token) rather than from an
+    ``app.dataframe`` (the Task 16 migration map).
+    """
+    markup = next(body for body in html_texts(app) if t("table.rows_returned") in body)
+    return set(re.findall(r'<bdi class="ltr">([^<]+)</bdi>', markup))
 
 
 def _loaded_indicator_ids(app) -> set[str]:
@@ -227,7 +234,7 @@ def test_inflation_page_toggle_off_by_default_preserves_behavior(
     assert not app.exception
     assert [checkbox.value for checkbox in app.checkbox] == [False]
     assert _loaded_indicator_ids(app) == {INFLATION_INDICATOR}
-    assert len(_quality_frame(app)) == 1
+    assert len(_quality_indicator_ids(app)) == 1
 
 
 def test_inflation_page_toggle_on_includes_the_derived_series(
@@ -240,7 +247,7 @@ def test_inflation_page_toggle_on_includes_the_derived_series(
 
     assert not app.exception
     assert _loaded_indicator_ids(app) == {INFLATION_INDICATOR, INFLATION_DERIVED_ID}
-    assert set(_quality_frame(app)[t("table.indicator_id")]) == {
+    assert _quality_indicator_ids(app) == {
         INFLATION_INDICATOR,
         INFLATION_DERIVED_ID,
     }

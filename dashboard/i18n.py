@@ -31,6 +31,7 @@ LOCALE: Final[str] = "fa"
 #: was invented outside the agreed structure.
 KEY_PREFIXES: Final[tuple[str, ...]] = (
     "app.",
+    "shell.",
     "group.",
     "nav.",
     "page.",
@@ -42,6 +43,8 @@ KEY_PREFIXES: Final[tuple[str, ...]] = (
     "export.",
     "empty.",
     "warn.",
+    "note.",
+    "state.",
     "value.",
 )
 
@@ -50,10 +53,13 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
     {
         # Shell chrome.
         "app.title": "سامانه داده‌های اقتصاد کلان ایران",
-        "app.db_connected": "اتصال به پایگاه داده برقرار است",
-        "app.db_unavailable": (
-            "پایگاه داده در دسترس نیست. پستگرس را با «make db-up» اجرا و مهاجرت‌ها را اعمال کنید."
-        ),
+        "app.brand": "سامانهٔ داده‌ها",
+        "app.db_status_label": "وضعیت پایگاه داده",
+        "app.db_status_online": "متصل",
+        "app.db_status_offline": "قطع",
+        "shell.breadcrumb_root": "سامانه",
+        "shell.last_collection": "آخرین گردآوری: {date}",
+        "shell.timezone": "منطقهٔ زمانی تهران",
         # Sidebar groups (mirror dashboard.navigation.GROUPS).
         "group.overview_analysis": "مرور و تحلیل",
         "group.domains": "حوزه‌ها",
@@ -82,11 +88,23 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "page.labor": "بازار کار",
         # Subheaders and expanders.
         "section.indicators_by_domain": "شاخص‌ها به تفکیک حوزه",
+        "section.indicators_by_domain_total": "جمع",
         "section.available_coverage": "پوشش موجود",
         "section.source_freshness": "تازگی داده‌های هر منبع",
+        # The stale count is coloured with the markdown orange directive (P4): the
+        # theme maps orange to the warn palette (`orangeColor = #9A5B00`), so the
+        # mockup's amber stale count renders without an HTML fragment. The section
+        # header's trailing slot is markdown, so the directive is the native route.
+        "section.freshness_summary": "{fresh} به‌روز · :orange[{stale}] کهنه",
         "section.key_indicators": "شاخص‌های کلیدی",
         "section.exact_join_counts": "تعداد تطابق‌های دقیق زمانی",
         "section.observations": "مشاهدات",
+        # The generic domain composition (Task 35): the chart block and the
+        # per-indicator quality table. The observations block keeps its existing
+        # expander label (``section.observations``) rather than gaining a second
+        # title above the same grid.
+        "section.chart": "نمودار سری‌های انتخاب‌شده",
+        "section.quality": "کیفیت داده",
         # Welfare & Survey page (owns the `welfare` domain).
         "section.hbsir_gini_poverty": "روند جینی و فقر نسبی",
         "section.hbsir_deciles": "سهم درآمدی دهک‌ها",
@@ -111,11 +129,30 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "metric.domains": "حوزه‌ها",
         "metric.sources": "منابع",
         "metric.selected_indicators": "{count} شاخص انتخاب‌شده",
+        # The indicators-by-domain bar list's footer total (Task 31): the mockup's
+        # "۵۰ شاخص". `table.indicator_count` ("تعداد شاخص") is the column/section
+        # label, which is why this is a separate count phrase.
+        "metric.indicator_count": "{count} شاخص",
         "metric.market_sessions": "نشست‌های معاملاتی مشاهده‌شده",
         # Overview series inventory (Task 16): the derived and orphan Gold series
         # that have no catalog row of their own.
         "metric.derived_series": "سری‌های مشتق‌شده",
         "metric.orphan_series": "سری‌های بدون ردیف فهرست",
+        # KPI band tooltips and tag (Task 19). The copy is deliberately
+        # data-agnostic (AM-9): it describes each set and how they nest, never a
+        # current count and never a claim about today's data.
+        "metric.derived_series_help": (
+            "سری‌هایی که این سامانه از سری والد محاسبه کرده و ردیف فهرست مستقل ندارند."
+        ),
+        "metric.orphan_series_help": (
+            "سری‌های لایهٔ طلایی که ردیف فهرست ندارند. سری‌های مشتق‌شده معمولاً در این "
+            "مجموعه قرار می‌گیرند؛ بنابراین این دو شمارنده می‌توانند هم‌پوشانی داشته باشند."
+        ),
+        "metric.gold_observations_help": (
+            "تنها مشاهدات متصل به یک ردیف فهرست را می‌شمارد؛ سری‌های مشتق‌شده و بدون "
+            "فهرست در این عدد نیستند."
+        ),
+        "metric.orphan_series_tag": "نیازمند بررسی",
         "section.series_inventory": "سری‌های طلایی خارج از فهرست",
         # Filter controls.
         "filter.domain": "حوزه",
@@ -146,6 +183,20 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
             "بازه اعمال‌شده: {jalali_start} تا {jalali_end} — "
             "کرانه‌های میلادی (UTC): {start} تا {end}"
         ),
+        # Filter-bar chrome (Task 21): the "all" option every catalog select
+        # carries, the row-count echo and the density toggle. The bar itself
+        # renders whatever controls it is handed, so these are the only strings it
+        # owns.
+        "filter.all": "همه",
+        "filter.showing_rows": "نمایش {count} ردیف",
+        "filter.density": "چگالی",
+        "filter.density_comfortable": "راحت",
+        "filter.density_compact": "فشرده",
+        # Widget placeholder (Task 35, F4). Streamlit's own default for an
+        # empty ``st.multiselect``/``st.selectbox`` is the English "Choose
+        # options"; every widget on a migrated page passes this key instead, so
+        # no English default can appear in the Persian UI.
+        "filter.placeholder": "انتخاب کنید",
         # CPI decile selector on the Inflation page (Task 13).
         "filter.cpi_deciles": "دهک‌های هزینه",
         # Chart labels and legends.
@@ -188,6 +239,18 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.observation_count": "تعداد مشاهدات",
         "table.chain_linked_count": "ردیف‌های زنجیره‌شده",
         "table.confidence": "میانگین اطمینان",
+        # Coverage-table headers (Task 32). The Overview coverage table names its
+        # own columns rather than borrowing the catalog grid's, exactly as P3 gave
+        # the freshness table its own `table.last_collection`: the two surfaces can
+        # then be reworded independently. `table.chained_rows` and
+        # `table.average_confidence` happen to read the same as the grid's
+        # `table.chain_linked_count` / `table.confidence` today; the pair of range
+        # headers is genuinely new wording (one range per pair of bounds).
+        "table.indicator": "شاخص",
+        "table.coverage_range": "بازهٔ پوشش",
+        "table.observed_range": "بازهٔ مشاهده‌شده",
+        "table.chained_rows": "ردیف‌های زنجیره‌شده",
+        "table.average_confidence": "میانگین اطمینان",
         "table.has_base_year_changes": "تغییر سال پایه",
         "table.base_years": "سال‌های پایه",
         "table.is_active": "فعال",
@@ -206,6 +269,11 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.expected_is_estimated": "برآوردی",
         "table.missing_periods": "دوره‌های مفقود",
         "table.collection_timestamp": "زمان گردآوری",
+        # The Overview freshness table's own header (P3). The mockup reads
+        # "آخرین گردآوری" for that column; `table.collection_timestamp` stays the
+        # generic header for every other table (the freshness display frame and
+        # the exports), so the two do not share one wording.
+        "table.last_collection": "آخرین گردآوری",
         "table.status": "وضعیت",
         "table.records_collected": "رکوردهای گردآوری‌شده",
         "table.error_message": "پیام خطا",
@@ -213,6 +281,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         # Overview freshness (Task 16): the staleness verdict against the
         # source's expected collection cadence (dashboard.labels).
         "table.staleness": "وضعیت تازگی",
+        # The freshness table's run-status column (Task 30). The verdict column
+        # reuses `table.staleness` (the same "وضعیت تازگی" header) rather than
+        # duplicating it under a second key.
+        "table.run_status": "وضعیت اجرا",
         # Chain-linking provenance (Task 23) and the correlation matched-
         # observation summary (Task 24).
         "table.base_year_segments": "بازه‌های سال پایه",
@@ -223,6 +295,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "table.survey_year": "سال آمارگیری",
         "table.survey_year_end": "پایان سال آمارگیری (شمسی)",
         "table.period_end": "پایان دوره ذخیره‌شده (میلادی)",
+        "table.coverage_footnote": (
+            "تاریخ مشاهدهٔ منابع میلادی (مانند بانک جهانی) به‌صورت سال میلادی نمایش "
+            "داده می‌شود؛ تاریخ دقیق در راهنمای هر خانه است."
+        ),
         "table.hbsir_indicators": "سری‌های HBSIR",
         "table.hbsir_observations": "مشاهدات HBSIR",
         # Observations-table row cap (Task 15): the grid is a bounded preview and
@@ -251,6 +327,7 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         "empty.no_observations": "هیچ مشاهده‌ای با شاخص‌ها و بازه زمانی انتخاب‌شده مطابقت ندارد.",
         "empty.no_collection_runs": "هنوز هیچ اجرای گردآوری ثبت نشده است.",
         "empty.no_quality_rows": "هیچ مشاهده لایه طلایی با پالایه‌های فعلی مطابقت ندارد.",
+        "empty.no_coverage_rows": "هیچ شاخصی با پالایه‌های پوشش مطابقت ندارد.",
         "empty.no_hbsir_observations": "هیچ مشاهده HBSIR در بازه زمانی انتخاب‌شده موجود نیست.",
         "empty.no_cpi_deciles": "هیچ سری شاخص قیمت مصرف‌کننده به تفکیک دهک هزینه در فهرست شاخص‌ها موجود نیست.",
         "empty.no_cpi_canonical": "هیچ سری زنجیره‌شده شاخص قیمت مصرف‌کننده در فهرست شاخص‌ها موجود نیست.",
@@ -272,8 +349,8 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
             "مبتنی است و هیچ مقداری جلو‌بری یا درون‌یابی نمی‌شود."
         ),
         "warn.single_observation": (
-            "یک یا چند سری انتخاب‌شده تنها یک مشاهده دارد. TGJU منبعی لحظه‌ای است و "
-            "تاریخچه از طریق گردآوری روزانه انباشته می‌شود."
+            "یک یا چند سری انتخاب‌شده تنها یک مشاهده دارد. این سری‌ها به‌صورت دوره‌ای "
+            "گردآوری می‌شوند و تاریخچه‌شان به‌تدریج انباشته می‌شود."
         ),
         "warn.missing_periods": (
             "بازه زمانی انتخاب‌شده دوره‌های مفقود دارد. هیچ مقداری جایگزین نشده است."
@@ -355,12 +432,36 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
             "به همین دلیل مقایسه آن‌ها روی یک مقیاس مشترک انجام می‌شود و هیچ نرمال‌سازی "
             "یا تبدیل واحدی اعمال نمی‌شود."
         ),
+        # Shared component chrome (Tasks 17-22). The callout label is rendered as
+        # a bold prefix inside the callout body; the body text itself is passed to
+        # ``render_callout`` as an existing key.
+        "note.methodology_label": "یادداشت روش‌شناسی",
         # Shared value placeholders.
         "value.unknown": "نامشخص",
         "value.fresh": "به‌روز",
         "value.stale": "کهنه",
         "value.yes": "بله",
         "value.no": "خیر",
+        # Collection-run status chips (Task 20). The slugs are the
+        # ``src.etl.bronze`` STATUS_* constants; the chip mapping is total, so an
+        # unrecognised slug renders the unknown chip rather than raising.
+        "value.status_success": "موفق",
+        "value.status_failed": "ناموفق",
+        "value.status_partial": "ناقص",
+        "value.status_unknown": "نامشخص",
+        # Shared page states (Task 22). `state.error` is the generic failure body;
+        # `state.retry_hint` is appended beneath it by `render_error`, and
+        # `state.loading` is the placeholder shown while a page waits on a query.
+        "state.loading": "در حال بارگذاری…",
+        "state.error": "خطا در بارگذاری داده.",
+        "state.retry_hint": "برای تلاش دوباره صفحه را بازخوانی کنید.",
+        # Relative-time labels (Task 11): coarse Persian granularity for
+        # freshness and provenance display. ``{count}`` is filled by the
+        # caller with already-digit-converted text.
+        "value.relative_today": "امروز",
+        "value.relative_hours_ago": "{count} ساعت پیش",
+        "value.relative_days_ago": "{count} روز پیش",
+        "value.relative_months_ago": "{count} ماه پیش",
         # Gold series classification (repository ``series_kind``), displayed in
         # the observations grid and the exports.
         "value.base": "پایه",

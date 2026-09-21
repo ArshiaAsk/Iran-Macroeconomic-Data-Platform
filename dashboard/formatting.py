@@ -28,6 +28,7 @@ from typing import Final, Literal, TypeGuard
 
 import jdatetime
 
+from dashboard.i18n import t
 from src.utils.persian import (
     ARABIC_INDIC_TO_ASCII,
     ASCII_DIGITS,
@@ -43,6 +44,7 @@ __all__ = [
     "PERSIAN_DECIMAL_SEPARATOR",
     "PERSIAN_PERCENT_SIGN",
     "PERSIAN_THOUSANDS_SEPARATOR",
+    "RANGE_SEPARATOR",
     "TEHRAN_TIMEZONE",
     "DigitMode",
     "format_large_number",
@@ -55,6 +57,9 @@ __all__ = [
     "jalali_month_label",
     "jalali_period_label",
     "jalali_year_label",
+    "range_label",
+    "relative_time_label",
+    "tehran_clock_label",
     "tehran_day_bounds",
     "tehran_timestamp_label",
     "to_ascii_digits",
@@ -75,6 +80,9 @@ PERSIAN_DECIMAL_SEPARATOR: Final[str] = "٫"
 PERSIAN_PERCENT_SIGN: Final[str] = "٪"
 MISSING_VALUE: Final[str] = "—"
 """Placeholder for ``None``/NaN: shown as unknown, never invented as zero."""
+
+RANGE_SEPARATOR: Final[str] = " – "
+"""En dash with surrounding spaces; matches the design mockup's coverage range."""
 
 #: Jalali month names in calendar order, derived from the shared month map so the
 #: two directions cannot drift.
@@ -367,6 +375,112 @@ def jalali_period_label(
     return jalali_date_label(value, digit_mode=digit_mode)
 
 
+def _gregorian_period_label(value: datetime, frequency: str, digit_mode: DigitMode) -> str:
+    """Label a Gregorian period end for an international source (AM-27(e)).
+
+    An annual series renders as the year only (``2023``); every sub-annual
+    series — monthly, quarterly or daily — renders as year-month (``2023-05``),
+    so a bare year is never shown for sub-annual data. The date is interpreted
+    in ``Asia/Tehran`` first, matching the other display formatters.
+    """
+    tehran = to_tehran(value)
+    text = (
+        f"{tehran.year:04d}" if frequency == "annual" else f"{tehran.year:04d}-{tehran.month:02d}"
+    )
+    return to_persian_digits(text) if digit_mode == "fa" else text
+
+
+def _compact_jalali_daily(
+    start: datetime,
+    end: datetime,
+    digit_mode: DigitMode,
+) -> str | None:
+    """Collapse a same-month/same-year daily Jalali range, or ``None``.
+
+    The mockup renders a three-day TGJU span as ``۱۸ – ۲۰ شهریور ۱۴۰۵`` rather
+    than repeating the month and year. Only a range whose two ends fall in the
+    same Jalali year *and* month collapses; anything else returns ``None`` so the
+    caller falls back to the full two-period label. Pure and display-only.
+    """
+    first = gregorian_to_jalali(start)
+    last = gregorian_to_jalali(end)
+    if (first.year, first.month) != (last.year, last.month):
+        return None
+    text = (
+        f"{first.day}{RANGE_SEPARATOR}{last.day} {JALALI_MONTH_NAMES[first.month - 1]} {first.year}"
+    )
+    return to_persian_digits(text) if digit_mode == "fa" else text
+
+
+def range_label(
+    start: datetime,
+    end: datetime,
+    *,
+    frequency: str,
+    calendar: str = "jalali",
+    compact: bool = False,
+    digit_mode: DigitMode = "fa",
+) -> str:
+    """Label a start/end period range, calendar-aware.
+
+    ``calendar="gregorian"`` (the international sources) renders Gregorian
+    periods via :func:`_gregorian_period_label`; anything else renders Jalali
+    periods via :func:`jalali_period_label`. The default is ``"jalali"`` so an
+    un-migrated caller keeps today's output byte-for-byte.
+
+    ``compact=True`` is opt-in and only affects a **daily Jalali** range whose
+    two ends share a Jalali month and year: it collapses to the mockup's
+    ``۱۸ – ۲۰ شهریور ۱۴۰۵``. Every other case, and the Gregorian branch, is
+    unchanged, so the Task 13 golden tests keep passing.
+
+    Bidi note: the Gregorian year-month form (``2023-05``) is LTR-ordered data
+    embedded in RTL text. Two such tokens separated by a neutral en dash can
+    visually swap start and end under the RTL paragraph direction, so the caller
+    must isolate the result in an LTR span (``dir="ltr"`` / ``<bdi>``) — see the
+    Task 13 execution-log entry.
+
+    Args:
+        start: Stored start period end (UTC)
+        end: Stored end period end (UTC)
+        frequency: Catalog frequency slug
+        calendar: ``"gregorian"`` for international sources, otherwise Jalali
+        compact: Collapse a same-month/same-year daily Jalali range (opt-in)
+        digit_mode: ``"fa"`` for display, ``"latin"`` for exports and tests
+
+    Returns:
+        Two period labels joined by :data:`RANGE_SEPARATOR`
+    """
+    if calendar == "gregorian":
+        first = _gregorian_period_label(start, frequency, digit_mode)
+        last = _gregorian_period_label(end, frequency, digit_mode)
+    else:
+        if compact and frequency == "daily":
+            collapsed = _compact_jalali_daily(start, end, digit_mode)
+            if collapsed is not None:
+                return collapsed
+        first = jalali_period_label(start, frequency, digit_mode=digit_mode)
+        last = jalali_period_label(end, frequency, digit_mode=digit_mode)
+    return f"{first}{RANGE_SEPARATOR}{last}"
+
+
+def tehran_clock_label(value: datetime, *, digit_mode: DigitMode = "fa") -> str:
+    """Label a stored instant with its Tehran-local wall clock (``HH:MM``).
+
+    The clock alone, without the date: the freshness table's two-line date cell
+    shows the Jalali date on the primary line and ``time · relative age`` on the
+    secondary line, so the date must not be repeated.
+
+    Examples:
+        >>> tehran_clock_label(datetime(2026, 9, 8, 20, 30, tzinfo=UTC))
+        '۰۰:۰۰'
+        >>> tehran_clock_label(datetime(2026, 9, 8, 20, 30, tzinfo=UTC), digit_mode="latin")
+        '00:00'
+    """
+    local = to_tehran(value)
+    clock = f"{local.hour:02d}:{local.minute:02d}"
+    return to_persian_digits(clock) if digit_mode == "fa" else clock
+
+
 def tehran_timestamp_label(value: datetime, *, digit_mode: DigitMode = "fa") -> str:
     """Label a stored instant as a Tehran-local Jalali date and time.
 
@@ -374,11 +488,7 @@ def tehran_timestamp_label(value: datetime, *, digit_mode: DigitMode = "fa") -> 
         >>> tehran_timestamp_label(datetime(2026, 9, 8, 20, 30, tzinfo=UTC))
         '۱۸ شهریور ۱۴۰۵، ۰۰:۰۰'
     """
-    local = to_tehran(value)
-    clock = f"{local.hour:02d}:{local.minute:02d}"
-    if digit_mode == "fa":
-        clock = to_persian_digits(clock)
-    return f"{jalali_date_label(value, digit_mode=digit_mode)}، {clock}"
+    return f"{jalali_date_label(value, digit_mode=digit_mode)}، {tehran_clock_label(value, digit_mode=digit_mode)}"
 
 
 def tehran_day_bounds(day: date) -> tuple[datetime, datetime]:
@@ -419,3 +529,66 @@ def jalali_day_bounds(jalali_date: jdatetime.date) -> tuple[datetime, datetime]:
         True
     """
     return tehran_day_bounds(jalali_date.togregorian())
+
+
+def relative_time_label(value: datetime, *, now: datetime, digit_mode: DigitMode = "fa") -> str:
+    """Label a timestamp relative to ``now`` with coarse Persian granularity.
+
+    Boundaries (all using floor division on the elapsed seconds):
+
+    - less than one hour → ``"امروز"`` (today)
+    - less than 24 hours → ``"{n} ساعت پیش"`` (n hours ago)
+    - less than 30 days → ``"{n} روز پیش"`` (n days ago)
+    - otherwise → ``"{n} ماه پیش"`` (n months ago, ``days // 30``)
+
+    A future instant clamps to ``"امروز"``. ``now`` is required; no wall-clock
+    call is made inside, so the function is fully testable.
+
+    Args:
+        value: The timestamp to label (naive treated as UTC)
+        now: The reference instant (injected for testability)
+        digit_mode: ``"fa"`` for Persian digits, ``"latin"`` for exports
+
+    Returns:
+        Persian relative-time label
+
+    Examples:
+        >>> now = datetime(2026, 9, 21, 12, tzinfo=UTC)
+        >>> relative_time_label(now, now=now)
+        'امروز'
+        >>> relative_time_label(datetime(2026, 9, 21, 7, tzinfo=UTC), now=now)
+        '۵ ساعت پیش'
+        >>> relative_time_label(datetime(2026, 9, 11, 12, tzinfo=UTC), now=now)
+        '۱۰ روز پیش'
+        >>> relative_time_label(datetime(2026, 9, 21, 17, tzinfo=UTC), now=now)
+        'امروز'
+    """
+    # Normalise naive datetimes to UTC (the storage convention).
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+
+    delta = now - value
+    # A future instant clamps to "امروز".
+    if delta.total_seconds() < 0:
+        return t("value.relative_today")
+
+    seconds = delta.total_seconds()
+    if seconds < 3600:
+        return t("value.relative_today")
+
+    def _count(n: int) -> str:
+        text = str(n)
+        return to_persian_digits(text) if digit_mode == "fa" else text
+
+    hours = int(seconds // 3600)
+    if hours < 24:
+        return t("value.relative_hours_ago", count=_count(hours))
+
+    days = int(seconds // 86400)
+    if days < 30:
+        return t("value.relative_days_ago", count=_count(days))
+
+    months = days // 30
+    return t("value.relative_months_ago", count=_count(months))

@@ -7,6 +7,14 @@ import streamlit as st
 
 from dashboard.connection import repository_session
 
+#: Cache TTL for the source-freshness wrapper only.
+#:
+#: Staleness is measured in days, so a 15-minute cache is short enough to
+#: reflect a new collection run quickly without re-querying the database on
+#: every Streamlit rerun. An explicit refresh control is deferred (Phase 7.2
+#: design-system.md open items).
+FRESHNESS_CACHE_TTL_SECONDS: int = 900
+
 
 @st.cache_data(show_spinner=False)
 def cached_list_indicators(
@@ -57,9 +65,14 @@ def cached_list_derived_ids(parent_ids: tuple[str, ...]) -> list[str]:
         return repository.list_derived_ids(list(parent_ids))
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=FRESHNESS_CACHE_TTL_SECONDS)
 def cached_source_freshness() -> pd.DataFrame:
-    """Cache the latest collection result for each source."""
+    """Cache the latest collection result for each source.
+
+    The only cached wrapper with a TTL: freshness is read on nearly every page
+    (top-bar stamp, overview freshness table) and staleness is measured in days,
+    so a short TTL avoids repeated DB hits without hiding new runs for long.
+    """
     with repository_session() as repository:
         return repository.source_freshness()
 

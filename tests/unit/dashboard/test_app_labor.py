@@ -22,6 +22,7 @@ from tests.unit.dashboard.app_smoke import (
     REPOSITORY_ROOT,
     FakeDashboardRepository,
     app_test,
+    html_texts,
     labor_series,
 )
 
@@ -35,10 +36,13 @@ def _observations_frame(app) -> pd.DataFrame:
     )
 
 
-def _quality_frame(app) -> pd.DataFrame:
-    return next(
-        frame.value for frame in app.dataframe if t("table.rows_returned") in frame.value.columns
-    )
+def _quality_markup(app) -> str:
+    """The quality summary's RTL HTML table markup (Task 35).
+
+    The summary is an HTML table now, so it is read through ``html_texts`` rather
+    than ``app.dataframe`` (the Task 16 migration map).
+    """
+    return next(body for body in html_texts(app) if t("table.rows_returned") in body)
 
 
 def test_labor_page_renders_the_single_published_quarter(
@@ -69,12 +73,20 @@ def test_labor_page_does_not_imply_a_trend_from_one_quarter(
     app = app_test(LABOR_PAGE)
     app.run()
 
-    quality = _quality_frame(app)
+    quality = _quality_markup(app)
+    # The quality summary is the shared RTL HTML table (Task 35): its headers are
+    # the localized catalog keys and its numeric cells carry tabular figures.
+    for header in (
+        t("table.indicator_id"),
+        t("table.rows_returned"),
+        t("table.missing_periods"),
+    ):
+        assert f'<th scope="col">{header}</th>' in quality
+    assert f'<bdi class="ltr">{LABOR_INDICATOR}</bdi>' in quality
     # One published quarter: the quality row reports exactly one returned row and
-    # no missing periods, and the chart carries a single marker, not a line. The
-    # grid is localized, so the counts render as Persian digits.
-    assert quality[t("table.rows_returned")].tolist() == [format_number(1)]
-    assert quality[t("table.missing_periods")].tolist() == [format_number(0)]
+    # no missing periods. The counts render as Persian digits.
+    assert f'<span class="num">{format_number(1)}</span>' in quality
+    assert f'<span class="num">{format_number(0)}</span>' in quality
     figure = build_time_series_chart(labor_series())
     assert len(figure.data) == 1
     # Plotly stores the axis as timezone-naive UTC; the stored value is tz-aware.

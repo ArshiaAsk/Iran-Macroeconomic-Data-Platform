@@ -6,7 +6,9 @@ from typing import Any
 import pandas as pd
 import pytest
 
+from dashboard.components import html_table as html_table_module
 from dashboard.components import quality as quality_module
+from dashboard.components.html_table import Text
 from dashboard.components.quality import (
     CALENDAR_CALENDAR,
     CALENDAR_TRADING,
@@ -16,12 +18,15 @@ from dashboard.components.quality import (
     SUPPORTED_FREQUENCIES,
     TRADING_SESSIONS_PER_YEAR,
     ExpectedPeriods,
+    build_quality_rows,
     calendar_for_source,
     expected_observation_count,
     expected_periods,
     render_quality_summary,
     summarize_quality,
 )
+from dashboard.components.tables import localized_header
+from dashboard.formatting import format_number
 from dashboard.i18n import t
 from dashboard.labels import FREQUENCY_LABELS
 
@@ -37,6 +42,7 @@ class RecordingStreamlit:
         self.warnings: list[str] = []
         self.infos: list[str] = []
         self.frames: list[pd.DataFrame] = []
+        self.markup: list[str] = []
 
     def warning(self, message: str) -> None:
         self.warnings.append(message)
@@ -46,6 +52,9 @@ class RecordingStreamlit:
 
     def dataframe(self, frame: pd.DataFrame, **kwargs: Any) -> None:
         self.frames.append(frame)
+
+    def html(self, body: str, **kwargs: Any) -> None:
+        self.markup.append(body)
 
 
 def quality_frame() -> pd.DataFrame:
@@ -498,6 +507,66 @@ def test_tsetmc_like_session_count_does_not_warn(monkeypatch: pytest.MonkeyPatch
     render_quality_summary(quality)
 
     assert recorder.warnings == []
+
+
+# --- the RTL HTML table (Task 35) -----------------------------------------
+
+
+def test_quality_summary_renders_the_shared_html_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The summary is the shared RTL HTML table, not a ``st.dataframe``."""
+    quality = summarize_quality(
+        quality_frame(), datetime(2024, 1, 1, tzinfo=UTC), datetime(2024, 1, 4, tzinfo=UTC)
+    )
+
+    recorder = RecordingStreamlit()
+    monkeypatch.setattr(quality_module, "st", recorder)
+    # ``render_html_table`` emits through its own module's ``st``, so the markup is
+    # recorded by patching that module too.
+    monkeypatch.setattr(html_table_module, "st", recorder)
+    render_quality_summary(quality)
+
+    assert recorder.frames == []
+    assert len(recorder.markup) == 1
+    markup = recorder.markup[0]
+    # The wide-table variant, so the eleven columns fit without a sideways scroll.
+    assert '<table class="dt cov comfortable">' in markup
+    assert f'<th scope="col">{t("table.rows_returned")}</th>' in markup
+    # The header row plus the one indicator, and the id as an isolated LTR token.
+    assert markup.count("<tr>") == 2
+    assert '<bdi class="ltr">tgju</bdi>' in markup
+    # Numeric cells carry tabular figures: 3 rows returned, 4 expected, 1 missing.
+    for value in (3, 4, 1):
+        assert f'<span class="num">{format_number(value)}</span>' in markup
+
+
+def test_quality_rows_keep_every_summarize_quality_column() -> None:
+    quality = summarize_quality(
+        quality_frame(), datetime(2024, 1, 1, tzinfo=UTC), datetime(2024, 1, 4, tzinfo=UTC)
+    )
+
+    table = build_quality_rows(quality)
+
+    assert table.columns == tuple(localized_header(str(column)) for column in quality.columns)
+    assert len(table.rows) == len(quality)
+    assert all(len(row) == len(quality.columns) for row in table.rows)
+
+
+def test_quality_rows_render_an_unknown_as_the_shared_missing_placeholder() -> None:
+    """An unsupported frequency has no expectation, so the cell is not a zero."""
+    frame = quality_frame()
+    frame["frequency"] = "irregular"
+    quality = summarize_quality(
+        frame, datetime(2024, 1, 1, tzinfo=UTC), datetime(2024, 1, 4, tzinfo=UTC)
+    )
+
+    table = build_quality_rows(quality)
+
+    index = list(quality.columns).index("expected_observations")
+    cell = table.rows[0][index]
+    assert isinstance(cell, Text)
+    assert cell.value is None
 
 
 def test_calendar_daily_gap_for_the_same_rows_is_material_and_warns(

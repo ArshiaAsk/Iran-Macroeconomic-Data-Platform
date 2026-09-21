@@ -1,0 +1,137 @@
+"""Design tokens for the Phase 7.2 dashboard redesign.
+
+This module is the single source for the palette, corner radii and font families
+that the Streamlit theme (``.streamlit/config.toml``), the shell stylesheet
+(``dashboard/components/direction.py``) and the Plotly template read. The set
+mirrors the ``:root`` block of
+``docs/design/phase-7.2/overview-redesign-mockup.html`` exactly, and
+``tests/unit/dashboard/test_tokens.py`` parses that file and fails when the two
+drift, so a token added to the mockup cannot be silently forgotten here.
+
+Token names carry no CSS ``--`` prefix; :func:`custom_properties` adds it. The
+mapping is immutable and every value is a plain string, so it is safe to share.
+"""
+
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Final
+
+__all__ = [
+    "CHART_CATEGORICAL_COLORS",
+    "CHART_CATEGORICAL_COLOR_TOKENS",
+    "TOKENS",
+    "TYPE_SCALE",
+    "css_custom_properties",
+    "custom_properties",
+    "token",
+]
+
+TOKENS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "bg": "#F6F7F9",
+        "surface": "#fff",
+        "surface-2": "#F1F3F6",
+        "hover": "#F3F6FA",
+        "border": "#E1E5EB",
+        "border-strong": "#C9D0DA",
+        "text-1": "#1B2430",
+        "text-2": "#4A5566",
+        "text-3": "#667385",
+        "accent": "#1D4E89",
+        "accent-soft": "#E8EFF8",
+        "ok": "#1F7A4D",
+        "ok-bg": "#E6F3EC",
+        "warn": "#9A5B00",
+        "warn-bg": "#FBF1DC",
+        "err": "#B42318",
+        "err-bg": "#FDECEA",
+        "neutral-bg": "#EEF1F5",
+        "radius": "6px",
+        "radius-lg": "8px",
+        "font-ui": '"Vazirmatn",Tahoma,system-ui,sans-serif',
+        "font-mono": '"DejaVu Sans Mono",monospace',
+    }
+)
+"""Every token in the mockup's ``:root`` block, keyed by name without ``--``."""
+
+CHART_CATEGORICAL_COLOR_TOKENS: Final[tuple[str, ...]] = (
+    "accent",
+    "ok",
+    "warn",
+    "err",
+    "text-3",
+    "text-2",
+    "border-strong",
+)
+"""Token names, in order, that make up the categorical chart palette.
+
+The order matches ``chartCategoricalColors`` in ``.streamlit/config.toml`` so
+Streamlit's built-in charts and the Plotly template assign colours identically.
+"""
+
+CHART_CATEGORICAL_COLORS: Final[tuple[str, ...]] = tuple(
+    TOKENS[name] for name in CHART_CATEGORICAL_COLOR_TOKENS
+)
+"""The categorical chart palette, derived from :data:`TOKENS` (single source).
+
+No literal colour lives here: the values are token lookups, so the palette
+cannot drift from the theme. ``tests/unit/dashboard/test_tokens.py`` asserts the
+``config.toml`` list equals this tuple, order included.
+"""
+
+TYPE_SCALE: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "h1-size": "28px",
+        "h1-weight": "700",
+        "h2-size": "18px",
+        "h2-weight": "600",
+        "h3-size": "18px",
+        "h3-weight": "600",
+        "metric-value-size": "28px",
+        "metric-value-weight": "600",
+        "body-size": "14px",
+        "body-weight": "400",
+    }
+)
+"""The mockup's type scale, keyed ``<element>-<property>``.
+
+Sizes are plain px strings and weights are integer strings, so every value
+round-trips through TOML (which stores the theme's weights as ints). The mockup
+declares h1 28px/700 (the page title, ``st.title``), an 18px/600 section title,
+a 28px/600 KPI value and a 14px/400 body. Streamlit renders the section header
+(``st.subheader``) as ``<h3>``, so the 18px/600 section scale is carried on both
+``h2`` and ``h3``. ``tests/unit/dashboard/test_tokens.py`` asserts the theme's
+``headingFontSizes``/``headingFontWeights``/``metricValueFontSize``/
+``metricValueFontWeight``/``baseFontSize``/``baseFontWeight`` equal these values,
+so the scale cannot drift from the theme.
+"""
+
+
+def token(name: str) -> str:
+    """Return the value of one token.
+
+    Args:
+        name: Token name without the CSS ``--`` prefix (e.g. ``"accent"``)
+
+    Returns:
+        The token value exactly as written in the mockup
+
+    Raises:
+        KeyError: When ``name`` is not a declared token
+    """
+    try:
+        return TOKENS[name]
+    except KeyError:
+        message = f"unknown design token: {name!r}"
+        raise KeyError(message) from None
+
+
+def custom_properties() -> Mapping[str, str]:
+    """Return the tokens keyed by their CSS custom-property name (``--name``)."""
+    return MappingProxyType({f"--{name}": value for name, value in TOKENS.items()})
+
+
+def css_custom_properties() -> str:
+    """Emit the tokens as one ``:root { … }`` CSS block for the shell stylesheet."""
+    declarations = " ".join(f"--{name}: {value};" for name, value in TOKENS.items())
+    return f":root {{ {declarations} }}"

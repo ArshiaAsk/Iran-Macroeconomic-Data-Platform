@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import pytest
 
 import dashboard.components.exports as exports_module
+from dashboard.components.direction import apply_plotly_typography
 from dashboard.components.exports import (
     UTF8_BOM,
     ChromiumCapability,
@@ -20,6 +21,7 @@ from dashboard.components.exports import (
     serialize_excel,
     serialize_figure_html,
     serialize_figure_image,
+    serialize_figure_images,
 )
 from dashboard.formatting import format_number, jalali_date_label
 from dashboard.i18n import t
@@ -188,6 +190,24 @@ def test_chart_exports_html_and_svg(monkeypatch) -> None:
 
     assert b"plotly" in serialize_figure_html(figure)
     assert serialize_figure_image(figure, "svg") == b"svg"
+
+
+@pytest.mark.integration()
+def test_kaleido_renders_png_and_svg_with_the_new_template() -> None:
+    """Real Chromium render smoke (AM-25): exercises the export path end to end.
+
+    Needs a Chromium/Chrome executable discoverable by
+    :func:`find_chromium_executable`, so it is marked ``integration`` and is
+    deselected by ``make check`` (``-m "not integration"``). Run it explicitly::
+
+        poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov
+    """
+    figure = apply_plotly_typography(go.Figure(go.Scatter(x=[1, 2, 3], y=[3, 2, 5], name="سری")))
+
+    images = serialize_figure_images(figure, ("png", "svg"))
+
+    assert images["png"].startswith(b"\x89PNG\r\n\x1a\n")
+    assert images["svg"].lstrip().startswith(b"<svg")
 
 
 def test_detect_chromium_capability_reports_available_executable(

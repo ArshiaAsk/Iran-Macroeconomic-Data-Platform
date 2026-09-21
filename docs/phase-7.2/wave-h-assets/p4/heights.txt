@@ -1,0 +1,51 @@
+Wave H — P4 screenshot-capture evidence
+=======================================
+
+Commit under capture: 31b88b6 (phase-7.2; P4 script change uncommitted)
+Dev server: restarted fresh at 2026-09-22 02:31:30 UTC, serving the tree above.
+
+Commands
+--------
+  poetry run python scripts/dashboard_screenshots.py --out-dir /tmp/p4-viewport
+  poetry run python scripts/dashboard_screenshots.py --full-height --out-dir /tmp/p4-full
+
+Result — default (no flag): every page is the shipped 1440x900 viewport
+-----------------------------------------------------------------------
+  catalog.png        1440 x 900
+  correlation.png    1440 x 900
+  fx_gold.png        1440 x 900
+  gdp.png            1440 x 900
+  inflation.png      1440 x 900
+  labor.png          1440 x 900
+  market.png         1440 x 900
+  overview.png       1440 x 900
+  trade_energy.png   1440 x 900
+  welfare.png        1440 x 900
+
+Result — --full-height: each page captured at its own content height
+-------------------------------------------------------------------
+  catalog.png        1440 x 1393
+  correlation.png    1440 x  921
+  fx_gold.png        1440 x 1026
+  gdp.png            1440 x 1811
+  inflation.png      1440 x 4693
+  labor.png          1440 x 1973
+  market.png         1440 x 4113
+  overview.png       1440 x 4637
+  trade_energy.png   1440 x  958
+  welfare.png        1440 x 5248
+
+Note on the first attempt (before the viewport-reset fix)
+---------------------------------------------------------
+The first `--full-height` run reported grouped heights (4637 x3, 4693 x3,
+5248 x4), matching the nav groups. Cause: `scrollHeight` never reports less
+than the current viewport height, and the grown viewport from the previous
+shot persisted into the next page, flooring its measurement. Fixed by
+resetting the viewport to the default height (with a short reflow wait)
+before measuring each page; the per-page heights above are the corrected,
+independent values. `correlation` (921 px) and `trade_energy` (958 px) are
+genuinely short (empty-state pages), so they are only slightly above the
+900 px viewport — not padded.
+
+Representative capture: overview-full.png (1440 x 4637, header through the
+catalog footer, no blank padding).

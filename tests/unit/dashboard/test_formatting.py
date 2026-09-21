@@ -29,6 +29,9 @@ from dashboard.formatting import (
     jalali_month_label,
     jalali_period_label,
     jalali_year_label,
+    range_label,
+    relative_time_label,
+    tehran_clock_label,
     tehran_day_bounds,
     tehran_timestamp_label,
     to_ascii_digits,
@@ -180,6 +183,16 @@ def test_tehran_timestamp_label_localizes_the_instant() -> None:
     )
 
 
+def test_tehran_clock_label_is_the_clock_without_the_date() -> None:
+    """Task 30: the freshness two-line cell shows the date above time · age."""
+    assert tehran_clock_label(EVENING_UTC) == "۰۰:۰۰"
+    assert (
+        tehran_clock_label(datetime(2026, 9, 8, 12, 5, tzinfo=UTC), digit_mode="latin") == "15:35"
+    )
+    # The date-bearing label still starts with the date and ends with this clock.
+    assert tehran_timestamp_label(EVENING_UTC).endswith(tehran_clock_label(EVENING_UTC))
+
+
 def test_tehran_day_bounds_are_inclusive_utc_bounds() -> None:
     start, end = tehran_day_bounds(date(2026, 9, 8))
 
@@ -213,3 +226,205 @@ def test_an_evening_instant_falls_inside_its_jalali_day_bounds() -> None:
 
     assert start <= EVENING_UTC <= end
     assert gregorian_to_jalali(EVENING_UTC) == EVENING_JALALI_DAY
+
+
+# --- relative_time_label (Task 11) -----------------------------------------
+
+_RELATIVE_NOW = datetime(2026, 9, 21, 12, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("delta", "expected"),
+    [
+        (timedelta(0), "امروز"),
+        (timedelta(minutes=30), "امروز"),
+        (timedelta(seconds=3599), "امروز"),
+        (timedelta(hours=1), "۱ ساعت پیش"),
+        (timedelta(hours=5), "۵ ساعت پیش"),
+        (timedelta(hours=23), "۲۳ ساعت پیش"),
+        (timedelta(hours=24), "۱ روز پیش"),
+        (timedelta(days=5), "۵ روز پیش"),
+        (timedelta(days=29), "۲۹ روز پیش"),
+        (timedelta(days=30), "۱ ماه پیش"),
+        (timedelta(days=60), "۲ ماه پیش"),
+        (timedelta(days=365), "۱۲ ماه پیش"),
+    ],
+)
+def test_relative_time_label_boundaries(delta: timedelta, expected: str) -> None:
+    value = _RELATIVE_NOW - delta
+    assert relative_time_label(value, now=_RELATIVE_NOW) == expected
+
+
+def test_relative_time_label_future_clamps_to_today() -> None:
+    future = _RELATIVE_NOW + timedelta(hours=5)
+    assert relative_time_label(future, now=_RELATIVE_NOW) == "امروز"
+
+
+def test_relative_time_label_latin_digits() -> None:
+    value = _RELATIVE_NOW - timedelta(hours=5)
+    assert relative_time_label(value, now=_RELATIVE_NOW, digit_mode="latin") == "5 ساعت پیش"
+
+    value = _RELATIVE_NOW - timedelta(days=10)
+    assert relative_time_label(value, now=_RELATIVE_NOW, digit_mode="latin") == "10 روز پیش"
+
+
+# --- range_label (Task 13) -------------------------------------------------
+
+_ANNUAL_START = datetime(1960, 12, 31, tzinfo=UTC)
+_ANNUAL_END = datetime(2025, 12, 31, tzinfo=UTC)
+_MONTHLY_START = datetime(1982, 3, 31, tzinfo=UTC)
+_MONTHLY_END = datetime(2023, 1, 31, tzinfo=UTC)
+_DAILY_START = datetime(2026, 9, 9, tzinfo=UTC)
+_DAILY_END = datetime(2026, 9, 11, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("frequency", "start", "end", "expected"),
+    [
+        # Golden values captured from jalali_period_label before range_label
+        # existed: the default must reproduce them byte-for-byte.
+        ("annual", _ANNUAL_START, _ANNUAL_END, "۱۳۳۹ – ۱۴۰۴"),
+        ("monthly", _MONTHLY_START, _MONTHLY_END, "فروردین ۱۳۶۱ – بهمن ۱۴۰۱"),
+        ("daily", _DAILY_START, _DAILY_END, "۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵"),
+    ],
+)
+def test_range_label_default_reproduces_the_existing_jalali_output(
+    frequency: str, start: datetime, end: datetime, expected: str
+) -> None:
+    assert range_label(start, end, frequency=frequency) == expected
+    # The default is explicit: naming "jalali" changes nothing.
+    assert range_label(start, end, frequency=frequency, calendar="jalali") == expected
+
+
+def test_range_label_jalali_is_the_composition_of_the_existing_period_labels() -> None:
+    assert range_label(_MONTHLY_START, _MONTHLY_END, frequency="monthly") == (
+        f"{jalali_period_label(_MONTHLY_START, 'monthly')} – "
+        f"{jalali_period_label(_MONTHLY_END, 'monthly')}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("frequency", "start", "end", "expected"),
+    [
+        # Annual → year only; every sub-annual frequency → year-month (AM-27(e)).
+        ("annual", _ANNUAL_START, _ANNUAL_END, "۱۹۶۰ – ۲۰۲۵"),
+        (
+            "monthly",
+            datetime(2023, 5, 31, tzinfo=UTC),
+            datetime(2024, 1, 31, tzinfo=UTC),
+            "۲۰۲۳-۰۵ – ۲۰۲۴-۰۱",
+        ),
+        (
+            "quarterly",
+            datetime(2026, 6, 30, tzinfo=UTC),
+            datetime(2026, 9, 30, tzinfo=UTC),
+            "۲۰۲۶-۰۶ – ۲۰۲۶-۰۹",
+        ),
+        (
+            "daily",
+            datetime(2023, 5, 31, tzinfo=UTC),
+            datetime(2023, 6, 15, tzinfo=UTC),
+            "۲۰۲۳-۰۵ – ۲۰۲۳-۰۶",
+        ),
+    ],
+)
+def test_range_label_gregorian_follows_the_annual_vs_subannual_rule(
+    frequency: str, start: datetime, end: datetime, expected: str
+) -> None:
+    assert range_label(start, end, frequency=frequency, calendar="gregorian") == expected
+
+
+def test_range_label_gregorian_never_renders_a_jalali_period_or_bare_year() -> None:
+    label = range_label(
+        datetime(2023, 5, 31, tzinfo=UTC),
+        datetime(2024, 1, 31, tzinfo=UTC),
+        frequency="monthly",
+        calendar="gregorian",
+    )
+
+    # No Jalali month name, and no bare year for a sub-annual series.
+    assert not any(month in label for month in JALALI_MONTH_NAMES)
+    assert "۲۰۲۳-۰۵" in label
+    assert "۲۰۲۴-۰۱" in label
+
+
+def test_range_label_gregorian_latin_digits() -> None:
+    assert (
+        range_label(
+            _ANNUAL_START,
+            _ANNUAL_END,
+            frequency="annual",
+            calendar="gregorian",
+            digit_mode="latin",
+        )
+        == "1960 – 2025"
+    )
+    assert (
+        range_label(
+            datetime(2023, 5, 31, tzinfo=UTC),
+            datetime(2024, 1, 31, tzinfo=UTC),
+            frequency="monthly",
+            calendar="gregorian",
+            digit_mode="latin",
+        )
+        == "2023-05 – 2024-01"
+    )
+
+
+# --- range_label compact daily form (Task 32) -------------------------------
+
+
+def test_range_label_compact_collapses_a_same_month_daily_range() -> None:
+    """The mockup's coverage table shows ``۱۸ – ۲۰ شهریور ۱۴۰۵``."""
+    assert (
+        range_label(_DAILY_START, _DAILY_END, frequency="daily", compact=True)
+        == "۱۸ – ۲۰ شهریور ۱۴۰۵"
+    )
+
+
+def test_range_label_compact_is_opt_in() -> None:
+    """The default stays the two-period form the Task 13 golden tests pin."""
+    assert range_label(_DAILY_START, _DAILY_END, frequency="daily") == (
+        "۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵"
+    )
+    assert range_label(_DAILY_START, _DAILY_END, frequency="daily", compact=False) == (
+        "۱۸ شهریور ۱۴۰۵ – ۲۰ شهریور ۱۴۰۵"
+    )
+
+
+@pytest.mark.parametrize("frequency", ["annual", "monthly", "quarterly"])
+def test_range_label_compact_leaves_every_other_frequency_alone(frequency: str) -> None:
+    start, end = _MONTHLY_START, _MONTHLY_END
+    assert range_label(start, end, frequency=frequency, compact=True) == range_label(
+        start, end, frequency=frequency
+    )
+
+
+def test_range_label_compact_keeps_a_cross_month_daily_range_whole() -> None:
+    """Only a same Jalali year *and* month collapses."""
+    start = datetime(2026, 9, 11, tzinfo=UTC)  # ۲۰ شهریور ۱۴۰۵
+    end = datetime(2026, 9, 12, tzinfo=UTC)  # ۲۱ شهریور ۱۴۰۵ — same month
+    assert range_label(start, end, frequency="daily", compact=True) == "۲۰ – ۲۱ شهریور ۱۴۰۵"
+    across_months = range_label(
+        _DAILY_START,
+        datetime(2026, 10, 5, tzinfo=UTC),
+        frequency="daily",
+        compact=True,
+    )
+    assert across_months == range_label(
+        _DAILY_START, datetime(2026, 10, 5, tzinfo=UTC), frequency="daily"
+    )
+
+
+def test_range_label_compact_ignores_the_gregorian_branch() -> None:
+    assert (
+        range_label(_DAILY_START, _DAILY_END, frequency="daily", calendar="gregorian", compact=True)
+        == "۲۰۲۶-۰۹ – ۲۰۲۶-۰۹"
+    )
+
+
+def test_range_label_compact_latin_digits() -> None:
+    assert (
+        range_label(_DAILY_START, _DAILY_END, frequency="daily", compact=True, digit_mode="latin")
+        == "18 – 20 شهریور 1405"
+    )

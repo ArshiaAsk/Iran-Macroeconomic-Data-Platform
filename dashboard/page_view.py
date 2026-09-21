@@ -1,9 +1,9 @@
 """Composable page-rendering functions used by Streamlit page modules."""
 
 import math
-from collections.abc import Hashable, Iterable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from datetime import UTC, datetime
-from typing import Any, Final
+from typing import Any, Final, NamedTuple
 
 import pandas as pd
 import streamlit as st
@@ -19,14 +19,45 @@ from dashboard.components.charts import (
     build_time_series_chart,
 )
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
-from dashboard.components.filters import FilterState, render_filters
+from dashboard.components.filters import FilterState, render_filters, unique_values
+from dashboard.components.html_table import (
+    Cell,
+    Dot,
+    Ltr,
+    Text,
+    Tone,
+    TwoLine,
+    UnitChip,
+    render_html_table,
+)
+from dashboard.components.layout import (
+    BarRow,
+    KpiCell,
+    render_bar_list,
+    render_callout,
+    render_callout_stack,
+    render_filter_bar,
+    render_kpi_band,
+    render_page_header,
+    render_section_header,
+    status_chip_cell,
+)
 from dashboard.components.quality import render_quality_summary, summarize_quality
-from dashboard.components.tables import cap_table_rows, localize_table_frame
+from dashboard.components.states import render_empty
+from dashboard.components.tables import (
+    OBSERVATIONS_ROW_HEIGHT,
+    cap_table_rows,
+    localize_table_frame,
+)
 from dashboard.formatting import (
+    RANGE_SEPARATOR,
     format_number,
     gregorian_to_jalali,
     jalali_date_label,
     jalali_year_label,
+    range_label,
+    relative_time_label,
+    tehran_clock_label,
     tehran_timestamp_label,
     to_ascii_digits,
     to_persian_digits,
@@ -34,13 +65,14 @@ from dashboard.formatting import (
 from dashboard.i18n import t
 from dashboard.labels import (
     DERIVED_SUFFIX_LABELS,
+    SOURCE_CALENDAR,
     derived_label,
     domain_label,
+    frequency_label,
     indicator_label,
     source_expected_cadence,
     source_label,
 )
-from dashboard.navigation import page_for_domain
 from dashboard.queries import (
     cached_available_domains,
     cached_coverage_summary,
@@ -136,14 +168,30 @@ CATALOG_FILTER_STATE_KEYS: Final[tuple[str, ...]] = (
 
 
 def render_domain_page(
-    title: str,
+    title_key: str,
     domains: Iterable[str],
     key_prefix: str,
     default_indicators: list[str] | None = None,
     repository: DashboardRepository | None = None,
 ) -> None:
-    """Render a domain-specific Gold exploration page."""
-    st.title(title)
+    """Render a domain-specific Gold exploration page.
+
+    The page opens with the shared page header (D11), so the two pages that use
+    this composition -- GDP & Economy and Trade & Energy -- draw the same header
+    shape as every other migrated page and the D11 guard can check them. Neither
+    page has a caveat, so no callout is rendered; a page that needs one (FX & Gold,
+    Labor) composes its own header through :func:`render_fx_gold_page` /
+    :func:`render_labor_page`.
+
+    Args:
+        title_key: Catalog key of the page title (``page.<key>``), not a resolved
+            string: :func:`render_page_header` resolves it
+        domains: Catalog domains the page owns
+        key_prefix: Widget-key prefix for the page's filters
+        default_indicators: Ids selected by default, when any
+        repository: Repository seam, or ``None`` for the cached query wrappers
+    """
+    render_page_header(title_key)
     render_domain_body(
         domains,
         key_prefix,
@@ -167,6 +215,11 @@ def render_domain_body(
     drawing a second page title (see :func:`render_welfare_page`). ``catalog`` and
     ``filters`` are passed in when the caller has already rendered them, so the
     domain is never queried or filtered twice.
+
+    The composition is the A2 archetype (D11): the shared filter set, then the
+    chart, quality and observations sections through the shared components. Every
+    empty case goes through :func:`dashboard.components.states.render_empty`, so a
+    page never hand-rolls an informational alert.
     """
     domain_list = list(domains)
     if catalog is None:
@@ -175,7 +228,7 @@ def render_domain_body(
         else:
             catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     if filters is None:
         filters = render_filters(catalog, key_prefix, default_indicators)
@@ -185,7 +238,7 @@ def render_domain_body(
             derived_series_ids(filters.indicator_ids, repository, exclude=selected_ids)
         )
     if not selected_ids:
-        st.info(t("empty.select_indicators"))
+        render_empty("empty.select_indicators")
         return
     if filters.start_date > filters.end_date:
         return
@@ -203,20 +256,25 @@ def render_inflation_page(repository: DashboardRepository | None = None) -> None
     series -- and the generic domain composition below them keeps the World
     Bank/IMF and every other inflation series reachable. Nothing is interpolated,
     normalized or resampled: Gold rows are drawn exactly as stored.
+
+    The composition follows the D11 layout contract (Task 38): the page header,
+    the shared section headers, and the shared empty/notice states. The filter
+    set is unchanged (:func:`render_filters`), so the selection, the chart modes
+    and every value are exactly as before.
     """
-    st.title(t("page.inflation"))
+    render_page_header("page.inflation")
     if repository is None:
         catalog = cached_list_indicators(domains=(INFLATION_DOMAIN,))
     else:
         catalog = repository.list_indicators(domains=[INFLATION_DOMAIN])
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     filters = render_filters(catalog, "inflation", list(INFLATION_DEFAULT_INDICATORS))
     _render_cpi_decile_section(catalog, filters, repository)
     _render_cpi_canonical_section(catalog, filters, repository)
     _render_chain_linking_section(catalog, filters, repository)
-    st.subheader(t("section.inflation_all_indicators"))
+    render_section_header("section.inflation_all_indicators")
     render_domain_body(
         (INFLATION_DOMAIN,),
         "inflation",
@@ -262,10 +320,10 @@ def _render_cpi_decile_section(
     through the generic multi-indicator chart, which would force ten unrelated
     facets onto the page's main selection.
     """
-    st.subheader(t("section.cpi_deciles"))
+    render_section_header("section.cpi_deciles")
     decile_ids = cpi_decile_ids(catalog)
     if not decile_ids:
-        st.info(t("empty.no_cpi_deciles"))
+        render_empty("empty.no_cpi_deciles")
         return
     selected = st.multiselect(
         t("filter.cpi_deciles"),
@@ -275,16 +333,24 @@ def _render_cpi_decile_section(
         key="inflation_deciles",
     )
     if not selected:
-        st.info(t("empty.select_indicators"))
+        render_callout("empty.select_indicators", tone="info", container_key="cpi-deciles")
         return
     series = _load_series(list(selected), filters.start_date, filters.end_date, repository)
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="cpi-deciles")
         return
-    st.caption(t("warn.cpi_deciles_shared_base"))
+    render_callout("warn.cpi_deciles_shared_base", tone="info")
     scaled = build_scaled_time_series_chart(series, mode=CHART_MODE_SMALL_MULTIPLES)
     if scaled.notice:
-        st.info(scaled.notice)
+        # The notice carries values, so its resolved text passes through ``body``
+        # and the key is the container hook only. A distinct container key keeps
+        # it from colliding with the generic composition's chart notice.
+        render_callout(
+            "chart.notice",
+            tone="info",
+            body=scaled.notice,
+            container_key="cpi-deciles-chart-notice",
+        )
     st.plotly_chart(scaled.figure, use_container_width=True)
 
 
@@ -299,14 +365,14 @@ def _render_cpi_canonical_section(
     ``B<year>`` segments stay off the dashboard), drawn through
     :func:`build_time_series_chart` so each keeps its own panel and axis.
     """
-    st.subheader(t("section.cpi_canonical"))
+    render_section_header("section.cpi_canonical")
     canonical_ids = cpi_canonical_ids(catalog)
     if not canonical_ids:
-        st.info(t("empty.no_cpi_canonical"))
+        render_empty("empty.no_cpi_canonical")
         return
     series = _load_series(canonical_ids, filters.start_date, filters.end_date, repository)
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="cpi-canonical")
         return
     st.plotly_chart(build_time_series_chart(series), use_container_width=True)
 
@@ -358,6 +424,54 @@ def chain_linking_provenance(catalog: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=columns)
 
 
+class ChainLinkingProvenanceTable(NamedTuple):
+    """The chain-linking provenance table ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in
+            :func:`chain_linking_provenance`'s order
+        rows: One tuple of typed cells per chain-linked indicator
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def build_chain_linking_provenance_rows(
+    frame: pd.DataFrame,
+) -> ChainLinkingProvenanceTable:
+    """Build the provenance table as typed cells from the localized frame.
+
+    The frame is the output of :func:`chain_linking_provenance`, whose cells are
+    already Persian display text (the indicator label, the Persian yes/no flag,
+    the Persian-digit base years and the joined segment ancestry). Each value
+    therefore maps to a plain :class:`~dashboard.components.html_table.Text`
+    cell, so the rendered table is byte-identical to the grid it replaces; a null
+    (never produced today) falls back to the shared em-dash through ``Text(None)``.
+
+    Args:
+        frame: Frame from :func:`chain_linking_provenance`
+
+    Returns:
+        A :class:`ChainLinkingProvenanceTable`; an empty frame yields no columns
+        and no rows
+    """
+    if frame.empty:
+        return ChainLinkingProvenanceTable((), ())
+    rows = tuple(
+        tuple(_provenance_cell(value) for value in row)
+        for row in frame.itertuples(index=False, name=None)
+    )
+    return ChainLinkingProvenanceTable(tuple(str(column) for column in frame.columns), rows)
+
+
+def _provenance_cell(value: object) -> Cell:
+    """One provenance cell: plain text, or the shared em-dash for a null."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return Text(None)
+    return Text(str(value))
+
+
 def _flag_label(value: object) -> str:
     """Display a stored boolean flag as the Persian yes/no, never inventing a yes."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -388,26 +502,35 @@ def _render_chain_linking_section(
     ``chain_linking_confidence`` and ``record_metadata`` unchanged. No value is
     recomputed, interpolated or normalized.
     """
-    st.subheader(t("section.chain_linking"))
-    st.caption(t("warn.chain_linking_stored"))
+    render_section_header("section.chain_linking")
+    render_callout("warn.chain_linking_stored", tone="info")
     chain_ids = chain_linked_catalog_ids(catalog)
     if not chain_ids:
-        st.info(t("empty.no_chain_linked"))
+        render_empty("empty.no_chain_linked")
         return
     flagged = catalog[catalog["indicator_id"].isin(chain_ids)]
-    st.dataframe(chain_linking_provenance(flagged), use_container_width=True, hide_index=True)
-    st.caption(t("warn.chain_linking_overlap"))
+    provenance = build_chain_linking_provenance_rows(chain_linking_provenance(flagged))
+    render_html_table(provenance.columns, provenance.rows, variant="coverage")
+    render_callout("warn.chain_linking_overlap", tone="info")
     series = _load_series(chain_ids, filters.start_date, filters.end_date, repository)
     if series.empty:
-        st.info(t("empty.no_chain_linked_observations"))
+        render_callout(
+            "empty.no_chain_linked_observations",
+            tone="info",
+            container_key="chain-linking",
+        )
         return
     figure = build_chain_linking_chart(series)
     if not figure.data:
-        st.info(t("empty.no_chain_linked_observations"))
+        render_callout(
+            "empty.no_chain_linked_observations",
+            tone="info",
+            container_key="chain-linking-figure",
+        )
         return
     st.plotly_chart(figure, use_container_width=True)
     with st.expander(t("section.observations"), expanded=False):
-        _render_capped_rows(series)
+        _render_capped_rows(series, "chain_linking")
 
 
 def render_market_page(repository: DashboardRepository | None = None) -> None:
@@ -423,25 +546,32 @@ def render_market_page(repository: DashboardRepository | None = None) -> None:
     Nothing is interpolated, forward-filled, resampled or zero-filled: an absent
     trading session is an absent observation, and the ``.ME`` rows are presented
     exactly as the ETL stamped them (calendar month end, monthly frequency).
+
+    The composition follows the D11 layout contract (Task 40): the page header
+    and the five TSETMC caveats through shared components (``render_page_header``
+    + ``render_callout_stack``), the sessions metric through a small KPI band,
+    the level section header through ``render_section_header``, and the empty
+    states through shared callouts. The filter set is unchanged, so the selection
+    and every value are exactly as before.
     """
-    st.title(t("page.market"))
+    render_page_header("page.market")
     _render_market_notes()
     if repository is None:
         catalog = cached_list_indicators(domains=(MARKET_DOMAIN,))
     else:
         catalog = repository.list_indicators(domains=[MARKET_DOMAIN])
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     filters = render_filters(catalog, "market", list(catalog["indicator_id"]))
     if not filters.indicator_ids:
-        st.info(t("empty.select_indicators"))
+        render_callout("empty.select_indicators", tone="info", container_key="market-select")
         return
     if filters.start_date > filters.end_date:
         return
     series = _load_market_series(filters, repository)
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="market-no-obs")
         return
     level, daily_derived, month_end = market_series_groups(series)
     _render_market_level(level)
@@ -482,12 +612,21 @@ def market_series_groups(
 
 
 def _render_market_notes() -> None:
-    """Render the TSETMC caveats: derivedness, absent sessions, warm-up, downsample."""
-    st.warning(t("warn.tsetmc_derived_not_official"))
-    st.info(t("warn.tsetmc_trading_days_absent"))
-    st.info(t("warn.tsetmc_ma30_warmup"))
-    st.info(t("warn.tsetmc_month_end"))
-    st.info(t("warn.tsetmc_deferred_metrics"))
+    """Render the TSETMC caveats: derivedness, absent sessions, warm-up, downsample.
+
+    The five caveats are a ``render_callout_stack`` (one warning + four info
+    callouts), so the page header's caveat block is the D11 shared component
+    rather than five raw ``st.warning``/``st.info`` calls.
+    """
+    render_callout_stack(
+        (
+            ("warn.tsetmc_derived_not_official", "warn"),
+            ("warn.tsetmc_trading_days_absent", "info"),
+            ("warn.tsetmc_ma30_warmup", "info"),
+            ("warn.tsetmc_month_end", "info"),
+            ("warn.tsetmc_deferred_metrics", "info"),
+        )
+    )
 
 
 def _load_market_series(
@@ -504,11 +643,14 @@ def _load_market_series(
 
 def _render_market_level(level: pd.DataFrame) -> None:
     """Render the daily index level with the session expectation it defines."""
-    st.subheader(t("section.market_level"))
+    render_section_header("section.market_level")
     if level.empty:
-        st.info(t("empty.no_observations"))
+        render_callout("empty.no_observations", tone="info", container_key="market-level")
         return
-    st.metric(t("metric.market_sessions"), format_number(len(level)))
+    render_kpi_band(
+        [KpiCell("metric.market_sessions", format_number(len(level)))],
+        key="market-level",
+    )
     _render_market_figure_and_rows(level, "market_level")
     # The trading-session expectation describes the collection itself, so it is
     # computed on the level series only. A derived series legitimately starts
@@ -580,7 +722,7 @@ def _render_market_figure_and_rows(series: pd.DataFrame, key_prefix: str) -> Non
     figure = build_time_series_chart(series)
     st.plotly_chart(figure, use_container_width=True)
     with st.expander(t("section.observations"), expanded=False):
-        _render_capped_rows(series)
+        _render_capped_rows(series, key_prefix)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
     render_chart_downloads(figure, f"iran-macro-{key_prefix}-chart")
 
@@ -595,27 +737,71 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     layer rather than in the catalog. The SQL ``search`` path is exercised for
     catalog columns and unioned with the label-layer match, so neither path can
     hide a row the other would find.
+
+    The page opens with ``render_page_header``. The filter bar hosts only the
+    **three simple controls** — the search box, the inactive-segment toggle and the
+    clear button — with proportional column weights that give the search field the
+    widest column (Wave H P1); the shared filter set is a tall stack of widgets, so
+    :func:`render_filters` returns to **full width** beneath the bar, in its
+    original position. The toggle's current value is read from
+    ``st.session_state`` **before** the bar renders (the Overview coverage bar's
+    pattern), so the catalog frame the count and grid describe is the one the
+    toggle describes in the same run; the controls write the same keys back. The
+    toggle is rendered by the bar **before** the empty-catalog check, so it stays
+    visible even when the catalog is empty (its pre-Task-44 behaviour). Every
+    widget key, the clear button's ``on_click`` callback and the reset key list are
+    unchanged. The matching count is a one-cell ``render_kpi_band``; the grid stays
+    a native ``st.dataframe`` (D1, sortable, LTR grid) with the shared density
+    ``row_height``; an empty search result is the shared ``render_empty`` state.
     """
-    st.title(t("page.catalog"))
-    include_inactive = st.checkbox(
-        t("filter.include_inactive_segments"),
-        key="catalog_include_inactive",
-    )
+    render_page_header("page.catalog")
+    include_inactive = bool(st.session_state.get("catalog_include_inactive", False))
     active_only = not include_inactive
     catalog = _catalog_frame(repository, active_only=active_only)
+
+    def search_control() -> None:
+        st.text_input(t("filter.search"), key="catalog_search")
+
+    def inactive_control() -> None:
+        st.checkbox(
+            t("filter.include_inactive_segments"),
+            key="catalog_include_inactive",
+        )
+
+    def clear_control() -> None:
+        st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
+
+    # The bar carries only the three simple controls (Wave H P1). The search field
+    # takes the widest column; the toggle and the clear button are narrower. The
+    # bar renders before the empty-catalog check so the toggle is never hidden by
+    # an empty catalog.
+    render_filter_bar(
+        [search_control, inactive_control, clear_control],
+        key="catalog",
+        weights=[3.0, 2.0, 1.0],
+    )
     if catalog.empty:
-        st.info(t("empty.catalog_empty"))
+        render_empty("empty.catalog_empty")
         return
+
+    # The shared filter set is full width, in its original position beneath the bar.
     filters = render_filters(catalog, "catalog")
-    st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
-    needle = st.text_input(t("filter.search"), key="catalog_search")
+    needle = str(st.session_state.get("catalog_search", ""))
     result = _apply_catalog_filters(catalog, filters)
     if needle.strip():
         result = _apply_catalog_search(result, catalog, needle, repository, active_only)
-    st.metric(t("metric.matching_indicators"), format_number(len(result)))
+    render_kpi_band(
+        [KpiCell("metric.matching_indicators", format_number(len(result)))],
+        key="catalog",
+    )
     if needle.strip() and result.empty:
-        st.info(t("empty.search_no_match"))
-    st.dataframe(localize_table_frame(result), use_container_width=True, hide_index=True)
+        render_empty("empty.search_no_match")
+    st.dataframe(
+        localize_table_frame(result),
+        use_container_width=True,
+        hide_index=True,
+        row_height=OBSERVATIONS_ROW_HEIGHT,
+    )
 
 
 def _catalog_frame(
@@ -752,11 +938,14 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
     against the presentation cadence map in :mod:`dashboard.labels` (the platform
     does not store an expected frequency, so this is a dashboard convention).
     """
-    st.title(t("page.overview"))
-    st.warning(t("warn.forecasts_indistinguishable"))
+    render_page_header(
+        "page.overview",
+        callout_key="warn.forecasts_indistinguishable",
+        label_key="note.methodology_label",
+    )
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.warning(t("warn.catalog_empty"))
+        render_callout("warn.catalog_empty")
         return
     coverage = repository.coverage_summary() if repository else cached_coverage_summary()
     freshness = repository.source_freshness() if repository else cached_source_freshness()
@@ -768,62 +957,592 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
         total_observations = 0
     else:
         total_observations = int(pd.to_numeric(observation_counts, errors="coerce").fillna(0).sum())
-    columns = st.columns(4)
-    columns[0].metric(t("metric.active_indicators"), format_number(len(catalog)))
-    columns[1].metric(t("metric.gold_observations"), format_number(total_observations))
-    columns[2].metric(t("metric.domains"), format_number(catalog["domain"].nunique()))
-    columns[3].metric(t("metric.sources"), format_number(catalog["source_name"].nunique()))
+    render_kpi_band(
+        overview_kpi_cells(catalog, inventory, total_observations=total_observations),
+        key="overview",
+    )
 
-    _render_series_inventory(inventory)
+    # One reference instant for the whole freshness section, so the verdict, the
+    # summary and every relative age agree with each other.
+    now = datetime.now(UTC)
+    fresh, stale = freshness_summary(freshness, now=now)
+    # The mockup's row: freshness in the wide column and the domain bars in the
+    # narrow one. The keyed container declares `direction: rtl`, so the first
+    # column is the rightmost, as in the mockup.
+    with st.container(key="overview-row"):
+        freshness_column, bars_column = st.columns([7, 5])
+        with freshness_column:
+            render_section_header(
+                "section.source_freshness",
+                trailing=(
+                    None
+                    if freshness.empty
+                    else t(
+                        "section.freshness_summary",
+                        fresh=format_number(fresh),
+                        stale=format_number(stale),
+                    )
+                ),
+            )
+            if freshness.empty:
+                render_empty("empty.no_collection_runs")
+            else:
+                table = build_freshness_rows(freshness, now=now)
+                render_html_table(table.columns, table.rows)
+        with bars_column:
+            render_section_header(
+                "section.indicators_by_domain",
+                trailing=t("table.indicator_count"),
+            )
+            _render_domain_counts(domain_counts)
 
-    st.subheader(t("section.indicators_by_domain"))
-    _render_domain_counts(domain_counts)
-
-    st.subheader(t("section.source_freshness"))
-    if freshness.empty:
-        st.info(t("empty.no_collection_runs"))
-    else:
-        st.dataframe(
-            freshness_display(freshness),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    st.subheader(t("section.available_coverage"))
-    st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
+    _render_coverage_section(coverage)
 
 
-def _render_series_inventory(inventory: pd.DataFrame) -> None:
-    """Show how many Gold series are derived or have no catalog row at all."""
+def series_inventory_counts(inventory: pd.DataFrame) -> tuple[int, int]:
+    """Count the derived and catalog-less Gold series in a series inventory.
+
+    Both are separate counts of the same ``series_inventory`` frame: the derived
+    series are read from the ETL-written ``series_kind`` classification and the
+    catalog-less series from ``has_catalog_metadata``. They are deliberately
+    **not** deduplicated (D2) — a derived series normally has no catalog row, so
+    the two sets overlap, and collapsing them would hide either signal.
+
+    Returns:
+        ``(derived, orphan)`` counts; both zero when the frame lacks the column
+    """
     kinds = inventory.get("series_kind")
     has_catalog = inventory.get("has_catalog_metadata")
     derived = 0 if kinds is None else int((kinds == SERIES_KIND_DERIVED).sum())
     orphan = 0 if has_catalog is None else int((~has_catalog.astype(bool)).sum())
-    columns = st.columns(2)
-    columns[0].metric(t("metric.derived_series"), format_number(derived))
-    columns[1].metric(t("metric.orphan_series"), format_number(orphan))
+    return derived, orphan
+
+
+def overview_kpi_cells(
+    catalog: pd.DataFrame,
+    inventory: pd.DataFrame,
+    *,
+    total_observations: int,
+) -> list[KpiCell]:
+    """The Overview's six KPI cells, in mockup order (right to left).
+
+    Order matches the mockup: sources, domains, active indicators, Gold-layer
+    observations, then the visually separated secondary group (derived series and
+    series without a catalog row). The three annotated cells carry a data-agnostic
+    tooltip, and the catalog-less cell carries the "نیازمند بررسی" tag.
+
+    Args:
+        catalog: The indicator catalog frame (its distinct domains and sources
+            are the first two counts)
+        inventory: The Gold series inventory frame
+        total_observations: Catalog-linked Gold observation count, already summed
+            by the caller
+
+    Returns:
+        One :class:`KpiCell` per band column, in display order
+    """
+    derived, orphan = series_inventory_counts(inventory)
+    return [
+        KpiCell("metric.sources", format_number(catalog["source_name"].nunique())),
+        KpiCell("metric.domains", format_number(catalog["domain"].nunique())),
+        KpiCell("metric.active_indicators", format_number(len(catalog))),
+        KpiCell(
+            "metric.gold_observations",
+            format_number(total_observations),
+            help_key="metric.gold_observations_help",
+        ),
+        KpiCell(
+            "metric.derived_series",
+            format_number(derived),
+            help_key="metric.derived_series_help",
+            tone="muted",
+            secondary=True,
+        ),
+        KpiCell(
+            "metric.orphan_series",
+            format_number(orphan),
+            help_key="metric.orphan_series_help",
+            tone="muted",
+            secondary=True,
+            tag_key="metric.orphan_series_tag",
+        ),
+    ]
+
+
+def ordered_domain_rows(domain_counts: pd.DataFrame) -> list[BarRow]:
+    """Turn the ``available_domains`` frame into bar rows, count-descending.
+
+    The mockup's bars are ordered by indicator count, largest first, and ties are
+    broken by the domain's Persian display name ascending (the mockup's own tie
+    order: ``تورم`` before ``رفاه`` at 15, ``ارز`` before ``بازار …`` at 1). A
+    domain whose count is missing or non-numeric is treated as zero, never
+    dropped, and the sort is stable so equal keys keep the frame's order.
+
+    Args:
+        domain_counts: Frame from ``available_domains`` with ``domain`` and
+            ``indicator_count`` columns
+
+    Returns:
+        One :class:`BarRow` per domain, in display order
+    """
+    rows: list[BarRow] = []
+    for row in domain_counts.itertuples(index=False):
+        count = row.indicator_count
+        rows.append(BarRow(str(row.domain), _domain_count(count)))
+    rows.sort(key=lambda row: (-row.indicator_count, domain_label(row.domain)))
+    return rows
+
+
+def _domain_count(value: object) -> int:
+    """A domain's indicator count as an int, treating a missing value as zero."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return 0
+    if isinstance(value, float) and not math.isfinite(value):
+        return 0
+    return int(value)
 
 
 def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
-    """Render one ``st.page_link`` per domain into the page that owns it.
+    """Render the indicators-by-domain bar list, one row per domain.
 
-    The owner comes from the navigation registry (:func:`page_for_domain`), the
-    single declaration of domain ownership. A domain without an owner is shown as
-    plain text rather than dropped, so an unowned domain stays visible.
+    Rows come from ``available_domains`` through :func:`ordered_domain_rows`
+    (count-descending, ties by domain display name ascending, as in the mockup).
+    :func:`render_bar_list` reads each domain's owner from the navigation
+    registry (:func:`page_for_domain`, the single declaration of domain ownership)
+    and keeps it a native ``st.page_link`` beside the bar, so an owned domain stays
+    navigable and visible to ``AppTest``; a domain without an owner stays visible
+    as plain text rather than being dropped. The footer total is the sum of the
+    row counts, computed from the data and formatted with Persian digits.
     """
-    if domain_counts.empty:
-        st.info(t("empty.no_indicators_for_page"))
-        return
-    for row in domain_counts.itertuples(index=False):
-        domain = str(row.domain)
-        count = row.indicator_count
-        count_text = format_number(count) if isinstance(count, int | float) else format_number(0)
-        label = f"{domain_label(domain)} ({count_text})"
-        owner = page_for_domain(domain)
-        if owner is None:
-            st.markdown(f"- {label}")
+    rows = ordered_domain_rows(domain_counts)
+    total = sum(row.indicator_count for row in rows)
+    render_bar_list(rows, t("metric.indicator_count", count=format_number(total)))
+
+
+#: Session-state keys of the Overview coverage filter bar. The three filter keys
+#: and the density key are read **before** the bar renders, so the frame the table
+#: renders is the one the controls describe in the same run; the controls then
+#: write the same keys back on the next interaction.
+_COVERAGE_DOMAIN_KEY: Final[str] = "overview_coverage_domain"
+_COVERAGE_SOURCE_KEY: Final[str] = "overview_coverage_source"
+_COVERAGE_FREQUENCY_KEY: Final[str] = "overview_coverage_frequency"
+_COVERAGE_DENSITY_KEY: Final[str] = "overview_coverage_density"
+
+#: Row densities in the mockup's segmented-control order ("راحت" first). The
+#: values are the HTML table's own density slugs, so the control's value passes
+#: straight to ``render_html_table``; a test pins the pair against ``DENSITIES``.
+_COVERAGE_DENSITIES: Final[tuple[str, ...]] = ("comfortable", "compact")
+
+
+class CoverageTable(NamedTuple):
+    """A coverage table ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in mockup order
+        rows: One tuple of typed cells per indicator, in the frame's order
+        wrap_headers: The subset of ``columns`` the mockup renders on two lines
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+    wrap_headers: tuple[str, ...]
+
+
+def _optional_cell_text(value: object) -> str | None:
+    """A stripped, non-empty string, or ``None`` for a null/blank/non-text value."""
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _optional_cell_number(value: Any) -> float | None:
+    """A finite number, or ``None`` for a null, boolean or non-numeric value.
+
+    ``value`` is typed ``Any`` because it arrives as an untyped pandas row
+    attribute: a count is a Python ``int``, but ``avg``/``sum`` can come back as a
+    ``Decimal``. ``pd.to_numeric`` is the same coercion the Overview's observation
+    total uses, so a value the database returns as a ``Decimal`` or as a NumPy
+    scalar is read as a number rather than silently rendered as missing.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    numeric = pd.to_numeric(value, errors="coerce")
+    if pd.isna(numeric):
+        return None
+    number = float(numeric)
+    return number if math.isfinite(number) else None
+
+
+def _label_cell(value: object, label: Callable[[str], str]) -> Cell:
+    """A text cell whose catalog slug is resolved through the label layer."""
+    slug = _optional_cell_text(value)
+    return Text(None if slug is None else label(slug))
+
+
+def _exact_range_title(first: datetime, last: datetime) -> str:
+    """The stored bounds as exact ISO dates, for a range cell's tooltip."""
+    return f"{first.date().isoformat()}{RANGE_SEPARATOR}{last.date().isoformat()}"
+
+
+def _coverage_range_cell(
+    start: object,
+    end: object,
+    *,
+    frequency: str,
+    calendar: str,
+) -> Cell:
+    """One range cell: an ``Ltr`` for a Gregorian source, a ``Text`` for Jalali.
+
+    This is the Task 13 bidi decision. A Gregorian range (``1960-2025``) is an LTR
+    data token embedded in RTL text, so it is isolated in a ``bdi`` and cannot
+    flip the row; a Jalali range is RTL text and stays a ``Text`` cell. A
+    Gregorian cell also carries the exact stored bounds in its ``title``: the
+    display is a bare year, so the tooltip is where the precise dates live, which
+    is exactly what the section footnote promises. A daily Jalali range collapses
+    to the mockup's compact same-month form (see
+    :func:`dashboard.formatting.range_label`); every other frequency is unchanged.
+
+    A missing bound renders the em-dash rather than a one-sided range.
+    """
+    first = _aware_utc(start)
+    last = _aware_utc(end)
+    if first is None or last is None:
+        return Text(None)
+    if calendar == "gregorian":
+        return Ltr(
+            range_label(first, last, frequency=frequency, calendar=calendar),
+            title=_exact_range_title(first, last),
+            num=True,
+        )
+    return Text(
+        range_label(first, last, frequency=frequency, calendar=calendar, compact=True),
+        num=True,
+    )
+
+
+def _coverage_count_cell(value: object) -> Cell:
+    """A numeric coverage cell, or the em-dash when the value is unknown."""
+    number = _optional_cell_number(value)
+    return Text(None if number is None else format_number(number), num=True)
+
+
+def build_coverage_rows(
+    frame: pd.DataFrame,
+    *,
+    calendar_map: Mapping[str, str] = SOURCE_CALENDAR,
+) -> CoverageTable:
+    """Build the Overview coverage table as typed cells, in the frame's order.
+
+    One row per catalog indicator, exactly the rows
+    :meth:`DashboardRepository.coverage_summary` returns. The cells are:
+
+    - indicator — :class:`TwoLine`: the display name above the raw id, which the
+      mockup sets in its own block-level ``idl`` line
+    - domain / source / frequency — :class:`Text` through the label layer
+    - unit — :class:`UnitChip`
+    - coverage range / observed range — the catalog bounds and the observed
+      bounds, each labelled by :func:`range_label`. A Gregorian source's range is
+      an :class:`Ltr` cell carrying the exact dates in its tooltip; a Jalali
+      source's is a :class:`Text` cell (the Task 13 bidi decision)
+    - observation count / chained rows / average confidence — numeric
+      :class:`Text` cells, em-dash when unknown (never an invented zero)
+
+    The three right-hand headers are the ones the mockup renders on two lines;
+    they come back as ``wrap_headers`` so the caller never restates them. Row
+    order is the frame's, which the repository owns; nothing is invented,
+    re-sorted or recomputed.
+
+    Args:
+        frame: Coverage frame from ``coverage_summary()``
+        calendar_map: Source slug -> display calendar. Defaults to the Task 13
+            :data:`~dashboard.labels.SOURCE_CALENDAR`; inject an empty map to
+            force every range into the Jalali form (tests, and any future
+            opt-out). A source absent from the map keeps the Jalali default
+
+    Returns:
+        A :class:`CoverageTable`; an empty frame yields the headers with no rows
+    """
+    columns = (
+        t("table.indicator"),
+        t("table.domain"),
+        t("table.source_name"),
+        t("table.frequency"),
+        t("table.unit"),
+        t("table.coverage_range"),
+        t("table.observed_range"),
+        t("table.observation_count"),
+        t("table.chained_rows"),
+        t("table.average_confidence"),
+    )
+    wrap_headers = (
+        t("table.observation_count"),
+        t("table.chained_rows"),
+        t("table.average_confidence"),
+    )
+    if frame.empty:
+        return CoverageTable(columns, (), wrap_headers)
+    rows: list[tuple[Cell, ...]] = []
+    for row in frame.itertuples(index=False):
+        indicator_id = _optional_cell_text(row.indicator_id)
+        frequency = _optional_cell_text(row.frequency) or ""
+        source_name = _optional_cell_text(row.source_name) or ""
+        calendar = calendar_map.get(source_name, "jalali")
+        if indicator_id is None:
+            indicator: Cell = Text(None)
         else:
-            st.page_link(owner.path, label=label)
+            indicator = TwoLine(
+                indicator_label(indicator_id, _optional_cell_text(row.name)),
+                (Ltr(indicator_id, mono_id=True),),
+            )
+        rows.append(
+            (
+                indicator,
+                _label_cell(row.domain, domain_label),
+                _label_cell(row.source_name, source_label),
+                _label_cell(row.frequency, frequency_label),
+                UnitChip(_optional_cell_text(row.unit)),
+                _coverage_range_cell(
+                    row.availability_start,
+                    row.availability_end,
+                    frequency=frequency,
+                    calendar=calendar,
+                ),
+                _coverage_range_cell(
+                    row.observed_start,
+                    row.observed_end,
+                    frequency=frequency,
+                    calendar=calendar,
+                ),
+                _coverage_count_cell(row.observation_count),
+                _coverage_count_cell(row.chain_linked_count),
+                _coverage_count_cell(row.confidence),
+            )
+        )
+    return CoverageTable(columns, tuple(rows), wrap_headers)
+
+
+def filter_coverage_frame(
+    frame: pd.DataFrame,
+    *,
+    domain: str | None = None,
+    source: str | None = None,
+    frequency: str | None = None,
+) -> pd.DataFrame:
+    """Apply the coverage filter bar's three selects to the loaded frame.
+
+    The coverage frame holds one row per catalog indicator, so the filters run in
+    memory and issue no extra query. ``None`` is the mockup's "همه" and matches
+    every row; a column the frame does not carry is skipped rather than raising,
+    so a partial frame still renders.
+
+    Args:
+        frame: Coverage frame from ``coverage_summary()``
+        domain: Selected domain slug, or ``None`` for all
+        source: Selected ``source_name`` slug, or ``None`` for all
+        frequency: Selected frequency slug, or ``None`` for all
+
+    Returns:
+        The filtered frame, in the input order
+    """
+    filtered = frame
+    for column, value in (
+        ("domain", domain),
+        ("source_name", source),
+        ("frequency", frequency),
+    ):
+        if value is None or column not in filtered.columns:
+            continue
+        filtered = filtered[filtered[column] == value]
+    return filtered
+
+
+def _coverage_option_label(label: Callable[[str], str]) -> Callable[[str | None], str]:
+    """An option formatter for a coverage select: "همه" for the no-filter value."""
+    return lambda value: t("filter.all") if value is None else label(value)
+
+
+def _render_coverage_section(coverage: pd.DataFrame) -> None:
+    """Render the coverage section: filter bar, table, footnote.
+
+    The bar is Task 21's :func:`render_filter_bar` with three ``st.selectbox``
+    controls (domain / source / frequency) and two trailing ones — the mockup's
+    row-count echo and its density segmented control. The three selections and the
+    density are read from ``st.session_state`` **before** the bar renders, so the
+    frame the table renders is the one the controls describe in the same run; the
+    controls then write the same keys back.
+
+    The table is the ``coverage`` variant (wide cells, two-line headers) at the
+    selected density, and the footnote states the calendar rule the range cells
+    implement: a Gregorian-calendar source shows a Gregorian year and the exact
+    date is in each cell's tooltip (D3 opt-in).
+    """
+    selected_domain = st.session_state.get(_COVERAGE_DOMAIN_KEY)
+    selected_source = st.session_state.get(_COVERAGE_SOURCE_KEY)
+    selected_frequency = st.session_state.get(_COVERAGE_FREQUENCY_KEY)
+    density = st.session_state.get(_COVERAGE_DENSITY_KEY, _COVERAGE_DENSITIES[0])
+    if density not in _COVERAGE_DENSITIES:
+        density = _COVERAGE_DENSITIES[0]
+    filtered = filter_coverage_frame(
+        coverage,
+        domain=selected_domain,
+        source=selected_source,
+        frequency=selected_frequency,
+    )
+
+    def domain_control() -> None:
+        st.selectbox(
+            t("filter.domain"),
+            options=[None, *unique_values(coverage, "domain")],
+            format_func=_coverage_option_label(domain_label),
+            key=_COVERAGE_DOMAIN_KEY,
+        )
+
+    def source_control() -> None:
+        st.selectbox(
+            t("filter.source"),
+            options=[None, *unique_values(coverage, "source_name")],
+            format_func=_coverage_option_label(source_label),
+            key=_COVERAGE_SOURCE_KEY,
+        )
+
+    def frequency_control() -> None:
+        st.selectbox(
+            t("filter.frequency"),
+            options=[None, *unique_values(coverage, "frequency")],
+            format_func=_coverage_option_label(frequency_label),
+            key=_COVERAGE_FREQUENCY_KEY,
+        )
+
+    def rows_control() -> None:
+        st.markdown(t("filter.showing_rows", count=format_number(len(filtered))))
+
+    def density_control() -> None:
+        st.segmented_control(
+            t("filter.density"),
+            options=list(_COVERAGE_DENSITIES),
+            default=_COVERAGE_DENSITIES[0],
+            format_func=lambda value: t(f"filter.density_{value}"),
+            key=_COVERAGE_DENSITY_KEY,
+            label_visibility="collapsed",
+        )
+
+    with st.container(key="overview-coverage-section"):
+        render_section_header("section.available_coverage")
+        render_filter_bar(
+            [domain_control, source_control, frequency_control],
+            trailing=[rows_control, density_control],
+            key="overview-coverage",
+        )
+        table = build_coverage_rows(filtered)
+        if table.rows:
+            render_html_table(
+                table.columns,
+                table.rows,
+                density=density,
+                variant="coverage",
+                wrap_headers=table.wrap_headers,
+            )
+        else:
+            render_empty("empty.no_coverage_rows")
+        st.caption(t("table.coverage_footnote"))
+
+
+class FreshnessTable(NamedTuple):
+    """A freshness table ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in mockup order
+        rows: One tuple of typed cells per source, stale rows first
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def _freshness_dot_tone(verdict: str) -> Tone:
+    """Tone of the freshness dot: amber when stale, green when fresh, grey unknown.
+
+    A source with no known cadence is reported as *unknown* and must not be
+    dressed as either verdict, so it gets the neutral dot.
+    """
+    if verdict == t("value.stale"):
+        return "warn"
+    if verdict == t("value.fresh"):
+        return "ok"
+    return "neutral"
+
+
+def build_freshness_rows(frame: pd.DataFrame, *, now: datetime) -> FreshnessTable:
+    """Build the freshness table as typed cells, stale rows first.
+
+    One row per source, exactly the latest ``DataCollectionLog`` run
+    :meth:`DashboardRepository.source_freshness` returns. The cells are:
+
+    - source — :class:`Text` through the label layer
+    - freshness — :class:`Dot` (amber stale / green fresh / neutral unknown) with
+      the verdict label, against the source's expected cadence
+      (:func:`dashboard.labels.source_expected_cadence`)
+    - last collection — :class:`TwoLine`: the Jalali date on the primary line,
+      ``time · relative age`` on the secondary line. The relative age is the
+      Task 11 formatter and the date is coloured by the verdict, as in the mockup
+    - collected records — :class:`Text` with the formatted count (unknown, never
+      an invented zero, when the source did not report one)
+    - run status — :class:`StatusChip` from the shared slug mapping
+      (:func:`dashboard.components.layout.status_chip_cell`)
+
+    Ordering is the Task 12 semantics: stale rows first, and a stable sort keeps
+    the input order within one verdict. Nothing is invented and no value is
+    recomputed.
+
+    Args:
+        frame: Freshness frame from ``source_freshness()``
+        now: Reference instant for the verdict and the relative ages. The caller
+            captures it once per render and passes it in, so every verdict, age
+            and the section summary agree; tests inject it.
+
+    Returns:
+        A :class:`FreshnessTable`; an empty frame yields the headers with no rows
+    """
+    columns = (
+        t("table.source_name"),
+        t("table.staleness"),
+        t("table.last_collection"),
+        t("table.records_collected"),
+        t("table.run_status"),
+    )
+    if frame.empty:
+        return FreshnessTable(columns, ())
+    reference = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+    stale_label = t("value.stale")
+    ordered: list[tuple[bool, tuple[Cell, ...]]] = []
+    for row in frame.itertuples(index=False):
+        source_name = str(row.source_name)
+        collected = _aware_utc(row.collection_timestamp)
+        verdict = _staleness_label(source_name, collected, reference)
+        if collected is None:
+            date_text = time_text = age_text = t("value.unknown")
+        else:
+            date_text = jalali_date_label(collected)
+            time_text = tehran_clock_label(collected)
+            age_text = relative_time_label(collected, now=reference)
+        ordered.append(
+            (
+                verdict != stale_label,
+                (
+                    Text(source_label(source_name)),
+                    Dot(verdict, _freshness_dot_tone(verdict)),
+                    TwoLine(
+                        date_text,
+                        (Text(time_text), Text(age_text)),
+                        primary_tone=_freshness_dot_tone(verdict),
+                    ),
+                    Text(_count_label(row.records_collected)),
+                    status_chip_cell(str(row.status)),
+                ),
+            )
+        )
+    ordered.sort(key=lambda item: item[0])
+    return FreshnessTable(columns, tuple(cells for _, cells in ordered))
 
 
 def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd.DataFrame:
@@ -864,6 +1583,7 @@ def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd
     for row in frame.itertuples(index=False):
         source_name = str(row.source_name)
         collected = _aware_utc(row.collection_timestamp)
+        staleness = _staleness_label(source_name, collected, reference)
         rows.append(
             {
                 columns[0]: source_label(source_name),
@@ -873,10 +1593,45 @@ def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd
                 columns[2]: str(row.status),
                 columns[3]: _count_label(row.records_collected),
                 columns[4]: "" if row.error_message is None else str(row.error_message),
-                columns[5]: _staleness_label(source_name, collected, reference),
+                columns[5]: staleness,
             }
         )
+    # Stale rows sort first; stable sort keeps the original order for rows
+    # with the same staleness verdict (fresh, unknown, etc.).
+    rows.sort(key=lambda r: r[columns[5]] != t("value.stale"))
     return pd.DataFrame(rows)
+
+
+def freshness_summary(frame: pd.DataFrame, *, now: datetime) -> tuple[int, int]:
+    """Count fresh and stale sources in a freshness frame.
+
+    Reuses :func:`_staleness_label` so the verdict matches
+    :func:`freshness_display` exactly. Sources with no known cadence
+    (``"unknown"``) are counted as neither fresh nor stale.
+
+    Args:
+        frame: Freshness frame from ``source_freshness()``
+        now: Reference instant for staleness; injectable for determinism
+
+    Returns:
+        ``(fresh, stale)`` counts
+    """
+    if frame.empty:
+        return (0, 0)
+    reference = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+    fresh = 0
+    stale = 0
+    fresh_label = t("value.fresh")
+    stale_label = t("value.stale")
+    for row in frame.itertuples(index=False):
+        source_name = str(row.source_name)
+        collected = _aware_utc(row.collection_timestamp)
+        verdict = _staleness_label(source_name, collected, reference)
+        if verdict == fresh_label:
+            fresh += 1
+        elif verdict == stale_label:
+            stale += 1
+    return (fresh, stale)
 
 
 def _staleness_label(source_name: str, collected: datetime | None, now: datetime) -> str:
@@ -913,12 +1668,12 @@ def _count_label(value: object) -> str:
 def render_fx_gold_page(repository: DashboardRepository | None = None) -> None:
     """Render the TGJU FX/gold page with snapshot limitations.
 
-    The page title is rendered once here; the body composition is
-    :func:`render_domain_body` rather than :func:`render_domain_page`, so the
-    title cannot appear twice on the same page.
+    The page header carries the snapshot caveat, so the title and the warning are
+    one shared component (Task 18 + Task 17) instead of a raw ``st.title`` /
+    ``st.warning``. The body composition is :func:`render_domain_body` rather than
+    :func:`render_domain_page`, so the title cannot appear twice on the same page.
     """
-    st.title(t("page.fx_gold"))
-    st.warning(t("warn.tgju_snapshot"))
+    render_page_header("page.fx_gold", callout_key="warn.tgju_snapshot")
     render_domain_body(
         ("fx", "gold"),
         "fx_gold",
@@ -935,17 +1690,23 @@ def render_welfare_page(repository: DashboardRepository | None = None) -> None:
     panel. The remaining ``welfare`` members -- World Bank population and IMF
     ``LUR`` -- render through the generic domain composition, so the page owns
     everything the catalog assigns to the domain.
+
+    The composition follows the D11 layout contract (Task 39): the page header
+    and the two HBSIR caveats through shared components, the shared section
+    headers, and the survey-year panel as the shared RTL HTML table. The filter
+    set is unchanged (:func:`render_filters`), so the selection and every value
+    are exactly as before.
     """
-    st.title(t("page.welfare"))
-    st.warning(_relative_poverty_note())
-    st.info(t("warn.hbsir_computed_values"))
+    render_page_header("page.welfare")
+    render_callout("warn.hbsir_relative_poverty", tone="warn", body=_relative_poverty_note())
+    render_callout("warn.hbsir_computed_values", tone="info")
     domain_list = ["welfare"]
     if repository is None:
         catalog = cached_list_indicators(domains=tuple(domain_list))
     else:
         catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     hbsir_ids = [
         indicator for indicator in catalog["indicator_id"] if indicator in HBSIR_INDICATORS
@@ -956,7 +1717,7 @@ def render_welfare_page(repository: DashboardRepository | None = None) -> None:
     filters = render_filters(catalog, "welfare", context_ids)
     series = _load_series(hbsir_ids, filters.start_date, filters.end_date, repository)
     _render_hbsir_sections(series)
-    st.subheader(t("section.welfare_other_indicators"))
+    render_section_header("section.welfare_other_indicators")
     render_domain_body(
         domain_list,
         "welfare",
@@ -979,16 +1740,19 @@ def render_labor_page(repository: DashboardRepository | None = None) -> None:
     implied trend. The unemployment series carries no derived Gold rows today, so
     the "Include derived series" control is inert until the ETL publishes one --
     exactly as it behaves for every other domain without derived rows.
+
+    The page header carries the SCI publication caveat (Task 18 + Task 17), so the
+    title and the notice are one shared component rather than a raw ``st.title`` /
+    ``st.info``.
     """
-    st.title(t("page.labor"))
-    st.info(t("warn.labor_publication"))
+    render_page_header("page.labor", callout_key="warn.labor_publication", tone="info")
     domain_list = [LABOR_DOMAIN]
     if repository is None:
         catalog = cached_list_indicators(domains=tuple(domain_list))
     else:
         catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     render_domain_body(
         domain_list,
@@ -1000,17 +1764,28 @@ def render_labor_page(repository: DashboardRepository | None = None) -> None:
 
 
 def render_correlation_page(repository: DashboardRepository | None = None) -> None:
-    """Render exact-timestamp correlation diagnostics."""
+    """Render exact-timestamp correlation diagnostics.
+
+    The composition follows the D11 layout contract: the page opens with
+    ``render_page_header``, every caveat (mixed frequencies, low overlap, exact
+    join) is a ``render_callout`` with its own container key, the section title is
+    a ``render_section_header``, and the empty/no-selection states are
+    ``render_empty``. The join-count matrix and the overlap summary stay native
+    ``st.dataframe`` tables (D1: a matrix and a sortable N-row table); only the
+    overlap summary takes the shared density ``row_height``. The quality summary is
+    the already-migrated ``render_quality_summary``. The suppression and
+    exact-join logic in ``build_correlation_chart`` is untouched.
+    """
     from dashboard.components.charts import build_correlation_chart
 
-    st.title(t("page.correlation"))
+    render_page_header("page.correlation")
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.info(t("empty.catalog_empty"))
+        render_empty("empty.catalog_empty")
         return
     filters = render_filters(catalog, "correlation")
     if not filters.indicator_ids:
-        st.info(t("empty.select_two_indicators"))
+        render_empty("empty.select_two_indicators")
         return
     if filters.start_date > filters.end_date:
         return
@@ -1027,23 +1802,27 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
             filters.end_date,
         )
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_empty("empty.no_observations")
         return
     frequencies = set(series["frequency"].astype(str))
     if len(frequencies) > 1:
-        st.warning(t("warn.mixed_frequencies"))
+        render_callout("warn.mixed_frequencies")
     bundle = build_correlation_chart(series)
     if bundle.suppressed_pairs:
-        st.warning(
-            t(
+        # The message carries the suppressed-pair count and the overlap minimum,
+        # so it passes its resolved text through ``body`` and uses the key for the
+        # callout's container hook only.
+        render_callout(
+            "warn.correlation_low_overlap",
+            body=t(
                 "warn.correlation_low_overlap",
                 count=format_number(len(bundle.suppressed_pairs)),
                 minimum=format_number(bundle.min_overlap),
-            )
+            ),
         )
-    st.caption(t("warn.correlation_exact_join"))
+    render_callout("warn.correlation_exact_join", tone="info")
     st.plotly_chart(bundle.figure, use_container_width=True)
-    st.subheader(t("section.exact_join_counts"))
+    render_section_header("section.exact_join_counts")
     matrix_column, summary_column = st.columns(2)
     with matrix_column:
         st.dataframe(bundle.join_counts, use_container_width=True)
@@ -1052,22 +1831,33 @@ def render_correlation_page(repository: DashboardRepository | None = None) -> No
             localize_table_frame(bundle.overlap_summary),
             use_container_width=True,
             hide_index=True,
+            row_height=OBSERVATIONS_ROW_HEIGHT,
         )
     render_quality_summary(summarize_quality(series, filters.start_date, filters.end_date))
     render_data_downloads(series, "iran-macro-correlation")
 
 
 def _render_series_section(series: pd.DataFrame, key_prefix: str) -> None:
+    """Render the A2 archetype's chart, quality and observations sections.
+
+    Order matches the archetype: the chart section (its mode control and the
+    figure), then the quality summary, then the observations grid inside its
+    expander, then the downloads. Nothing about the selection, the chart mode, the
+    row cap or the values changes; only the composition and its section titles are
+    shared components now.
+    """
     if series.empty:
-        st.info(t("empty.no_observations"))
+        render_empty("empty.no_observations")
         return
     start = series["timestamp"].min().to_pydatetime()
     end = series["timestamp"].max().to_pydatetime()
     quality = summarize_quality(series, start, end)
+    render_section_header("section.chart")
     scaled = _render_scaled_chart(series, key_prefix)
+    render_section_header("section.quality")
     render_quality_summary(quality)
     with st.expander(t("section.observations"), expanded=False):
-        _render_capped_rows(series)
+        _render_capped_rows(series, key_prefix)
     render_data_downloads(series, f"iran-macro-{key_prefix}")
     render_chart_downloads(scaled.figure, f"iran-macro-{key_prefix}-chart")
 
@@ -1089,7 +1879,9 @@ def _render_scaled_chart(series: pd.DataFrame, key_prefix: str) -> ScaledChart:
     )
     scaled = build_scaled_time_series_chart(series, mode=mode)
     if scaled.notice:
-        st.info(scaled.notice)
+        # The notice carries values, so it passes its resolved text through
+        # ``body`` and uses the key for the callout's container hook only.
+        render_callout("chart.notice", tone="info", body=scaled.notice)
     st.plotly_chart(scaled.figure, use_container_width=True)
     return scaled
 
@@ -1099,23 +1891,36 @@ def _chart_mode_label(mode: str) -> str:
     return t(f"chart.mode.{mode}")
 
 
-def _render_capped_rows(series: pd.DataFrame) -> None:
+def _render_capped_rows(series: pd.DataFrame, key_prefix: str) -> None:
     """Render the observations grid as a bounded preview with a truncation hint.
 
     The cap is presentation-only: it never changes a value, a column or the
     timezone-aware ``timestamp`` column, and the exports and the quality summary
-    still describe the full selection.
+    still describe the full selection. The grid is a large, scrollable table, so it
+    stays a ``st.dataframe`` (D1) with ``row_height`` as its density control.
+
+    ``key_prefix`` names the truncation callout's container: a page can render
+    several grids (the Market page's level and one per derived series), and a
+    repeated container key raises.
     """
     capped = cap_table_rows(series)
     if capped.truncated:
-        st.info(
-            t(
+        render_callout(
+            "table.rows_capped",
+            tone="info",
+            container_key=f"rows-capped-{key_prefix}",
+            body=t(
                 "table.rows_capped",
                 shown=format_number(capped.shown_rows),
                 total=format_number(capped.total_rows),
-            )
+            ),
         )
-    st.dataframe(localize_table_frame(capped.frame), use_container_width=True, hide_index=True)
+    st.dataframe(
+        localize_table_frame(capped.frame),
+        use_container_width=True,
+        hide_index=True,
+        row_height=OBSERVATIONS_ROW_HEIGHT,
+    )
 
 
 def survey_year_frame(series: pd.DataFrame) -> pd.DataFrame:
@@ -1196,12 +2001,68 @@ def _relative_poverty_note() -> str:
     )
 
 
+class SurveyYearPanelTable(NamedTuple):
+    """The survey-year panel ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in :func:`survey_year_panel`'s order
+        rows: One tuple of typed cells per survey year
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def build_survey_year_panel_rows(frame: pd.DataFrame) -> SurveyYearPanelTable:
+    """Build the survey-year panel as typed cells from the localized frame.
+
+    The frame is the output of :func:`survey_year_panel`, whose cells are already
+    Persian display text (the Jalali survey-year label, the Esfand 29/30
+    year-end, the Gregorian period end, and the formatted coverage counts). Each
+    value therefore maps to a plain :class:`~dashboard.components.html_table.Text`
+    cell, so the rendered table is byte-identical to the grid it replaces; a null
+    (never produced today) falls back to the shared em-dash through ``Text(None)``.
+
+    Args:
+        frame: Frame from :func:`survey_year_panel`
+
+    Returns:
+        A :class:`SurveyYearPanelTable`; an empty frame yields no columns and no
+        rows
+    """
+    if frame.empty:
+        return SurveyYearPanelTable((), ())
+    rows = tuple(
+        tuple(_survey_year_cell(value) for value in row)
+        for row in frame.itertuples(index=False, name=None)
+    )
+    return SurveyYearPanelTable(tuple(str(column) for column in frame.columns), rows)
+
+
+def _survey_year_cell(value: object) -> Cell:
+    """One survey-year cell: plain text, or the shared em-dash for a null."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return Text(None)
+    return Text(str(value))
+
+
 def _render_hbsir_sections(series: pd.DataFrame) -> None:
-    """Render the HBSIR emphasis sections: trend, decile shares, survey years."""
+    """Render the HBSIR emphasis sections: trend, decile shares, survey years.
+
+    Each section opens with a shared section header. An empty section renders the
+    shared empty callout with a distinct ``container_key`` per section, because
+    the same ``empty.no_hbsir_observations`` key can legitimately fire in more
+    than one section on the same run. The survey-year panel is the shared RTL
+    HTML table (:func:`render_html_table`) fed by the pure builder
+    :func:`build_survey_year_panel_rows`; its values are byte-identical to the
+    grid it replaces.
+    """
     trend = _hbsir_subset(series, HBSIR_GINI_POVERTY_INDICATORS)
-    st.subheader(t("section.hbsir_gini_poverty"))
+    render_section_header("section.hbsir_gini_poverty")
     if trend.empty:
-        st.info(t("empty.no_hbsir_observations"))
+        render_callout(
+            "empty.no_hbsir_observations", tone="info", container_key="hbsir-gini-poverty"
+        )
     else:
         st.plotly_chart(
             build_survey_year_chart(survey_year_frame(trend)),
@@ -1209,21 +2070,24 @@ def _render_hbsir_sections(series: pd.DataFrame) -> None:
         )
 
     deciles = _hbsir_subset(series, tuple(DECILE_INDICATORS))
-    st.subheader(t("section.hbsir_deciles"))
+    render_section_header("section.hbsir_deciles")
     if deciles.empty:
-        st.info(t("empty.no_hbsir_observations"))
+        render_callout("empty.no_hbsir_observations", tone="info", container_key="hbsir-deciles")
     else:
         st.plotly_chart(
             build_survey_year_chart(survey_year_frame(deciles), facet_indicators=False),
             use_container_width=True,
         )
 
-    st.subheader(t("section.hbsir_survey_years"))
+    render_section_header("section.hbsir_survey_years")
     panel = survey_year_panel(_hbsir_subset(series, HBSIR_INDICATORS))
     if panel.empty:
-        st.info(t("empty.no_hbsir_observations"))
+        render_callout(
+            "empty.no_hbsir_observations", tone="info", container_key="hbsir-survey-years"
+        )
     else:
-        st.dataframe(panel, use_container_width=True, hide_index=True)
+        table = build_survey_year_panel_rows(panel)
+        render_html_table(table.columns, table.rows)
 
 
 def _hbsir_subset(series: pd.DataFrame, indicator_ids: tuple[str, ...]) -> pd.DataFrame:

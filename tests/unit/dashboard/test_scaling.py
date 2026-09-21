@@ -41,7 +41,7 @@ def _render_capped_observations_app() -> None:
             "value": [float(index) for index in range(rows)],
         }
     )
-    _render_capped_rows(frame)
+    _render_capped_rows(frame, "capped-probe")
 
 
 def _ensure_indicator_selected(app, prefix: str) -> None:

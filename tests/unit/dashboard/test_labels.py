@@ -19,6 +19,7 @@ from dashboard.labels import (
     DOMAIN_ORDER,
     FREQUENCY_LABELS,
     INDICATOR_LABELS,
+    SOURCE_CALENDAR,
     SOURCE_EXPECTED_CADENCE,
     SOURCE_LABELS,
     derived_label,
@@ -26,6 +27,7 @@ from dashboard.labels import (
     frequency_label,
     indicator_label,
     is_derived,
+    source_calendar,
     source_expected_cadence,
     source_label,
 )
@@ -239,3 +241,23 @@ def test_unknown_derived_suffix_falls_back_without_inventing_a_fragment() -> Non
         == "Parent name"
     )
     assert indicator_label("WB.NEW.IND.NEWSUF", derived_from="NEW.IND") == "WB.NEW.IND.NEWSUF"
+
+
+def test_source_calendar_maps_exactly_the_international_sources_to_gregorian() -> None:
+    gregorian = {slug for slug, calendar in SOURCE_CALENDAR.items() if calendar == "gregorian"}
+
+    assert gregorian == {"world_bank", "imf", "eia"}
+    # Every labelled source has a calendar, and the domestic four are Jalali.
+    assert set(SOURCE_CALENDAR) == set(SOURCE_LABELS)
+    assert {slug for slug, calendar in SOURCE_CALENDAR.items() if calendar == "jalali"} == {
+        "tgju",
+        "sci",
+        "tsetmc",
+        "hbsir",
+    }
+
+
+def test_source_calendar_returns_none_for_an_unmapped_source() -> None:
+    assert source_calendar("world_bank") == "gregorian"
+    assert source_calendar("sci") == "jalali"
+    assert source_calendar("unknown_source") is None

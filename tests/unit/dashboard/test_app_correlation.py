@@ -37,7 +37,9 @@ def test_correlation_page_warns_and_suppresses_a_low_overlap_pair(
         )
         in warnings
     )
-    assert t("warn.correlation_exact_join") in {caption.value for caption in app.caption}
+    # The exact-join note is an explanatory notice, so it is an info callout
+    # (Task 42) rather than the raw ``st.caption`` it used to be.
+    assert t("warn.correlation_exact_join") in {info.value for info in app.info}
 
 
 def test_correlation_page_shows_the_matched_observation_summary(

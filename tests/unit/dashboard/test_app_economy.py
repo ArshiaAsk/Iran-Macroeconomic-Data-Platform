@@ -25,6 +25,7 @@ from dashboard.navigation import PAGES
 from dashboard.page_view import (
     SCI_CANONICAL_CPI_INDICATORS,
     SCI_DECILE_INDICATORS,
+    build_chain_linking_provenance_rows,
     chain_linked_catalog_ids,
     chain_linking_provenance,
     cpi_canonical_ids,
@@ -38,6 +39,7 @@ from tests.unit.dashboard.app_smoke import (
     SCI_CPI_IDS,
     SCI_DECILE_IDS,
     app_test,
+    html_texts,
     inflation_catalog,
     inflation_series,
 )
@@ -153,7 +155,9 @@ def test_inflation_page_states_that_the_deciles_share_a_unit_and_base_year(
     app = app_test(INFLATION_PAGE)
     app.run()
 
-    assert t("warn.cpi_deciles_shared_base") in [caption.value for caption in app.caption]
+    # Task 38: the shared-base notice is a shared callout (native ``st.info``),
+    # not a raw caption, so it is asserted through ``app.info``.
+    assert t("warn.cpi_deciles_shared_base") in [info.value for info in app.info]
 
 
 def test_decile_comparison_is_a_capped_small_multiples_grid() -> None:
@@ -243,6 +247,15 @@ def test_chain_linking_provenance_lists_base_years_and_segment_ancestry() -> Non
     assert indicator_label("SCI.CPI.URBAN.B2021") in segments
 
 
+def _provenance_markup(app) -> str:
+    """The chain-linking provenance table's RTL HTML markup (Task 38).
+
+    The table is a ``render_html_table`` now, so it is read through
+    ``html_texts`` rather than ``app.dataframe`` (the Task 16 migration map).
+    """
+    return next(body for body in html_texts(app) if t("table.base_year_segments") in body)
+
+
 def test_inflation_page_renders_the_chain_linking_section(
     fake_streamlit_connection,
 ) -> None:
@@ -251,5 +264,65 @@ def test_inflation_page_renders_the_chain_linking_section(
 
     assert not app.exception
     assert t("section.chain_linking") in {subheader.value for subheader in app.subheader}
-    assert t("warn.chain_linking_stored") in {caption.value for caption in app.caption}
-    assert t("warn.chain_linking_overlap") in {caption.value for caption in app.caption}
+    # Task 38: the stored/overlap notices are shared callouts (native
+    # ``st.info``), not raw captions, so they are asserted through ``app.info``.
+    assert t("warn.chain_linking_stored") in {info.value for info in app.info}
+    assert t("warn.chain_linking_overlap") in {info.value for info in app.info}
+
+
+def test_the_provenance_table_is_an_html_table_with_localized_headers(
+    fake_streamlit_connection,
+) -> None:
+    """Task 38: the provenance grid is the shared RTL HTML table (markup).
+
+    The grid is read through ``html_texts`` rather than ``app.dataframe``; the
+    headers are the localized catalog keys and the cells are the Persian display
+    values produced by :func:`chain_linking_provenance`. No ``app.dataframe``
+    assertion ever covered this table (Task 16 migration map), so this is the
+    markup assertion the migration adds.
+    """
+    app = app_test(INFLATION_PAGE)
+    app.run()
+
+    markup = _provenance_markup(app)
+    for header in (
+        t("table.name"),
+        t("table.has_base_year_changes"),
+        t("table.base_years"),
+        t("table.base_year_segments"),
+    ):
+        assert f'<th scope="col">{header}</th>' in markup
+    # Two cell values: the Urban row's Persian yes flag and its segment ancestry,
+    # both produced by ``chain_linking_provenance`` and carried byte-identically.
+    assert t("value.yes") in markup
+    assert indicator_label("SCI.CPI.URBAN.B2016") in markup
+    assert indicator_label("SCI.CPI.URBAN.B2021") in markup
+
+
+def test_build_chain_linking_provenance_rows_maps_every_cell_to_plain_text() -> None:
+    """Task 38: the pure builder maps the localized frame to typed cells.
+
+    Every cell is plain :class:`~dashboard.components.html_table.Text`, so the
+    rendered table is byte-identical to the grid it replaces; a null falls back
+    to the shared em-dash. The builder adds nothing and recomputes nothing.
+    """
+    from dashboard.components.html_table import Text
+
+    catalog = inflation_catalog()
+    flagged = catalog[catalog["indicator_id"].isin(chain_linked_catalog_ids(catalog))]
+    frame = chain_linking_provenance(flagged)
+
+    table = build_chain_linking_provenance_rows(frame)
+
+    assert table.columns == tuple(str(column) for column in frame.columns)
+    assert len(table.rows) == len(frame)
+    for row, (_, source_row) in zip(table.rows, frame.iterrows(), strict=True):
+        assert all(isinstance(cell, Text) for cell in row)
+        assert tuple(None if cell.value is None else cell.value for cell in row) == tuple(
+            source_row[column] for column in frame.columns
+        )
+
+
+def test_build_chain_linking_provenance_rows_is_empty_safe() -> None:
+    assert build_chain_linking_provenance_rows(pd.DataFrame()).columns == ()
+    assert build_chain_linking_provenance_rows(pd.DataFrame()).rows == ()

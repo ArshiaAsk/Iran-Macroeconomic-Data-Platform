@@ -1,12 +1,80 @@
 # Theme baseline for the local-only dashboard.
 #
-# RTL direction and the Persian-capable font stack are installed by CSS from
-# dashboard/components/direction.py, not here: Streamlit's theme options only pick
-# a generic font family, and the offline rule (no CDN, no webfont, no vendored
-# font file) means the OS fallback stack is applied from that one owner module.
+# Phase 7.2 (D4, ratified) vendors Vazirmatn locally: the font and its OFL
+# licence live under `dashboard/static/` and are served by Streamlit's static
+# serving at `app/static/...` (no CDN, no webfont fetch). The font families are
+# declared here via `[[theme.fontFaces]]` and referenced by name from the theme;
+# `dashboard/components/direction.py` applies the RTL direction and the richer
+# Persian-capable fallback stack as a safety net.
+#
+# Every colour, radius and the 14 px base size below is pinned to a design token
+# from `dashboard/components/tokens.py`; `tests/unit/dashboard/test_tokens.py`
+# asserts the equality so a token change forces a theme change. The alert
+# colours map orange=warn, blue=accent/info, red=err, green=ok; yellow has no
+# mockup token and is folded into the warn palette so a `st.badge(color="yellow")`
+# stays in the warm family. Dark mode is unsupported (D14, light only).
+
+[server]
+enableStaticServing = true
+
+# Phase 7.2 (Task 28): hide the native Deploy button and developer options so the
+# analyst sees a clean viewer shell. The custom [theme] already hides the theme
+# toggle (D14). For local development set the environment variable
+# STREAMLIT_CLIENT_TOOLBAR_MODE=developer to restore the full toolbar.
+[client]
+toolbarMode = "viewer"
 
 [theme]
 base = "light"
-primaryColor = "#1f6feb"
-font = "sans serif"
-baseFontSize = 16
+primaryColor = "#1D4E89"
+backgroundColor = "#F6F7F9"
+secondaryBackgroundColor = "#fff"
+textColor = "#1B2430"
+borderColor = "#E1E5EB"
+baseRadius = "6px"
+buttonRadius = "6px"
+baseFontSize = 14
+dataframeHeaderBackgroundColor = "#F1F3F6"
+showWidgetBorder = true
+showSidebarBorder = true
+chartCategoricalColors = ["#1D4E89", "#1F7A4D", "#9A5B00", "#B42318", "#667385", "#4A5566", "#C9D0DA"]
+font = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
+headingFont = "Vazirmatn, IRANSans, Tahoma, Segoe UI, sans-serif"
+codeFont = '"DejaVu Sans Mono", "SFMono-Regular", Menlo, Consolas, monospace'
+
+# Type scale (Step 0e). Pinned to `TYPE_SCALE` in `dashboard/components/tokens.py`
+# and asserted by `tests/unit/dashboard/test_tokens.py`. The mockup declares
+# h1 28px/700 (page title, `st.title`), a section title 18px/600, and a KPI value
+# 28px/600; body is 14px/400. Streamlit's `st.subheader` (the section header)
+# renders `<h3>`, so the 18px/600 section scale is carried on both h2 and h3.
+# Sizes are px (not rem) so the values equal the mockup exactly regardless of the
+# themed root size. Values left at Streamlit's defaults are still written out so
+# the token/theme equality test covers the whole scale.
+headingFontSizes = ["28px", "18px", "18px"]
+headingFontWeights = [700, 600, 600]
+metricValueFontSize = "28px"
+metricValueFontWeight = 600
+baseFontWeight = 400
+
+# Alert colours (orange=warn, blue=accent/info, red=err, green=ok). Yellow has
+# no mockup token and is folded into the warn palette.
+redColor = "#B42318"
+redBackgroundColor = "#FDECEA"
+redTextColor = "#B42318"
+orangeColor = "#9A5B00"
+orangeBackgroundColor = "#FBF1DC"
+orangeTextColor = "#9A5B00"
+yellowColor = "#9A5B00"
+yellowBackgroundColor = "#FBF1DC"
+yellowTextColor = "#9A5B00"
+blueColor = "#1D4E89"
+blueBackgroundColor = "#E8EFF8"
+blueTextColor = "#1D4E89"
+greenColor = "#1F7A4D"
+greenBackgroundColor = "#E6F3EC"
+greenTextColor = "#1F7A4D"
+
+[[theme.fontFaces]]
+family = "Vazirmatn"
+url = "app/static/Vazirmatn.ttf"
+weight = "100 900"
