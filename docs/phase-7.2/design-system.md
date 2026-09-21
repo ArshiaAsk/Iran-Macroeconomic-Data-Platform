@@ -168,7 +168,7 @@ needs no `unsafe_allow_html`.
 | `render_callout_stack` | `(callouts)` | A stack of callouts from `(catalog_key, tone)` pairs, each through `render_callout`. The D11 way to render a page's several caveats (the Market page's five TSETMC notes) under one `render_page_header`. |
 | `render_kpi_band` | `(cells, *, key="default")` | One bordered row of metric cells, with an optional separated secondary group. A band with fewer than three cells is padded to the four-cell reference width (Step 0b). |
 | `render_section_header` | `(title_key, *, subtitle=None, trailing=None, key=None)` | A native `st.subheader` with optional secondary text, laid out as one baseline-aligned row. |
-| `render_filter_bar` | `(controls, *, trailing=(), key="default")` | One filter-bar row over an arbitrary number of control callables. |
+| `render_filter_bar` | `(controls, *, trailing=(), key="default", weights=None)` | One filter-bar row over an arbitrary number of control callables. `weights` gives the leading controls proportional column widths (Wave H P1 — the catalog page passes `[3.0, 2.0, 1.0]` so the search field is widest); `None` keeps equal widths. |
 | `render_status_chip` | `(status)` | A standalone collection-run chip (`st.badge`), for use **outside** tables. |
 | `status_chip_cell` | `(status)` | The same slug → (label, tone) mapping as `render_status_chip`, as an RTL-table `StatusChip` cell (Task 30). Not a renderer: it returns a cell. |
 | `render_status_dot` | `(label, tone)` | A standalone coloured dot with a label; the one escaped fragment here. |

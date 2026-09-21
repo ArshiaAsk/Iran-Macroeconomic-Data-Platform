@@ -3015,3 +3015,38 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   re-run the suite.
 - **Deviations:** none.
 - **Commit:** Step 0 commit.
+
+## Wave H — P1 (catalog filter layout, own commit)
+
+- **Files:** `dashboard/components/layout.py` (`render_filter_bar` gains an
+  optional `weights`), `dashboard/page_view.py` (`render_catalog_page`),
+  `tests/unit/dashboard/test_app_catalog.py` (+2 tests),
+  `tests/unit/dashboard/test_layout.py` (+2 tests),
+  `docs/phase-7.2/design-system.md` (`render_filter_bar` signature),
+  `docs/phase-7.2/validation/archetype-catalog.md` (row 22 → resolved; §2/§4/§7/§8/§10),
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Task 45 box ticked),
+  `docs/phase-7.2/wave-h-assets/p1/` (before/after viewport + full captures).
+- **Build:** the bar now hosts only the **three simple controls** — search, the
+  inactive-segment toggle and the clear button — with proportional weights
+  `[3.0, 2.0, 1.0]` so the search field is widest; `render_filters` returns to
+  **full width** beneath the bar, in its original position. The bar renders
+  **before** the empty-catalog check, so the toggle stays visible on an empty
+  catalog (the pre-Task-44 behaviour). Every widget key, the clear button's
+  `on_click` callback, `CATALOG_FILTER_STATE_KEYS`, the defaults and the
+  session-state read-before-render ordering are unchanged.
+- **Measured (live DOM, 1440 px; before = worktree at `ed2b4a4`, after = P1):**
+  bar **555 px → 61 px**; bar columns **4 equal × 251 px → 3 weighted
+  513 / 339 / 165 px**; the filter set **251 px wide inside the bar → full width
+  1044 px beneath it**. The tall narrow column is gone.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_app_catalog.py
+  tests/unit/dashboard/test_layout.py tests/unit/dashboard/test_layout_guard.py
+  tests/unit/dashboard/test_literal_guard.py tests/unit/dashboard/test_design_system_doc.py
+  -q --no-cov` → **108 passed**. `test_app_catalog.py` passes **unchanged**; the
+  two new tests pin the bar's three controls + weights and the toggle-on-empty
+  behaviour.
+- **Evidence:** `docs/phase-7.2/wave-h-assets/p1/{before,after}-{top,full}.png`,
+  captured with the dev server restarted against the P1 working tree on top of
+  `5554e6d` (before) and the `ed2b4a4` worktree (before-layout measurement).
+- **Deviations:** the bar's `weights` parameter is a small additive component
+  change (defaults to equal widths); the plan's P1 wording anticipated it.
+- **Commit:** P1 commit.

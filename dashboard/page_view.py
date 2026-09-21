@@ -738,12 +738,17 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     catalog columns and unioned with the label-layer match, so neither path can
     hide a row the other would find.
 
-    The page opens with ``render_page_header`` and hosts its controls — the search
-    box, the shared filter set, the inactive-segment toggle and the clear button —
-    in one ``render_filter_bar``. The toggle's current value is read from
+    The page opens with ``render_page_header``. The filter bar hosts only the
+    **three simple controls** — the search box, the inactive-segment toggle and the
+    clear button — with proportional column weights that give the search field the
+    widest column (Wave H P1); the shared filter set is a tall stack of widgets, so
+    :func:`render_filters` returns to **full width** beneath the bar, in its
+    original position. The toggle's current value is read from
     ``st.session_state`` **before** the bar renders (the Overview coverage bar's
     pattern), so the catalog frame the count and grid describe is the one the
-    toggle describes in the same run; the controls write the same keys back. Every
+    toggle describes in the same run; the controls write the same keys back. The
+    toggle is rendered by the bar **before** the empty-catalog check, so it stays
+    visible even when the catalog is empty (its pre-Task-44 behaviour). Every
     widget key, the clear button's ``on_click`` callback and the reset key list are
     unchanged. The matching count is a one-cell ``render_kpi_band``; the grid stays
     a native ``st.dataframe`` (D1, sortable, LTR grid) with the shared density
@@ -753,19 +758,9 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     include_inactive = bool(st.session_state.get("catalog_include_inactive", False))
     active_only = not include_inactive
     catalog = _catalog_frame(repository, active_only=active_only)
-    if catalog.empty:
-        render_empty("empty.catalog_empty")
-        return
-
-    # ``render_filters`` returns the selection; the control callable stashes it so
-    # the count and grid can use it after the bar has rendered.
-    selection: dict[str, FilterState] = {}
 
     def search_control() -> None:
         st.text_input(t("filter.search"), key="catalog_search")
-
-    def filters_control() -> None:
-        selection["filters"] = render_filters(catalog, "catalog")
 
     def inactive_control() -> None:
         st.checkbox(
@@ -776,11 +771,21 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     def clear_control() -> None:
         st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
 
+    # The bar carries only the three simple controls (Wave H P1). The search field
+    # takes the widest column; the toggle and the clear button are narrower. The
+    # bar renders before the empty-catalog check so the toggle is never hidden by
+    # an empty catalog.
     render_filter_bar(
-        [search_control, filters_control, inactive_control, clear_control],
+        [search_control, inactive_control, clear_control],
         key="catalog",
+        weights=[3.0, 2.0, 1.0],
     )
-    filters = selection["filters"]
+    if catalog.empty:
+        render_empty("empty.catalog_empty")
+        return
+
+    # The shared filter set is full width, in its original position beneath the bar.
+    filters = render_filters(catalog, "catalog")
     needle = str(st.session_state.get("catalog_search", ""))
     result = _apply_catalog_filters(catalog, filters)
     if needle.strip():

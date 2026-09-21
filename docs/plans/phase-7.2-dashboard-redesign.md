@@ -1157,7 +1157,7 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 34, 44.
 - **Acceptance:**
-  - [ ] Owner sign-off recorded, or defects filed.
+  - [x] Owner sign-off recorded, or defects filed.
 - **Verify:** Manual browser checklist.
 
 > **Owner sign-off: APPROVED, conditional on P1 (2026-09-22).** The 15 MATCH and
@@ -1165,6 +1165,10 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 > as a tall narrow bar column) is a **DEFECT, not an accepted deviation**, fixed in
 > Wave H **P1**; the acceptance box above is ticked only after P1 is verified. See
 > `docs/phase-7.2/validation/archetype-catalog.md` §10.
+>
+> **P1 verified (2026-09-22):** the bar is 61 px with three weighted columns
+> (513 / 339 / 165 px) and `render_filters` is full width (1044 px); the toggle
+> renders on an empty catalog. The box is ticked.
 
 ---
 

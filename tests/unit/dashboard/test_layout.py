@@ -853,6 +853,45 @@ def test_filter_bar_rejects_an_empty_control_list() -> None:
     assert "at least one control" in str(app.exception[0].value)
 
 
+def test_filter_bar_accepts_proportional_control_weights() -> None:
+    """P1: ``weights`` gives the leading controls proportional columns."""
+    app = _run(
+        "from dashboard.components.layout import render_filter_bar\n"
+        "from dashboard.i18n import t\n"
+        "import streamlit as st\n"
+        "\n"
+        "\n"
+        "def make(key):\n"
+        "    def control():\n"
+        "        st.text_input(t(key))\n"
+        "    return control\n"
+        "\n"
+        "\n"
+        "render_filter_bar([make('filter.search'), make('filter.include_inactive_segments'), "
+        "make('filter.clear')], weights=[3.0, 2.0, 1.0])\n"
+    )
+
+    assert not app.exception
+    assert len(app.text_input) == 3
+
+
+def test_filter_bar_rejects_weights_that_do_not_match_the_controls() -> None:
+    app = _run(
+        "import streamlit as st\n"
+        "from dashboard.components.layout import render_filter_bar\n"
+        "\n"
+        "\n"
+        "def control():\n"
+        "    st.selectbox('x', ['a'])\n"
+        "\n"
+        "\n"
+        "render_filter_bar([control, control], weights=[1.0, 2.0, 3.0])\n"
+    )
+
+    assert app.exception
+    assert "weights must match" in str(app.exception[0].value)
+
+
 def test_filter_bar_container_declares_the_rtl_context() -> None:
     css = direction_css()
 

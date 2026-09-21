@@ -1,8 +1,8 @@
 # Catalog review — Data Catalog (Wave G)
 
-**Status: SIGNED OFF — APPROVED, CONDITIONAL ON P1.**
-**Owner sign-off: APPROVED (2026-09-22), conditional on P1 (the tall narrow filter
-column is a defect and is fixed in Wave H P1).**
+**Status: SIGNED OFF — APPROVED (P1 verified).**
+**Owner sign-off: APPROVED (2026-09-22). The one defect (row 22) is resolved by
+Wave H P1.**
 
 This is the Wave G owner visual review (Task 45). It walks the A5 **data catalog**
 page against the design system's **page-layout contract**
@@ -12,8 +12,8 @@ Wave C reference), the generic domain explorer (Wave D), the emphasis pages
 mockup for the catalog page; the contract and the earlier archetypes are the
 reference.
 
-The page is the A5 archetype: header → filter bar (search + shared filter set +
-inactive toggle + clear) → matching count → grid.
+The page is the A5 archetype: header → filter bar (search + inactive toggle +
+clear) → the shared filter set (full width) → matching count → grid.
 
 - **Reviewed tree:** `ed2b4a4` (Task 44) on branch `phase-7.2`
 - **Review date:** 2026-09-22
@@ -47,7 +47,7 @@ the design (native-first, D13), the data, or a genuine gap.
 
 | Page | Route | Registry key | Header title | Controls | Count | Grid |
 |---|---|---|---|---|---|---|
-| Data Catalog | `pages/7_Data_Catalog.py` | `catalog` | `page.catalog` — فهرست دادهها | search + shared filter set (`render_filters`) + inactive toggle + clear, all in one `render_filter_bar` | one-cell `render_kpi_band` (`metric.matching_indicators`) | `st.dataframe` (sortable, LTR grid) |
+| Data Catalog | `pages/7_Data_Catalog.py` | `catalog` | `page.catalog` — فهرست دادهها | search + inactive toggle + clear in one `render_filter_bar`; the shared filter set (`render_filters`) full width beneath the bar | one-cell `render_kpi_band` (`metric.matching_indicators`) | `st.dataframe` (sortable, LTR grid) |
 
 The page module is a **thin delegate**: no function of its own, no Streamlit
 import, one call to the migrated `render_catalog_page`.
@@ -86,34 +86,39 @@ apply).
 | 19 | The search box is hosted by the bar | MATCH | `catalog_search`, value unchanged (`review-search.png` shows `SCI.CPI` → ۱۳ matches) |
 | 20 | The inactive toggle is hosted by the bar; key/default unchanged | MATCH | `catalog_include_inactive`; the value is read before the bar so the count/grid describe the same run |
 | 21 | The clear button is hosted by the bar; `on_click` and reset keys unchanged | MATCH | `catalog_clear_filters` + `_clear_catalog_filters` + `CATALOG_FILTER_STATE_KEYS`, unchanged |
-| 22 | The shared filter set is hosted by the bar | **DEFECT** | `render_filters` is hosted as one bar column; the set is tall, so its column is much taller than the other three (layout defect below — fixed in Wave H **P1**) |
+| 22 | The shared filter set is hosted by the bar | **MATCH — resolved by P1** | the bar now hosts only the three simple controls (search, toggle, clear) with weights `[3.0, 2.0, 1.0]`; `render_filters` is full width beneath the bar, and the toggle renders before the empty-catalog check |
 | 23 | Grid columns, values and order unchanged | MATCH | `before-grid.png` vs `after-grid.png`: same columns/values; only the row height changed |
 | 24 | The LTR-grid limitation is documented | MATCH | design-system §8 (the catalog grid note) |
 
-**Verdict tally:** 15 MATCH, **1 DEFECT** (row 22, the tall filter set in a narrow
-bar column — fixed in Wave H **P1**), 8 N/A. The empty-catalog micro-deviation is
-recorded below and is **accepted**.
+**Verdict tally:** 16 MATCH, 8 N/A, **0 DEFECT** (row 22 resolved by Wave H P1).
+The empty-catalog micro-deviation is accepted and was also fixed by P1.
 
-### Row 22 — the shared filter set in the bar (DEFECT, fixed in Wave H P1)
+### Row 22 — the shared filter set in the bar (RESOLVED by Wave H P1)
 
-The catalog page is the first page to host the whole shared filter set
-(`render_filters`) **inside** `render_filter_bar`, as Task 44 asks. The bar lays
-four equal columns (`[search, filters, inactive, clear]`); the filter set is seven
-widgets tall (four multiselects, the Jalali preset expander, two date inputs and
-the range echo), so its column is much taller than the other three and the bar
-carries white space beside them. Nothing about the widgets changes: every key,
-the placeholder, the expander and the returned `FilterState` are the same, and the
-matching count and grid are unchanged.
+Task 44 hosted the whole shared filter set (`render_filters`) **inside**
+`render_filter_bar` as one of four equal columns. The set is seven widgets tall
+(four multiselects, the Jalali preset expander, two date inputs and the range
+echo), so its column was much taller than the other three and the bar carried
+white space beside them. The owner classified this a **defect, not an accepted
+deviation** (2026-09-22), fixed in Wave H **P1**.
 
-The owner's decision (2026-09-22): this is a **defect, not an accepted
-deviation** — a tall narrow filter column is not a shape the bar should produce.
-It is **fixed in Wave H P1**, which hosts only the three simple controls (search,
-the inactive toggle, clear) in the bar with proportional column weights and
-restores `render_filters` to full width in its original position. See §10.
+**Measured before (ed2b4a4) vs after (P1), live DOM at 1440 px:**
 
-This is the **first** page where the filter set is the bar (Waves D/E and the
-correlation page record the opposite: `render_filters` is *not* the Overview's
-three-select bar).
+| Metric | Before (Task 44) | After (P1) |
+|---|---|---|
+| Filter bar box | 1044 × **555 px** | 1044 × **61 px** |
+| Bar columns | 4 equal, **251 px** each | 3 weighted, **513 / 339 / 165 px** (search / toggle / clear) |
+| Filter-set column | **251 px wide × 555 px tall** (the tall narrow column) | — (no longer in the bar) |
+| `render_filters` (first widget) | inside the bar, 251 px wide | **full width, 1044 px**, beneath the bar |
+
+The tall narrow column is **gone**: the bar is 61 px (the search field's height),
+the search field takes the widest column, and the shared filter set renders at full
+width in its original position beneath the bar. The inactive toggle renders
+**before** the empty-catalog check, so it stays visible on an empty catalog (its
+pre-Task-44 behaviour). Every widget key, the clear button's `on_click` callback,
+`CATALOG_FILTER_STATE_KEYS` and the defaults are unchanged. Evidence:
+[`wave-h-assets/p1/`](../wave-h-assets/p1/) (`before-top.png`, `before-full.png`,
+`after-top.png`, `after-full.png`).
 
 ### Micro-deviation — the empty catalog
 
@@ -131,7 +136,7 @@ The page is compared to the other archetypes on the surfaces they share:
 |---|---|---|---|---|---|
 | Shell (top bar, breadcrumb, stamp) | Full-bleed top bar | Identical | Identical | Identical — the shell is global | MATCH |
 | Page header | `render_page_header` + callout | `render_page_header` + caveat(s) | `render_page_header` + caveats | `render_page_header` (no caveat) | MATCH |
-| Filter bar | three `st.selectbox` via `render_filter_bar` | `render_filters` (not the bar) | `render_filters` (not the bar) | **`render_filter_bar` hosting `render_filters`** | DEFECT (row 22; fixed in P1) |
+| Filter bar | three `st.selectbox` via `render_filter_bar` | `render_filters` (not the bar) | `render_filters` (not the bar) | **bar of three simple controls + full-width `render_filters`** | MATCH (row 22 resolved by P1) |
 | KPI band | Six-cell band | Market one-cell; others none | none | one-cell (matching count) | MATCH |
 | Section headers | `render_section_header` | `render_section_header` | `render_section_header` | none | N/A |
 | Large/sortable table | (coverage table) | `st.dataframe(row_height)` | `st.dataframe(row_height)` + matrix | `st.dataframe(row_height)` | MATCH |
@@ -173,14 +178,15 @@ result changed.
 
 ## 7. Defects and recommendations
 
-**One presentation-layer defect is filed**, plus one accepted micro-deviation:
+**No open presentation-layer defect.** The one defect (row 22) is **resolved by
+Wave H P1**, and the accepted micro-deviation is also fixed by P1:
 
-1. **Row 22 — the shared filter set is hosted as a tall, narrow bar column** —
-   the owner classified this a **defect** (not an accepted deviation). It is
-   **fixed in Wave H P1** (§10).
-2. **The empty catalog** no longer renders the inactive toggle (the early
-   `render_empty` return precedes the bar) — **accepted** (the path is unreachable
-   and untested); P1 restores the toggle-before-empty-check order.
+1. **Row 22 — the shared filter set was hosted as a tall, narrow bar column** —
+   the owner classified this a **defect**; **P1** now hosts only the three simple
+   controls (search, toggle, clear) in the bar and renders `render_filters` at full
+   width. Measured: bar 555 px → 61 px; filter set 251 px → 1044 px wide.
+2. **The empty catalog** — P1 restored the toggle-before-empty-check order, so the
+   toggle renders even when the catalog is empty (its pre-Task-44 behaviour).
 
 The Wave D carry list (F1, F2, F5, F7, filter-bar shape, Gregorian/Jalali range
 direction, `neutralise()` scroll no-op Task 47) is unchanged and still open.
@@ -188,31 +194,31 @@ direction, `neutralise()` scroll no-op Task 47) is unchanged and still open.
 ## 8. Owner checklist
 
 The owner reviews the captures in
-[`wave-g-assets/task45/`](../wave-g-assets/task45/) and the Task 44 before/after
-crops, then works down this list.
+[`wave-g-assets/task45/`](../wave-g-assets/task45/), the Task 44 before/after
+crops and the P1 before/after crops in
+[`wave-h-assets/p1/`](../wave-h-assets/p1/), then works down this list.
 
-- [x] The page opens with the shared header; the search box, the filter set, the
-      inactive toggle and the clear button sit in one bar.
+- [x] The page opens with the shared header; the search box, the inactive toggle
+      and the clear button sit in one bar (P1: the filter set is full width below).
 - [x] The matching count is a one-cell KPI band at the RTL start, not stretched
       across the content column.
 - [x] **Search:** typing narrows the count and the grid; a no-match needle shows
       the shared empty state.
 - [x] **Inactive toggle:** checking it reveals the four SCI base-year segments.
 - [x] **Clear:** the button resets the search and every filter to their defaults.
-- [x] **1280 px and 1024 px:** the four bar columns stay usable and the filter
-      widgets do not truncate their labels.
+- [x] **1280 px and 1024 px:** the bar columns stay usable and the filter widgets
+      do not truncate their labels.
 - [x] The grid stays sortable and its columns/values are unchanged; the LTR-grid
       limitation is understood (the id column is LTR inside the RTL page).
 - [x] **Row 22** — the shared filter set is a tall, narrow bar column — **is a
-      defect; fix it in Wave H P1** (not an accepted deviation).
+      defect; fixed in Wave H P1** (bar 555 → 61 px; filter set 251 → 1044 px).
 - [x] No element of the archetype is missing, and no page silently differs from
       the others.
 
 ## 9. What this gate unblocks
 
-Wave G closes on the owner's decision above. The one **defect** (row 22) does
-**not** block Wave H — it *is* a Wave H item: **P1** fixes the bar shape, and the
-Task 45 plan box is ticked only once P1 is verified (§10).
+Wave G is closed: the owner's decision is recorded and its one **defect** (row 22)
+is resolved by Wave H **P1** (§10). The Task 45 plan box is ticked.
 
 ## 10. Owner sign-off (recorded 2026-09-22)
 
@@ -227,4 +233,9 @@ The owner's decision, verbatim:
 - **The empty-catalog micro-deviation is accepted**, and P1 restores the
   toggle-before-empty-check order.
 
-**Owner sign-off: APPROVED, conditional on P1 (2026-09-22).**
+**P1 verified (2026-09-22).** The bar is 61 px tall with three weighted columns
+(513 / 339 / 165 px) and `render_filters` is full width (1044 px); the toggle
+renders on an empty catalog. The defect is resolved and the Task 45 plan box is
+ticked.
+
+**Owner sign-off: APPROVED (2026-09-22); P1 verified.**

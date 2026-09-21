@@ -642,6 +642,7 @@ def render_filter_bar(
     *,
     trailing: Sequence[Callable[[], None]] = (),
     key: str = "default",
+    weights: Sequence[float] | None = None,
 ) -> None:
     """Render one filter-bar layout over an arbitrary number of controls.
 
@@ -657,24 +658,38 @@ def render_filter_bar(
     mockup's row-count echo and density toggle). A spacer column between the two
     groups is the mockup's ``.grow``; it is added only when both groups are present.
 
+    ``weights`` optionally gives the leading ``controls`` proportional column
+    weights instead of the default equal widths (Wave H P1). The catalog page
+    hosts three simple controls — a wide search field and two narrower controls —
+    so equal thirds would waste the search field's width; the caller passes e.g.
+    ``weights=[3.0, 2.0, 1.0]``. The trailing group always keeps weight ``1.0``,
+    and the spacer keeps :data:`_FILTER_BAR_SPACER_WEIGHT`.
+
     Args:
         controls: Callables rendering the leading filter controls, in display order
         trailing: Callables rendering the controls pinned to the far end
         key: Suffix that makes the container key unique when a page renders more
             than one filter bar
+        weights: Optional proportional weights for ``controls``; ``None`` gives
+            every control an equal weight. Must match ``len(controls)``
 
     Raises:
-        ValueError: When neither group carries a control
+        ValueError: When neither group carries a control, or when ``weights`` does
+            not match the number of ``controls``
     """
     if not controls and not trailing:
         message = "render_filter_bar needs at least one control"
         raise ValueError(message)
-    weights = [1.0] * len(controls)
+    if weights is not None and len(weights) != len(controls):
+        message = "render_filter_bar weights must match the number of controls"
+        raise ValueError(message)
+    control_weights = [1.0] * len(controls) if weights is None else [float(w) for w in weights]
+    column_weights = list(control_weights)
     if controls and trailing:
-        weights.append(_FILTER_BAR_SPACER_WEIGHT)
-    weights += [1.0] * len(trailing)
+        column_weights.append(_FILTER_BAR_SPACER_WEIGHT)
+    column_weights += [1.0] * len(trailing)
     with st.container(key=f"filter-bar-{key}"):
-        columns = st.columns(weights, vertical_alignment="center")
+        columns = st.columns(column_weights, vertical_alignment="center")
         trailing_start = len(controls) + (1 if controls and trailing else 0)
         for column, control in zip(columns[: len(controls)], controls, strict=True):
             with column:
