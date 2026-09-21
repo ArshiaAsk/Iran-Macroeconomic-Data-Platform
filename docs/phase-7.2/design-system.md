@@ -166,7 +166,7 @@ needs no `unsafe_allow_html`.
 | `render_page_header` | `(title_key, *, callout_key=None, label_key=None, tone="warn")` | The one page-header pattern: a native `st.title` plus an optional callout (with an optional bold label, e.g. the methodology note). |
 | `render_callout` | `(key, *, tone="warn", label_key=None, detail=None, container_key=None, body=None)` | The mockup's callout as a native `st.warning`/`st.info`/`st.error`. |
 | `render_callout_stack` | `(callouts)` | A stack of callouts from `(catalog_key, tone)` pairs, each through `render_callout`. The D11 way to render a page's several caveats (the Market page's five TSETMC notes) under one `render_page_header`. |
-| `render_kpi_band` | `(cells, *, key="default")` | One bordered row of metric cells, with an optional separated secondary group. |
+| `render_kpi_band` | `(cells, *, key="default")` | One bordered row of metric cells, with an optional separated secondary group. A band with fewer than three cells is padded to the four-cell reference width (Step 0b). |
 | `render_section_header` | `(title_key, *, subtitle=None, trailing=None, key=None)` | A native `st.subheader` with optional secondary text, laid out as one baseline-aligned row. |
 | `render_filter_bar` | `(controls, *, trailing=(), key="default")` | One filter-bar row over an arbitrary number of control callables. |
 | `render_status_chip` | `(status)` | A standalone collection-run chip (`st.badge`), for use **outside** tables. |
@@ -223,6 +223,18 @@ if frame.empty:
   for standalone use.
 - **The page header emits no keyed class of its own** — `st.title` already takes
   the theme's heading font and size, and the optional callout brings its own hook.
+- **A small KPI band keeps the full-band cell width (Step 0b).** `render_kpi_band`
+  takes its `st.columns` spec from `kpi_band_column_weights`, not from
+  `kpi_column_weights` directly. A band with fewer than three cells appends one
+  **empty spacer column** so the cells keep the width they would have in the
+  reference four-cell band, aligned to the RTL start (the spacer takes the far
+  end). Without it a lone cell stretches across the whole content column: the
+  Market one-cell band measured **1042 px of a 1044 px band (99.8 %)** before,
+  **253.5 px (24.3 %, one quarter)** after. A band of three or more cells is
+  returned unchanged, so every full band is byte-identical. The padding is a pure
+  column-weight spec (`kpi_band_column_weights`, unit-tested in the style of
+  `kpi_column_weights`); `render_kpi_band` renders the spacer empty and only the
+  leading `len(cells)` columns carry a cell.
 
 ### 4.2 Tables — `components/html_table.py`
 

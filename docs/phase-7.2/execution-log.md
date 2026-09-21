@@ -2790,3 +2790,28 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   suite.
 - **Deviations:** none.
 - **Commit:** Step 0a commit.
+
+## Wave F — Step 0b (single-cell KPI band review)
+
+- **Files:** `dashboard/components/layout.py` (new `kpi_band_column_weights` +
+  `_KPI_SMALL_BAND_THRESHOLD`/`_KPI_REFERENCE_UNITS`; `render_kpi_band` uses it and
+  renders the padding column empty), `tests/unit/dashboard/test_layout.py` (+4
+  tests), `docs/phase-7.2/design-system.md` §4.1 (single-cell behaviour),
+  `docs/phase-7.2/wave-f-assets/step-0b/` (before/after crops).
+- **Measurement (fresh server, 1440×900, commit `2c16584` before / this commit
+  after):** the Market one-cell band (`kpi-band-market-level`) cell measured
+  **1042.0 px of a 1044.0 px band = 99.8 %** (visibly stretched, value pinned to
+  the far right of an otherwise empty band). The Overview six-cell band's primary
+  cell measures **143.8 px = 13.8 %**. After the fix the lone cell is **253.5 px =
+  24.3 %** — the reference four-cell band's cell width (¼), aligned to the RTL
+  start; the appended spacer takes the far end.
+- **Rule:** a band with fewer than three cells keeps the cells at the four-cell
+  reference width by appending one empty spacer column (`kpi_band_column_weights`
+  → `[1.0, 3.0]` for one cell, `[1.0, 1.0, 2.0]` for two). Three or more cells are
+  returned unchanged, so the Overview band is byte-identical.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_layout.py
+  tests/unit/dashboard/test_app_market.py tests/unit/dashboard/test_layout_guard.py
+  tests/unit/dashboard/test_design_system_doc.py -q --no-cov` → **98 passed**
+  (`test_layout.py` 63, was 59; +4). No existing assertion changed.
+- **Deviations:** none.
+- **Commit:** Step 0b commit.

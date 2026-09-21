@@ -55,6 +55,7 @@ __all__ = [
     "STATUS_CHIP_FALLBACK",
     "BarRow",
     "KpiCell",
+    "kpi_band_column_weights",
     "kpi_column_weights",
     "render_bar_list",
     "render_callout",
@@ -364,6 +365,44 @@ def kpi_column_weights(cells: Sequence[KpiCell]) -> list[float]:
     return [_KPI_SECONDARY_WEIGHT if cell.secondary else _KPI_PRIMARY_WEIGHT for cell in cells]
 
 
+#: A band with fewer than this many cells is padded to the reference width, so a
+#: lone (or two-cell) band's cells keep the width they would have in a full band
+#: instead of stretching across the whole content column.
+_KPI_SMALL_BAND_THRESHOLD: Final[int] = 3
+
+#: The reference width of a full primary band, in primary-cell units. The mockup's
+#: band is a four-cell row, so a padded cell is one quarter of the band.
+_KPI_REFERENCE_UNITS: Final[float] = 4.0 * _KPI_PRIMARY_WEIGHT
+
+
+def kpi_band_column_weights(cells: Sequence[KpiCell]) -> list[float]:
+    """Full ``st.columns`` spec for a KPI band, padding a small band's width.
+
+    A band with fewer than :data:`_KPI_SMALL_BAND_THRESHOLD` cells would otherwise
+    stretch its cells across the whole content column (a one-cell band measured
+    99.8 % of the band). The cells are therefore kept at the width they would have
+    in a full four-cell band by appending an **empty spacer column** for the
+    remaining units; the cells stay at the RTL start (the right edge) and the
+    spacer takes the far end. A band of three or more cells is returned unchanged,
+    so every existing band is byte-identical.
+
+    The padding is a pure column-weight spec: :func:`render_kpi_band` renders the
+    spacer columns empty and only the first ``len(cells)`` columns carry a cell.
+
+    Args:
+        cells: One :class:`KpiCell` per band column, in display order
+
+    Returns:
+        One positive weight per rendered column: one per cell, plus a single
+        trailing spacer weight when the band is padded
+    """
+    weights = kpi_column_weights(cells)
+    if len(cells) >= _KPI_SMALL_BAND_THRESHOLD:
+        return weights
+    spacer = _KPI_REFERENCE_UNITS - sum(weights)
+    return [*weights, spacer] if spacer > 0 else weights
+
+
 def render_kpi_band(cells: Sequence[KpiCell], *, key: str = "default") -> None:
     """Render the reusable KPI band (D2) as one bordered row of metric cells.
 
@@ -373,8 +412,11 @@ def render_kpi_band(cells: Sequence[KpiCell], *, key: str = "default") -> None:
     separator, drawn by the ``:has()`` rule in :mod:`dashboard.components.direction`).
     Secondary cells also take the mockup's wider ``flex: 1.35`` weight through
     :func:`kpi_column_weights`, so the derived/orphan pair is visibly wider than a
-    primary cell. Cell sizing comes from the theme (``metricValueFontSize`` and
-    friends), so no component sets a font-size literal.
+    primary cell. A band with fewer than three cells is padded to the reference
+    four-cell width through :func:`kpi_band_column_weights`, so a lone cell is not
+    stretched across the content column. Cell sizing comes from the theme
+    (``metricValueFontSize`` and friends), so no component sets a font-size
+    literal.
 
     The CSS hook is the per-cell keyed container,
     ``kpi-<band key>-<group>-<index>-tone-<tone>``: the group and index make the
@@ -396,9 +438,11 @@ def render_kpi_band(cells: Sequence[KpiCell], *, key: str = "default") -> None:
         message = "render_kpi_band needs at least one cell"
         raise ValueError(message)
     with st.container(border=True, key=f"kpi-band-{key}"):
-        columns = st.columns(kpi_column_weights(cells))
+        columns = st.columns(kpi_band_column_weights(cells))
         group_indexes: dict[str, int] = {}
-        for column, cell in zip(columns, cells, strict=True):
+        # Only the leading columns carry a cell; a padded band's trailing column
+        # is the empty spacer that keeps the cells at the reference width.
+        for column, cell in zip(columns[: len(cells)], cells, strict=True):
             tone = _validated(cell.tone, KPI_TONES, "kpi")
             group = "secondary" if cell.secondary else "primary"
             index = group_indexes.get(group, 0)

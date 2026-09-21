@@ -19,6 +19,7 @@ from dashboard.components.layout import (
     STATUS_CHIPS,
     BarRow,
     KpiCell,
+    kpi_band_column_weights,
     kpi_column_weights,
     render_bar_list,
     status_chip_cell,
@@ -393,6 +394,46 @@ def test_kpi_column_weights_default_every_cell_to_primary() -> None:
     cells = [KpiCell("metric.sources", "۷"), KpiCell("metric.domains", "۹")]
 
     assert kpi_column_weights(cells) == [1.0, 1.0]
+
+
+def test_kpi_band_column_weights_pads_a_lone_cell_to_a_quarter() -> None:
+    """Step 0b: a one-cell band keeps a full band's cell width, not the column."""
+    cells = [KpiCell("metric.market_sessions", "۱۱")]
+
+    # The cell keeps the four-cell reference width; the trailing spacer takes the
+    # remaining three units and lands at the RTL far end.
+    assert kpi_band_column_weights(cells) == [1.0, 3.0]
+
+
+def test_kpi_band_column_weights_pads_a_two_cell_band() -> None:
+    cells = [KpiCell("metric.sources", "۷"), KpiCell("metric.domains", "۹")]
+
+    assert kpi_band_column_weights(cells) == [1.0, 1.0, 2.0]
+
+
+def test_kpi_band_column_weights_leaves_a_full_band_unchanged() -> None:
+    """Three or more cells are returned byte-identical, so no band regresses."""
+    cells = [
+        KpiCell("metric.sources", "۷"),
+        KpiCell("metric.domains", "۹"),
+        KpiCell("metric.derived_series", "۳۲", secondary=True),
+        KpiCell("metric.orphan_series", "۳۲", secondary=True),
+    ]
+
+    assert kpi_band_column_weights(cells) == kpi_column_weights(cells)
+    assert kpi_band_column_weights(cells) == [1.0, 1.0, 1.35, 1.35]
+
+
+def test_kpi_band_renders_a_lone_cell_with_an_empty_spacer_column() -> None:
+    """The spacer column is empty; only the cell column carries a metric."""
+    app = _run(
+        "from dashboard.components.layout import KpiCell, render_kpi_band\n"
+        'render_kpi_band([KpiCell("metric.market_sessions", "۱۱")], key="solo")\n'
+    )
+
+    assert not app.exception
+    assert len(app.metric) == 1
+    assert app.metric[0].label == t("metric.market_sessions")
 
 
 def test_kpi_band_renders_a_mixed_band_with_the_secondary_weights() -> None:
