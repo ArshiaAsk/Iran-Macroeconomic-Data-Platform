@@ -8,18 +8,29 @@ It does not call raw ``st.title``, ``st.metric``, ``st.warning``/``st.info``/
 ``st.error``, or ``unsafe_allow_html`` where a shared component exists.
 
 This guard is the static half of that contract, modelled on
-``test_literal_guard.py``. Two decisions are load-bearing:
+``test_literal_guard.py``. Three decisions are load-bearing:
 
 - **Function-scoped, not file-scoped.** Every page composition lives in one large
   module (AM-14), so ``MIGRATED_PAGES`` maps module → migrated *function names*
   and grows once per wave. A function that is not listed is not checked, which is
-  what lets the migration land page by page without a flag day.
+  what lets the migration land page by page without a flag day. The final wave
+  (Task 46) closes the coverage gap the function scope leaves open with two
+  completeness tests instead of switching to file scope: every registered page's
+  delegate function must be listed (:func:`test_every_registered_page_delegates_to_a_migrated_function`),
+  and every function in a migrated module that renders must be listed
+  (:func:`test_the_mapping_covers_every_render_function`). A deliberate raw
+  ``st.title`` therefore fails whether it lands in a listed function, in a new
+  render function, or in a page module.
 - **The whitelist is the shared-component modules, not the page modules.** The
   components must call the banned APIs themselves — ``render_callout`` *is* a
   ``st.warning`` — so scanning them would report the contract's own
   implementation. The whitelist is pinned against the design-system document by
   :func:`test_the_whitelist_matches_the_design_system_contract`, so the two cannot
   drift apart.
+- **The page modules are thin delegates.** No page module holds a function or
+  calls Streamlit itself; each imports one ``page_view`` composition and calls it
+  (:func:`test_all_page_modules_are_thin_delegates`). That is what makes the
+  function scope sufficient: there is nowhere else for a raw call to hide.
 """
 
 import ast
@@ -30,6 +41,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
+from dashboard.navigation import PAGES
 from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT
 
 DESIGN_SYSTEM_DOC: Final[Path] = REPOSITORY_ROOT / "docs" / "phase-7.2" / "design-system.md"
@@ -75,6 +87,7 @@ MIGRATED_PAGES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
                 "_render_market_notes",
                 "_render_market_level",
                 "_render_market_derived_panels",
+                "_render_market_figure_and_rows",
                 # A4 — the comparison / correlation page (Wave F, Task 42).
                 "render_correlation_page",
                 # A5 — the data catalog page (Wave G, Task 44).
@@ -84,18 +97,11 @@ MIGRATED_PAGES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     }
 )
 
-#: The four A2 page modules (GDP & Economy, Trade & Energy, FX & Gold, Labor).
-#: Each is a **thin delegate**: no function of its own, one call to a migrated
-#: ``page_view`` composition function, and no direct Streamlit call. The guard
-#: below is function-scoped, so it has nothing to inspect inside them; these two
-#: tests pin the invariant that makes that safe -- a page module that grows a
-#: function or reaches for Streamlit itself is a composition the guard is not
-#: covering.
-A2_PAGE_MODULES: Final[tuple[str, ...]] = (
-    "dashboard/pages/3_GDP_Economy.py",
-    "dashboard/pages/4_Trade_Welfare_Energy.py",
-    "dashboard/pages/5_FX_Gold.py",
-    "dashboard/pages/10_Labor.py",
+#: The ten registered pages as ``(key, module path)``, derived from the router
+#: registry so coverage is pinned to the sidebar: a page added to ``PAGES`` is
+#: covered by the completeness tests below with no second list to remember.
+PAGE_MODULES: Final[tuple[tuple[str, str], ...]] = tuple(
+    (spec.key, f"dashboard/{spec.path}") for spec in PAGES
 )
 
 #: Modules that own the contract's implementation and therefore must call the
@@ -191,6 +197,49 @@ def contract_modules() -> set[str]:
     return {f"dashboard/{match}" for match in re.findall(r"components/[a-z_]+\.py", section)}
 
 
+def top_level_functions(source: str) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Every top-level function in a module, by name."""
+    return {
+        node.name: node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+
+
+def _is_render_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Whether a function renders: it calls Streamlit, or another render function."""
+    for call in ast.walk(node):
+        if not isinstance(call, ast.Call):
+            continue
+        func = call.func
+        if (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "st"
+        ):
+            return True
+        if isinstance(func, ast.Name) and func.id.startswith(("render_", "_render")):
+            return True
+    return False
+
+
+def render_functions(module: str) -> set[str]:
+    """The render functions in a migrated module (the ones the guard must list)."""
+    source = (REPOSITORY_ROOT / module).read_text("utf-8")
+    return {name for name, node in top_level_functions(source).items() if _is_render_function(node)}
+
+
+def delegated_calls(source: str) -> set[str]:
+    """The bare function names a thin page module calls at module scope."""
+    return {
+        node.value.func.id
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+    }
+
+
 def test_no_layout_violation_in_a_migrated_function() -> None:
     findings = [
         finding
@@ -233,39 +282,109 @@ def test_the_guard_covers_the_a2_archetype() -> None:
     assert migrated <= declared
 
 
-def test_the_four_a2_page_modules_are_thin_delegates() -> None:
-    """A page module holds no function and calls no Streamlit display API.
+def test_all_page_modules_are_thin_delegates() -> None:
+    """Every registered page module holds no function and calls no Streamlit API.
 
     The guard is function-scoped, so it cannot inspect a module whose whole body
     is one call to a migrated composition function. This test is what makes that
     safe: it fails if a page module grows a composition of its own, which the
     guard would then not be covering.
     """
-    for module in A2_PAGE_MODULES:
+    assert len(PAGE_MODULES) == 10
+    for key, module in PAGE_MODULES:
         source = (REPOSITORY_ROOT / module).read_text("utf-8")
         tree = ast.parse(source)
 
         assert not [
             node for node in tree.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-        ], module
+        ], key
         assert not [
             node
             for node in ast.walk(tree)
             if isinstance(node, ast.Attribute)
             and isinstance(node.value, ast.Name)
             and node.value.id == "st"
-        ], module
+        ], key
         assert find_layout_violations(source, module=module) == []
-        # The module composes through exactly one migrated entry point.
-        called = {
-            node.value.func.id
-            for node in tree.body
-            if isinstance(node, ast.Expr)
-            and isinstance(node.value, ast.Call)
-            and isinstance(node.value.func, ast.Name)
-        }
-        assert len(called) == 1, module
-        assert called <= MIGRATED_PAGES["dashboard/page_view.py"], module
+        # The module composes through exactly one entry point.
+        assert len(delegated_calls(source)) == 1, key
+
+
+def test_every_registered_page_delegates_to_a_migrated_function() -> None:
+    """Task 46: the guard covers all ten pages, one delegate each.
+
+    Every registered page's module must call exactly one composition function and
+    that function must be in ``MIGRATED_PAGES``. This is the registry-completeness
+    check: a new page (or a re-pointed delegate) is a failure until the guard
+    covers its composition.
+    """
+    migrated = MIGRATED_PAGES["dashboard/page_view.py"]
+    covered: dict[str, str] = {}
+
+    for key, module in PAGE_MODULES:
+        called = delegated_calls((REPOSITORY_ROOT / module).read_text("utf-8"))
+        assert len(called) == 1, (key, called)
+        (entry,) = called
+        assert entry in migrated, (key, entry)
+        covered[key] = entry
+
+    # Not vacuous: ten pages, and every composition entry point is exercised.
+    assert len(covered) == 10
+    assert set(covered.values()) == {
+        "render_overview_page",
+        "render_correlation_page",
+        "render_catalog_page",
+        "render_inflation_page",
+        "render_domain_page",
+        "render_welfare_page",
+        "render_fx_gold_page",
+        "render_market_page",
+        "render_labor_page",
+    }
+
+
+def test_the_mapping_covers_every_render_function() -> None:
+    """No render function in a migrated module is left unguarded (Task 46).
+
+    The function scope means an *unlisted* function is not checked. This closes
+    that gap by requiring the map to equal the module's actual render functions:
+    a new render function, or a raw ``st`` call that makes a helper a render
+    function, fails until it is listed.
+    """
+    module = "dashboard/page_view.py"
+
+    assert MIGRATED_PAGES[module] == render_functions(module)
+
+
+def test_the_mapping_has_no_stale_entries() -> None:
+    """Every mapped name is a real top-level function in its module."""
+    for module, names in MIGRATED_PAGES.items():
+        declared = set(top_level_functions((REPOSITORY_ROOT / module).read_text("utf-8")))
+
+        assert names <= declared, (module, names - declared)
+
+
+def test_render_function_detection_flags_a_raw_streamlit_call() -> None:
+    """A deliberate raw ``st.title`` in a new function is caught by completeness.
+
+    ``render_functions`` is what :func:`test_the_mapping_covers_every_render_function`
+    compares against, so a new function that calls Streamlit is reported and the
+    mapping must list it.
+    """
+    node = top_level_functions(
+        "import streamlit as st\ndef render_new_page() -> None:\n    st.title('x')\n"
+    )["render_new_page"]
+
+    assert _is_render_function(node)
+
+
+def test_render_function_detection_ignores_a_pure_helper() -> None:
+    """A function that neither calls Streamlit nor renders is not a render function."""
+    node = top_level_functions("def total(values: list[int]) -> int:\n    return sum(values)\n")[
+        "total"
+    ]
+
+    assert not _is_render_function(node)
 
 
 def test_guard_flags_a_raw_metric_in_a_migrated_function() -> None:

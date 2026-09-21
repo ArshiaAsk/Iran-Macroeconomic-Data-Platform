@@ -3162,3 +3162,52 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   run exposed the floor artifact; it is within P4's scope (the flag must capture
   the true page height).
 - **Commit:** P4 commit.
+
+## Task 46 — (H) ENABLE the consistency guard for all pages
+
+- **Files:** `tests/unit/dashboard/test_layout_guard.py`,
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Task 46 boxes ticked).
+- **Scope decision — function-scoped, kept (not switched to file-scoped).** The
+  guard maps module → migrated *function names* and scans only those. The final
+  wave closes the coverage gap the function scope leaves open with **two
+  completeness tests** rather than widening the scan to whole files (which would
+  report the shared components' own implementation — `render_callout` *is* a
+  `st.warning`):
+  - `test_every_registered_page_delegates_to_a_migrated_function` — registry
+    completeness: for each of the ten `PAGES` rows, the page module calls exactly
+    one composition and that function is in `MIGRATED_PAGES` (and all nine
+    distinct entry points are exercised).
+  - `test_the_mapping_covers_every_render_function` — module completeness:
+    `MIGRATED_PAGES["dashboard/page_view.py"]` **equals** the set of top-level
+    functions in `page_view.py` that render (call `st.*` or another
+    `render_*`/`_render*`).
+  With these, a deliberate raw `st.title` fails wherever it lands: in a listed
+  function (`find_layout_violations`), in a new render function (module
+  completeness), or in a page module (`test_all_page_modules_are_thin_delegates`).
+- **Mapping completed.** Added the one missing render function,
+  `_render_market_figure_and_rows` (it calls `st.plotly_chart`/`st.expander` and
+  the migrated `_render_capped_rows`). The map is now **23 = 23**: no gaps
+  (`render_functions - listed == ∅`) and no stale entries
+  (`listed - render_functions == ∅`), verified live.
+- **Generalised the thin-delegate invariant.** The old
+  `test_the_four_a2_page_modules_are_thin_delegates` (four A2 modules) is now
+  `test_all_page_modules_are_thin_delegates` over all ten registry rows: no
+  function def, no `st.` attribute, no layout violation, exactly one delegate
+  call.
+- **New synthetic tests:** `test_the_mapping_has_no_stale_entries`,
+  `test_render_function_detection_flags_a_raw_streamlit_call`,
+  `test_render_function_detection_ignores_a_pure_helper`. The existing synthetic
+  banned-call tests (`test_guard_flags_a_raw_metric_in_a_migrated_function`,
+  `test_guard_flags_every_banned_call`, the whitelist/outside-function tests) are
+  unchanged.
+- **No false positives.** The guard only inspects `st.{title,metric,warning,info,error}`
+  and the `unsafe_allow_html` keyword, so data-level English values never trigger
+  it. The literal guard already owns the data-level case via its documented
+  allowlist (`test_allowlist_accepts_a_documented_data_level_value`) and stays
+  green.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_layout_guard.py -q
+  --no-cov` → **17 passed**; full dashboard subset → **657 passed** (was 652);
+  `mypy tests/unit/dashboard/test_layout_guard.py` → clean.
+- **Deviations:** none. The function-scoped design and its justification are
+  recorded in the guard module's docstring.
+- **Commit:** Task 46 commit.

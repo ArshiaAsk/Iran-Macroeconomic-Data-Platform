@@ -1179,8 +1179,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 33, 34, 36, 38–40, 42, 44.
 - **Acceptance:**
-  - [ ] Guard enforces all ten pages; a deliberate raw `st.title` anywhere fails the test.
-  - [ ] No mapping entries remain except the migrated functions.
+  - [x] Guard enforces all ten pages; a deliberate raw `st.title` anywhere fails the test.
+  - [x] No mapping entries remain except the migrated functions.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout_guard.py -q`.
 
 ### 47. (H) WRITE the validation record and refresh the README
