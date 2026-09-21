@@ -737,27 +737,66 @@ def render_catalog_page(repository: DashboardRepository | None = None) -> None:
     layer rather than in the catalog. The SQL ``search`` path is exercised for
     catalog columns and unioned with the label-layer match, so neither path can
     hide a row the other would find.
+
+    The page opens with ``render_page_header`` and hosts its controls — the search
+    box, the shared filter set, the inactive-segment toggle and the clear button —
+    in one ``render_filter_bar``. The toggle's current value is read from
+    ``st.session_state`` **before** the bar renders (the Overview coverage bar's
+    pattern), so the catalog frame the count and grid describe is the one the
+    toggle describes in the same run; the controls write the same keys back. Every
+    widget key, the clear button's ``on_click`` callback and the reset key list are
+    unchanged. The matching count is a one-cell ``render_kpi_band``; the grid stays
+    a native ``st.dataframe`` (D1, sortable, LTR grid) with the shared density
+    ``row_height``; an empty search result is the shared ``render_empty`` state.
     """
-    st.title(t("page.catalog"))
-    include_inactive = st.checkbox(
-        t("filter.include_inactive_segments"),
-        key="catalog_include_inactive",
-    )
+    render_page_header("page.catalog")
+    include_inactive = bool(st.session_state.get("catalog_include_inactive", False))
     active_only = not include_inactive
     catalog = _catalog_frame(repository, active_only=active_only)
     if catalog.empty:
-        st.info(t("empty.catalog_empty"))
+        render_empty("empty.catalog_empty")
         return
-    filters = render_filters(catalog, "catalog")
-    st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
-    needle = st.text_input(t("filter.search"), key="catalog_search")
+
+    # ``render_filters`` returns the selection; the control callable stashes it so
+    # the count and grid can use it after the bar has rendered.
+    selection: dict[str, FilterState] = {}
+
+    def search_control() -> None:
+        st.text_input(t("filter.search"), key="catalog_search")
+
+    def filters_control() -> None:
+        selection["filters"] = render_filters(catalog, "catalog")
+
+    def inactive_control() -> None:
+        st.checkbox(
+            t("filter.include_inactive_segments"),
+            key="catalog_include_inactive",
+        )
+
+    def clear_control() -> None:
+        st.button(t("filter.clear"), key="catalog_clear_filters", on_click=_clear_catalog_filters)
+
+    render_filter_bar(
+        [search_control, filters_control, inactive_control, clear_control],
+        key="catalog",
+    )
+    filters = selection["filters"]
+    needle = str(st.session_state.get("catalog_search", ""))
     result = _apply_catalog_filters(catalog, filters)
     if needle.strip():
         result = _apply_catalog_search(result, catalog, needle, repository, active_only)
-    st.metric(t("metric.matching_indicators"), format_number(len(result)))
+    render_kpi_band(
+        [KpiCell("metric.matching_indicators", format_number(len(result)))],
+        key="catalog",
+    )
     if needle.strip() and result.empty:
-        st.info(t("empty.search_no_match"))
-    st.dataframe(localize_table_frame(result), use_container_width=True, hide_index=True)
+        render_empty("empty.search_no_match")
+    st.dataframe(
+        localize_table_frame(result),
+        use_container_width=True,
+        hide_index=True,
+        row_height=OBSERVATIONS_ROW_HEIGHT,
+    )
 
 
 def _catalog_frame(

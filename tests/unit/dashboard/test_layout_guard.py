@@ -77,6 +77,8 @@ MIGRATED_PAGES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
                 "_render_market_derived_panels",
                 # A4 — the comparison / correlation page (Wave F, Task 42).
                 "render_correlation_page",
+                # A5 — the data catalog page (Wave G, Task 44).
+                "render_catalog_page",
             }
         ),
     }

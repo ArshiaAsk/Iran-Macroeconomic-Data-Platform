@@ -447,7 +447,7 @@ table (`render_html_table`); a table that must sort, scroll or scale is a
 | Survey-year panel (welfare) | 2 | small/static | HTML table |
 | Chain-linking provenance (inflation) | ~3 | small/static | HTML table |
 | Quality summary (all domain pages) | = indicator count | small/static | HTML table (`coverage` variant) |
-| Catalog (catalog) | 50–54 | sortable | `st.dataframe` |
+| Catalog (catalog) | 50–54 | sortable | `st.dataframe` (theme only; shared `row_height`; **LTR grid**) |
 | Observations (all domain pages) | capped 500 (underlying up to ~20 074) | large/scrollable | `st.dataframe` |
 | Join counts (correlation) | N×N | matrix | `st.dataframe` |
 | Overlap summary (correlation) | N | small/sortable | `st.dataframe` |
@@ -456,6 +456,14 @@ table (`render_html_table`); a table that must sort, scroll or scale is a
 cannot express a status dot, a tone chip, a mono LTR id beneath a name, or a
 date/time/age stack. The HTML table can, and pays for it with `st.html`
 invisibility to `AppTest`.
+
+**The catalog grid (Task 44).** The catalog keeps the native `st.dataframe` (a
+sortable 50–54-row grid) with the theme only — no `column_config` is needed,
+because `localize_table_frame` already produces display-ready columns — and the
+shared `OBSERVATIONS_ROW_HEIGHT` density. It therefore keeps the **LTR grid**:
+the indicator id column stays left-to-right inside an otherwise RTL page. That is
+the documented D1 limitation, not a defect; converting the grid to the HTML table
+would lose sorting and the column-header menu.
 
 **The typed-cell model.** A cell is one of six frozen dataclasses, so a cell's kind
 is checked by the type checker rather than by a format string:

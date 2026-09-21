@@ -2,6 +2,7 @@
 
 from streamlit.testing.v1 import AppTest
 
+from dashboard.formatting import format_number
 from dashboard.i18n import t
 from tests.unit.dashboard.app_smoke import (
     INACTIVE_SEGMENT_IDS,
@@ -114,3 +115,32 @@ def test_catalog_clear_filters_resets_the_search(fake_streamlit_connection) -> N
     assert not app.exception
     assert app.text_input(key="catalog_search").value == ""
     assert len(_indicator_ids(app)) > 1
+
+
+def test_catalog_matching_count_is_a_kpi_band_cell(fake_streamlit_connection) -> None:
+    """Task 44: the matching count is a one-cell KPI band, label and value unchanged."""
+    app = app_test("7_Data_Catalog.py")
+    app.run()
+
+    assert not app.exception
+    assert [metric.label for metric in app.metric] == [t("metric.matching_indicators")]
+    # The value still counts the rows the grid shows.
+    assert app.metric[0].value == format_number(len(_grid(app)))
+
+
+def test_catalog_hosts_every_control_in_the_filter_bar(fake_streamlit_connection) -> None:
+    """Task 44: search, the shared filter set, the toggle and clear all render.
+
+    ``AppTest`` cannot see the bar's keyed container, so the migration is pinned
+    by asserting every hosted control is present in one run — a hosting refactor
+    that dropped or renamed a widget would fail here.
+    """
+    app = app_test("7_Data_Catalog.py")
+    app.run()
+
+    assert not app.exception
+    assert app.text_input(key="catalog_search").value == ""
+    assert app.checkbox(key="catalog_include_inactive").value is False
+    assert app.button(key="catalog_clear_filters") is not None
+    for key in ("catalog_domains", "catalog_frequencies", "catalog_sources", "catalog_indicators"):
+        assert app.multiselect(key=key) is not None, key

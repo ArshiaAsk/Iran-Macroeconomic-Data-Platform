@@ -2913,3 +2913,45 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Verify:** docs-only; no test run.
 - **Deviations:** none.
 - **Commit:** Step 0c commit.
+
+## Wave G — Task 44 (migrate the catalog page)
+
+- **Files:** `dashboard/page_view.py` (`render_catalog_page`),
+  `tests/unit/dashboard/test_app_catalog.py` (+2 tests), 
+  `tests/unit/dashboard/test_layout_guard.py` (`MIGRATED_PAGES` + A5),
+  `docs/phase-7.2/design-system.md` §8 (catalog grid: LTR limitation + density),
+  `docs/phase-7.2/wave-g-assets/task-44/` (before/after top, grid; full-height
+  after).
+- **Build:** `render_page_header("page.catalog")` replaces the raw `st.title`.
+  The search box, the shared filter set (`render_filters`), the inactive-segment
+  toggle and the clear button are hosted by one `render_filter_bar`
+  (`[search, filters, inactive, clear]`, four equal columns). The toggle's value
+  is read from `st.session_state` **before** the bar renders (the Overview
+  coverage bar's pattern), so the catalog frame the count and grid describe is the
+  one the toggle describes in the same run; the controls write the same keys back.
+  Every widget key (`catalog_search`, `catalog_include_inactive`,
+  `catalog_clear_filters`, `catalog_*` filter keys), the clear button's `on_click`
+  callback and `CATALOG_FILTER_STATE_KEYS` are unchanged. The matching count is a
+  one-cell `render_kpi_band` (label `metric.matching_indicators`, value unchanged;
+  the Step 0b padding gives the lone cell the reference width). The grid stays a
+  native `st.dataframe` (theme only, sortable, LTR grid documented in §8) with
+  `row_height=OBSERVATIONS_ROW_HEIGHT`; the no-match state is `render_empty`.
+- **Changed assertions:** **none.** Every existing `test_app_catalog.py`
+  assertion passes unchanged: the grid columns/values, the inactive toggle, the
+  four search cases and the clear-reset test all hold. **Added** two tests for the
+  new surface — `test_catalog_matching_count_is_a_kpi_band_cell` (the KPI cell) and
+  `test_catalog_hosts_every_control_in_the_filter_bar` (every hosted control
+  renders; `AppTest` cannot see the bar's keyed container).
+- **Recorded micro-deviation:** on an **empty catalog** the inactive toggle no
+  longer renders, because the early `render_empty` return precedes the bar (the
+  original rendered the checkbox before its empty check). The catalog is never
+  empty in practice and no test covers it; the toggle's key, callback and default
+  are unchanged.
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_app_catalog.py
+  tests/unit/dashboard/test_layout_guard.py tests/unit/dashboard/test_literal_guard.py
+  tests/unit/dashboard/test_design_system_doc.py
+  tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` → **51 passed**
+  (`test_app_catalog.py` 11, was 9; +2).
+- **Deviations:** the tall shared filter set now sits in a narrow bar column (a
+  layout observation recorded for the owner in the Task 45 review).
+- **Commit:** Task 44 commit.

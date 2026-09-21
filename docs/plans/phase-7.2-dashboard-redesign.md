@@ -1140,8 +1140,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `filter.search`, `filter.clear`, `filter.include_inactive_segments`, `metric.matching_indicators`.
 - **Depends:** Tasks 19–22, 34.
 - **Acceptance:**
-  - [ ] Search/filter/clear behaviour and results unchanged.
-  - [ ] Guard enabled for the catalog functions.
+  - [x] Search/filter/clear behaviour and results unchanged.
+  - [x] Guard enabled for the catalog functions.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_catalog.py tests/unit/dashboard/test_layout_guard.py -q`.
 
 ### 45. (G) OWNER VISUAL REVIEW — catalog
