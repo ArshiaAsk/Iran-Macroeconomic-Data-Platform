@@ -3050,3 +3050,42 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** the bar's `weights` parameter is a small additive component
   change (defaults to equal widths); the plan's P1 wording anticipated it.
 - **Commit:** P1 commit.
+
+## Wave H — P2 (caption direction, F5; own commit)
+
+- **Files:** `dashboard/components/direction.py` (new shell rule
+  `main_block_caption`; the scoped `coverage_footnote` selector + rule removed),
+  `tests/unit/dashboard/test_direction.py` (+1 test),
+  `tests/unit/dashboard/test_app_overview.py` (the footnote hook test now asserts
+  the shell rule), `docs/phase-7.2/design-system.md` (§14 row → resolved by P2),
+  `docs/phase-7.2/wave-h-assets/p2/{before,after}/` (ten pages each).
+- **Build:** one shell-level rule scoped to the main block —
+  `[data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"] { direction: rtl; text-align: start; }`
+  — makes every caption in the main block read RTL. It replaces the Task 32
+  scoped `coverage_footnote` hook, which it **fully covers** (the Overview
+  footnote is byte-identical before/after). The sidebar is not inside
+  `stMainBlockContainer`, so its captions are untouched.
+- **Pages whose captions moved (live DOM, 1440 px):** **correlation, catalog,
+  inflation, gdp, trade_energy, welfare, fx_gold, market, labor** — the
+  `filter.applied_range` echo on each (x 326 LTR → x ≈850–892 RTL; `text-align`
+  `left` → `start`). The **Overview** is the only page whose caption did **not**
+  move (it was already RTL via the scoped hook; the declaration changed from
+  `right` to `start`, which both resolve to the right edge). Market's caption sits
+  at y = 1059 (below the 900 px viewport), so it moved in the DOM but not in the
+  viewport capture.
+- **Pixel diff (viewport, before → after):** overview **0 px**; the other nine
+  differ only in a single ~14 px-tall caption strip (x 326–1370): correlation /
+  inflation / gdp / trade_energy 5165 px (0.40 %), catalog 5165 px, welfare
+  5165 px, labor 5613 px, fx_gold 5845 px; market 0 px in the viewport (its
+  caption is below the fold).
+- **Latin/number captions:** no caption in the UI is a pure Latin/number string
+  (the four `st.caption` call sites are all Persian or Persian+Latin). The
+  mixed-script `filter.applied_range` echo was checked in a crop: the Latin/UTC
+  tokens (`2026-09-10 تا 2026-09-11`) stay LTR inside the RTL line and read
+  correctly (`wave-h-assets/p2/after/fx_gold.png`).
+- **Verify:** `poetry run pytest tests/unit/dashboard/test_direction.py
+  tests/unit/dashboard/test_app_overview.py tests/unit/dashboard/test_layout.py
+  tests/unit/dashboard/test_literal_guard.py -q --no-cov` → **154 passed**.
+- **Deviations:** the `coverage_footnote` selector was **removed** (P2 says to
+  remove it only if the shell rule fully covers it — verified byte-identical).
+- **Commit:** P2 commit.

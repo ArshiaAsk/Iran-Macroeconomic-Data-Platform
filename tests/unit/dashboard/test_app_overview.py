@@ -744,10 +744,15 @@ def test_overview_coverage_footnote_explains_the_gregorian_calendar(
 
 
 def test_overview_coverage_footnote_declares_the_rtl_context() -> None:
-    """A native `st.caption` inherits the LTR main block, so it needs the hook."""
+    """A native `st.caption` inherits the LTR main block, so it needs the hook.
+
+    Wave H P2 replaced the coverage-only hook with the shell-level
+    `main_block_caption` rule, so this asserts the shell rule (which covers the
+    footnote) rather than the retired scoped selector.
+    """
     css = direction_css()
 
-    assert f'{CSS_SELECTORS["coverage_footnote"]} {{ direction: rtl; text-align: right; }}' in css
+    assert f'{CSS_SELECTORS["main_block_caption"]} {{ direction: rtl; text-align: start; }}' in css
 
 
 def test_overview_coverage_filter_bar_reduces_the_rows_and_updates_the_label(

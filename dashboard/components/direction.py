@@ -107,12 +107,13 @@ CSS_SELECTORS: Final[Mapping[str, str]] = MappingProxyType(
         "top_bar": '[class*="st-key-top-bar"]',
         # Overview's two-column row (Task 31): the mockup's 7fr/5fr grid.
         "overview_row": '[class*="st-key-overview-row"]',
-        # The coverage section's footnote (Task 32). Scoped to the section on
-        # purpose: `st.caption` inherits the main block's LTR direction, so a
-        # Persian caption hugs the left edge. Fixing that shell-wide would move
-        # every un-migrated page's captions, which the wave discipline forbids.
-        "coverage_footnote": (
-            '[class*="st-key-overview-coverage-section"] [data-testid="stCaptionContainer"]'
+        # Native captions (Wave H P2). A native `st.caption` inherits the main
+        # block's LTR direction, so a Persian sentence hugs the left edge. This
+        # shell-level rule is scoped to the main block (never the sidebar) and
+        # covers every page's captions; it replaced the earlier scoped
+        # `coverage_footnote` workaround, which is no longer needed.
+        "main_block_caption": (
+            '[data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"]'
         ),
     }
 )
@@ -501,10 +502,12 @@ _COMPONENT_RULES: Final[tuple[str, ...]] = (
     # the left and the two sections would swap. The column weights themselves come
     # from `st.columns([7, 5])`.
     f'{CSS_SELECTORS["overview_row"]} {{ direction: rtl; }}',
-    # The coverage footnote (Task 32): a native `st.caption` inherits the LTR main
-    # block, so its Persian sentence would render at the left edge. Scoped to the
-    # coverage section so no other page's captions move.
-    f'{CSS_SELECTORS["coverage_footnote"]} {{ direction: rtl; text-align: right; }}',
+    # Native captions (Wave H P2, finding F5): a native `st.caption` inherits the
+    # LTR main block, so a Persian sentence hugs the left edge. This shell-level
+    # rule is scoped to the main block (not the sidebar) and fixes every page's
+    # captions at once; `text-align: start` resolves to the right edge under the
+    # RTL direction, exactly as the old scoped `coverage_footnote` rule did.
+    f'{CSS_SELECTORS["main_block_caption"]} {{ direction: rtl; text-align: start; }}',
 )
 
 

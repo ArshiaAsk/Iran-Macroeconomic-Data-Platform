@@ -265,8 +265,25 @@ def test_top_bar_full_bleed_reads_the_main_container_padding_property() -> None:
     assert "padding-inline: var(--main-pad-x);" in css
 
 
-# --- Task 27: sidebar brand (fallback 2) — CSS-pinned mark + text ---
+def test_main_block_caption_rule_is_shell_scoped() -> None:
+    """Wave H P2 (F5): captions are RTL across the shell, scoped to the main block.
 
+    A native ``st.caption`` inherits the main block's LTR direction, so a Persian
+    sentence hugs the left edge. The shell rule fixes every page's captions at
+    once and is scoped to the main block, so the sidebar's captions are untouched.
+    """
+    css = direction_css()
+
+    assert CSS_SELECTORS["main_block_caption"] == (
+        '[data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"]'
+    )
+    assert (
+        f'{CSS_SELECTORS["main_block_caption"]} {{ direction: rtl; text-align: start; }}' in css
+    )
+    assert "stSidebar" not in CSS_SELECTORS["main_block_caption"]
+
+
+# --- Task 27: sidebar brand (fallback 2) — CSS-pinned mark + text ---
 BRAND = "سامانهٔ داده‌ها"
 
 
