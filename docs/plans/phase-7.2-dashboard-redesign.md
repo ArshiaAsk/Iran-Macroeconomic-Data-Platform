@@ -886,9 +886,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Task 1.
 - **Acceptance:**
-  - [ ] All ten icons validate against `ALL_MATERIAL_ICONS`.
-  - [ ] Icons are semantically distinct (`fx_gold` and `trade_energy` do not share a glyph).
-  - [ ] `test_navigation.py` passes; a new test asserts every icon is a Material shortcode.
+  - [x] All ten icons validate against `ALL_MATERIAL_ICONS`.
+  - [x] Icons are semantically distinct (`fx_gold` and `trade_energy` do not share a glyph).
+  - [x] `test_navigation.py` passes; a new test asserts every icon is a Material shortcode.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_navigation.py -q`.
 
 ### 26. (B) ADD the freshness-query TTL (D7)

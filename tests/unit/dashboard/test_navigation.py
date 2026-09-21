@@ -7,7 +7,10 @@ the single declaration consumed by ``st.navigation``.
 
 from collections import Counter
 
-from dashboard.navigation import GROUPS, PAGES, page_for_domain
+from streamlit.material_icon_names import ALL_MATERIAL_ICONS
+from streamlit.string_util import validate_material_icon
+
+from dashboard.navigation import GROUPS, PAGES, PageSpec, page_for_domain
 from src.connectors import eia, hbsir, imf, sci_scraper, tgju_scraper, tsetmc, world_bank
 from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT
 
@@ -124,3 +127,45 @@ def test_domain_exceptions_from_the_plan_hold() -> None:
         "correlation",
         "catalog",
     }
+
+
+# --- Task 25: Material nav icons -------------------------------------------
+
+
+def _icon_name(spec: PageSpec) -> str:
+    """Extract the bare icon name from a ``:material/<name>:`` shortcode.
+
+    Returns the empty string when ``spec.icon`` is not a Material shortcode, so
+    the shortcode test can report the offending page without raising here.
+    """
+    icon = spec.icon
+    if icon.startswith(":material/") and icon.endswith(":"):
+        return icon[len(":material/") : -1]
+    return ""
+
+
+def test_every_page_icon_is_a_material_shortcode() -> None:
+    """Every nav icon is a validated ``:material/<name>:`` shortcode.
+
+    Bare names do not validate (Wave 0 spike, Task 1): the shortcode form is
+    what ``st.Page(icon=...)`` accepts, and ``validate_material_icon`` is the
+    Streamlit validator the running app uses. Each name is also a member of
+    ``ALL_MATERIAL_ICONS``.
+    """
+    for spec in PAGES:
+        name = _icon_name(spec)
+        assert name, f"{spec.key!r} icon {spec.icon!r} is not a :material/…: shortcode"
+        assert name in ALL_MATERIAL_ICONS, f"{spec.key!r}: {name!r} not in ALL_MATERIAL_ICONS"
+        validate_material_icon(spec.icon)
+
+
+def test_nav_icons_are_unique() -> None:
+    """No two pages share a nav glyph, so each page is visually distinct."""
+    icons = [spec.icon for spec in PAGES]
+    assert len(set(icons)) == len(icons)
+
+
+def test_fx_gold_and_trade_energy_do_not_share_a_glyph() -> None:
+    """The plan calls out this pair explicitly (Task 25 acceptance)."""
+    specs = {spec.key: spec for spec in PAGES}
+    assert specs["fx_gold"].icon != specs["trade_energy"].icon
