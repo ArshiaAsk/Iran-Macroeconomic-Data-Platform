@@ -277,9 +277,7 @@ def test_main_block_caption_rule_is_shell_scoped() -> None:
     assert CSS_SELECTORS["main_block_caption"] == (
         '[data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"]'
     )
-    assert (
-        f'{CSS_SELECTORS["main_block_caption"]} {{ direction: rtl; text-align: start; }}' in css
-    )
+    assert f'{CSS_SELECTORS["main_block_caption"]} {{ direction: rtl; text-align: start; }}' in css
     assert "stSidebar" not in CSS_SELECTORS["main_block_caption"]
 
 
