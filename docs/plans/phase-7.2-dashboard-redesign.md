@@ -1201,8 +1201,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 34, 47.
 - **Acceptance:**
-  - [ ] A consistency table (page × contract item) is complete.
-  - [ ] Export smoke test result recorded (re-confirming the Task 14 `test_exports.py` PNG + SVG smoke).
+  - [x] A consistency table (page × contract item) is complete.
+  - [x] Export smoke test result recorded (re-confirming the Task 14 `test_exports.py` PNG + SVG smoke).
 - **Verify:** `make check` + `poetry run pytest tests/unit/dashboard/test_exports.py -q`.
 
 ---

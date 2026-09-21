@@ -3245,3 +3245,33 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   doc test scans the component package and stays green).
 - **Deviations:** none.
 - **Commit:** Task 47 commit.
+
+## Task 48 — (H) RUN the cross-page consistency audit
+
+- **Files:** `docs/phase-7.2/wave-h-assets/audit/contract-audit.md` (new),
+  `docs/phase-7.2/VALIDATION.md` (Wave H part C appended),
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Task 48 boxes ticked).
+- **Method (two checks).** (1) A **static call graph**: for each registered page,
+  resolve the delegate's entry function in `page_view.py` and walk the
+  intra-module call graph to see which shared contract components the composition
+  reaches (the definitive "does the page use the component" answer). (2) A **live
+  Playwright DOM probe** at 1440x900 recording the `h1` text and the counts of
+  `stPlotlyChart`, `stMainBlockContainer table`, `stDataFrame`, `stMetric` and
+  `stAlertContainer` per page.
+- **Live app:** HEAD **`4e7c3a8`** (dashboard code unchanged since `2c0977c` —
+  Tasks 46–48 are tests/docs only). All ten pages: `h1 == t("page.<key>")` — the
+  shared header pattern is confirmed live.
+- **Result — no defect.** One header pattern (all ten), one KPI pattern
+  (Overview/Catalog/Market; N/A elsewhere), one section-header pattern (nine;
+  Catalog N/A), one filter-bar pattern (all ten, `render_filter_bar` or
+  `render_filters`), shared `render_empty` on all ten. `render_error`/
+  `render_loading` are defined but no page renders an error/loading path (N/A, not
+  a bypass). Eight pages use the typed `render_html_table`; the Catalog uses the
+  native `st.dataframe` (the D1 sortable LTR grid decision). Every chart page
+  reaches a `charts.build_*` builder — none builds Plotly directly. Exports on
+  eight pages.
+- **Export smoke re-confirmed:** `poetry run pytest
+  tests/unit/dashboard/test_exports.py -m integration -q --no-cov` → **1 passed**.
+- **Deviations:** none. The matrix is in
+  `wave-h-assets/audit/contract-audit.md`.
+- **Commit:** Task 48 commit.

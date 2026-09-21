@@ -1318,3 +1318,31 @@ manual review; they are recorded as open, not as verified:
   dashboard's boundary.
 - **Cache-TTL item** and Phase 7.1 Tasks 27–28 (extended suite + analyst
   acceptance) — deferred (plan Deferred Scope).
+
+## Wave H — part C (Task 48 cross-page consistency audit)
+
+**Scope.** Confirm one header / KPI / section-header / filter-bar pattern and the
+shared states across all ten pages, confirm every chart uses the shared template,
+and re-confirm the export image path. No code change.
+
+**Evidence:** `wave-h-assets/audit/contract-audit.md` — a page × contract-item
+matrix from two checks (a static call graph of each page's composition, plus a live
+Playwright DOM probe at 1440x900). Live app at HEAD **`4e7c3a8`** (dashboard code
+unchanged since `2c0977c`).
+
+| Contract item | Result |
+|---|---|
+| One header pattern (`render_page_header`) | CONFIRMED — all ten; live `h1 == t("page.<key>")` on every page |
+| One KPI pattern (`render_kpi_band`) | CONFIRMED — Overview, Catalog, Market (the pages with KPI cells); N/A elsewhere |
+| One section-header pattern (`render_section_header`) | CONFIRMED — nine pages; Catalog N/A (single grid) |
+| One filter-bar pattern (`render_filter_bar` / `render_filters`) | CONFIRMED — all ten |
+| Shared states (`render_empty`) | CONFIRMED — all ten empty cases |
+| Shared error/loading states | N/A — `render_error`/`render_loading` are defined but no page renders an error/loading path |
+| Typed table (`render_html_table`) | CONFIRMED — eight pages; Catalog uses the native `st.dataframe` (D1 grid), N/A |
+| Every chart uses the shared template | CONFIRMED — the eight chart pages reach a `charts.build_*` builder; none builds Plotly directly |
+| Exports (`render_data_downloads` / `render_chart_downloads`) | CONFIRMED — eight pages |
+| Layout guard (no raw `st.title`/`st.metric`/… in a migrated function) | PASS — `test_layout_guard.py` |
+
+**Export smoke re-confirmed:** `pytest tests/unit/dashboard/test_exports.py -m
+integration -q --no-cov` → **1 passed** (PNG + SVG render with the shared
+template). No defect found in the audit.
