@@ -2,34 +2,27 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Waves F and G approved; Wave H in progress** (Overview reference
-implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
-Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
-deviations A1–A9 approved as recorded; see
-[`validation/reference-overview.md`](validation/reference-overview.md) §6a and
-the "Wave C part 2c" section of [`VALIDATION.md`](VALIDATION.md)). Wave D (the
-four generic domain-explorer pages: GDP, Trade & Energy, FX & Gold, Labor) is
-complete through Tasks 35–36 and its owner review is
-[`validation/archetype-domain.md`](validation/archetype-domain.md), **signed off
-APPROVED on 2026-09-21**. Wave E (the emphasis-domain pages: Inflation Task 38,
-Welfare Task 39, Market Task 40, plus Step 0a/0b) is **complete through Task 41**;
-the emphasis owner review is
-[`validation/archetype-emphasis.md`](validation/archetype-emphasis.md),
-**signed off APPROVED on 2026-09-22** (the 15 MATCH rows accepted; the three
-approved deviations are recorded in its §10). Wave F (the comparison /
-correlation page, Task 42) is **complete through Task 43**; its owner review is
-[`validation/archetype-correlation.md`](validation/archetype-correlation.md),
-**signed off APPROVED on 2026-09-22** (14 MATCH rows; the shared `render_filters`
-deviation accepted). Wave G (the data catalog page, Task 44) is **complete through
-Task 45**; its owner review is
-[`validation/archetype-catalog.md`](validation/archetype-catalog.md),
-**signed off APPROVED on 2026-09-22, conditional on P1** (the tall narrow filter
-column is a defect, fixed in Wave H P1). Wave H (the final polish, the consistency
-guard, the validation record and the cross-page audit) is **in progress**. Wave 0
-is recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
-baseline and the per-wave gate rule). Per-task evidence lives in
-[`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual
-reviews and gates are in [`VALIDATION.md`](VALIDATION.md).
+Status: **Phase 7.2 complete pending owner acceptance.** All ten pages are
+migrated to the D11 layout contract and all five archetype reviews are **signed
+off APPROVED** (Overview, the four generic domain-explorer pages, the three
+emphasis pages, the correlation page, and the catalog page conditional on Wave H
+P1 — verified). Wave H closed the phase: the four polish items P1–P4, the
+completed consistency guard (Task 46), this runbook and the validation record
+(Task 47), and the cross-page audit (Task 48). The Overview reference review is
+[`validation/reference-overview.md`](validation/reference-overview.md) §6a and the
+"Wave C part 2c" section of [`VALIDATION.md`](VALIDATION.md); the domain review is
+[`validation/archetype-domain.md`](validation/archetype-domain.md) (APPROVED
+2026-09-21); the emphasis review is
+[`validation/archetype-emphasis.md`](validation/archetype-emphasis.md) (APPROVED
+2026-09-22); the correlation review is
+[`validation/archetype-correlation.md`](validation/archetype-correlation.md)
+(APPROVED 2026-09-22); the catalog review is
+[`validation/archetype-catalog.md`](validation/archetype-catalog.md) (APPROVED
+2026-09-22, conditional on P1). Wave 0 is recorded in
+[`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change baseline and the
+per-wave gate rule). Per-task evidence lives in
+[`execution-log.md`](execution-log.md); the per-wave visual reviews and gates are in
+[`VALIDATION.md`](VALIDATION.md).
 
 Sign-off carry items (2026-09-22): **F3** (chart legend title `label`) and **F4**
 (English `Choose options` placeholder) were scheduled in Waves D–G and have

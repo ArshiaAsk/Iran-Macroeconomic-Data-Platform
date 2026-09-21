@@ -1346,3 +1346,46 @@ unchanged since `2c0977c`).
 **Export smoke re-confirmed:** `pytest tests/unit/dashboard/test_exports.py -m
 integration -q --no-cov` → **1 passed** (PNG + SVG render with the shared
 template). No defect found in the audit.
+
+## Wave H — closing checks and phase summary
+
+**Closing checks.**
+
+- **Boundary.** `git diff --stat <phase-7.2 base>..phase-7.2 -- src alembic airflow`
+  → **empty**. No file under `src/`, `alembic/` or `airflow/` changed anywhere in
+  Phase 7.2. The plan's literal command used `main...phase-7.2`; `main` in this
+  repository is a stale branch that predates Phases 1–6, so that range is non-empty
+  for reasons unrelated to Phase 7.2. The true Phase 7.2 base is `35ce5f6^`
+  (the Phase 7.1 tip); over that range the boundary is empty, and this session's
+  commits (`5554e6d^..HEAD`) touch nothing under the three directories.
+- **Static assets tracked.** `git ls-files dashboard/static` →
+  `dashboard/static/OFL.txt`, `dashboard/static/Vazirmatn.ttf` (both committed;
+  `enableStaticServing` serves them at `/app/static/…`).
+- **Repository integration.** `dashboard/repository.py` has **no write statement**
+  (its only `merge` is a pandas frame merge), so the dashboard is read-only. With
+  the integration database healthy:
+  `pytest tests/integration/test_dashboard_repository.py -q --no-cov` → **18
+  passed** (the fixtures seed rows and roll back; the repository never writes).
+- **Full gate.** `make check` → **PASS**; `mypy src dashboard` → **0 errors / 68
+  files**.
+
+**Phase 7.2 summary.**
+
+| Wave | Scope | Outcome |
+|---|---|---|
+| 0 | Capability probes, baseline, plan corrections | recorded in `wave-0-spike.md` |
+| A | Tokens, theme, font, scoped CSS, shared components | components staged |
+| B | Shell: sidebar brand/DB status, top bar | approved |
+| C | Overview reference + AM-23 review | APPROVED |
+| D | Four generic domain pages (A2) | APPROVED |
+| E | Three emphasis pages (A3) | APPROVED |
+| F | Comparison / correlation (A4) | APPROVED |
+| G | Data catalog (A5) | APPROVED, conditional on P1 |
+| H | Polish P1–P4, guard (T46), docs (T47), audit (T48) | this record |
+
+**Accepted deviations (not fixed, owner-approved):** F1 (content padding 70 px vs
+the mockup's 40 px), F7 (coverage-column wrap), the D3 Gregorian/Jalali bidi
+direction, and the `<td title>` hover tooltip (unverified in a real browser).
+**Deferred:** the OPEC/CBI/TSETMC-extended scope, the cache-TTL item, and Phase 7.1
+Tasks 27–28 (extended suite + analyst acceptance). No merge or push is part of
+this change set.

@@ -3275,3 +3275,25 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** none. The matrix is in
   `wave-h-assets/audit/contract-audit.md`.
 - **Commit:** Task 48 commit.
+
+## Wave H — closing checks and phase summary (Scope A + Scope B close-out)
+
+- **Files:** `docs/phase-7.2/README.md` (status → "Phase 7.2 complete pending
+  owner acceptance"), `docs/phase-7.2/VALIDATION.md` (closing checks + phase
+  summary).
+- **Boundary.** `git diff --stat <phase-7.2 base>..phase-7.2 -- src alembic
+  airflow` → **empty**. The true Phase 7.2 base is `35ce5f6^` (the Phase 7.1 tip);
+  this session's commits (`5554e6d^..HEAD`) also touch nothing under the three
+  directories. The plan's literal `main...phase-7.2` command is non-empty only
+  because `main` is a stale branch predating Phases 1–6 (recorded in
+  VALIDATION.md).
+- **Static assets.** `git ls-files dashboard/static` → `OFL.txt`, `Vazirmatn.ttf`
+  (tracked).
+- **Repository integration.** `dashboard/repository.py` is read-only (no
+  `INSERT`/`UPDATE`/`DELETE`/`session.add`/`commit`; the only `merge` is pandas).
+  `DOCKER_CONTEXT=default pytest tests/integration/test_dashboard_repository.py -q
+  --no-cov` → **18 passed** (fixtures seed and roll back).
+- **Final gate.** `make check` → **PASS**, `1473 passed, 3 skipped`, coverage
+  **89.22%**; `mypy src dashboard` → **0 errors / 68 files**. No regressions.
+- **Phase summary.** Recorded in VALIDATION.md (Waves 0–H table, accepted
+  deviations, deferred scope). No merge or push.
