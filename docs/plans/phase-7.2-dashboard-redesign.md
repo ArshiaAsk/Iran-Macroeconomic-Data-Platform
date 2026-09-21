@@ -1080,9 +1080,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `section.hbsir_*`, `warn.hbsir_*`.
 - **Depends:** Tasks 15–22, 34, 36.
 - **Acceptance:**
-  - [ ] Welfare renders through the shared components; survey-year panel unchanged in content.
-  - [ ] Guard enabled for the Welfare functions.
-  - [ ] The survey-year assertions use the markup strategy, not `app.dataframe`.
+  - [x] Welfare renders through the shared components; survey-year panel unchanged in content.
+  - [x] Guard enabled for the Welfare functions.
+  - [x] The survey-year assertions use the markup strategy, not `app.dataframe`.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_welfare.py tests/unit/dashboard/test_layout_guard.py -q`.
 
 ### 40. (E) MIGRATE the Market page emphasis sections

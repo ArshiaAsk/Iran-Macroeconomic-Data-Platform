@@ -22,7 +22,11 @@ from dashboard.formatting import (
 from dashboard.i18n import t
 from dashboard.labels import indicator_label
 from dashboard.navigation import PAGES
-from dashboard.page_view import survey_year_frame, survey_year_panel
+from dashboard.page_view import (
+    build_survey_year_panel_rows,
+    survey_year_frame,
+    survey_year_panel,
+)
 from src.connectors.hbsir_parser import (
     DECILE_INDICATORS,
     DEFAULT_INDICATORS,
@@ -36,6 +40,7 @@ from tests.unit.dashboard.app_smoke import (
     SURVEY_TIMESTAMPS,
     WELFARE_CONTEXT_ROWS,
     app_test,
+    html_texts,
     welfare_series,
 )
 
@@ -90,9 +95,9 @@ def test_welfare_page_renders_with_the_hbsir_sections(fake_streamlit_connection)
     # Two HBSIR emphasis charts (trend + decile shares) plus the generic
     # composition's chart for the population/LUR context selection.
     assert len(app.get("plotly_chart")) == 3
-    # The survey-year metadata panel is rendered with the Jalali survey years.
-    expected = _expected_panel()
-    assert any(frame.value.equals(expected) for frame in app.dataframe)
+    # Task 39: the survey-year panel is a ``render_html_table`` now, so it is
+    # asserted through markup rather than ``app.dataframe`` (see
+    # ``test_the_survey_year_panel_is_an_html_table_with_localized_headers``).
 
 
 def test_welfare_page_states_that_the_poverty_rate_is_relative(
@@ -266,3 +271,72 @@ def test_survey_year_panel_is_empty_rather_than_invented_without_observations() 
 
     assert panel.empty
     assert t("table.survey_year") in panel.columns
+
+
+def _survey_panel_markup(app) -> str:
+    """The survey-year panel's RTL HTML markup (Task 39).
+
+    The panel is a ``render_html_table`` now, so it is read through
+    ``html_texts`` rather than ``app.dataframe`` (the Task 16 migration map).
+    """
+    return next(body for body in html_texts(app) if t("table.survey_year") in body)
+
+
+def test_the_survey_year_panel_is_an_html_table_with_localized_headers(
+    fake_streamlit_connection,
+) -> None:
+    """Task 39: the survey-year panel is the shared RTL HTML table (markup).
+
+    The panel is read through ``html_texts`` rather than ``app.dataframe``; the
+    headers are the localized catalog keys and the cells are the Persian display
+    values produced by :func:`survey_year_panel`. The previous
+    ``app.dataframe`` assertion is rewritten to this markup assertion (Task 16
+    migration map), keeping its intent: the panel's headers and coverage values
+    are checked.
+    """
+    app = app_test(WELFARE_PAGE)
+    app.run()
+
+    markup = _survey_panel_markup(app)
+    for header in (
+        t("table.survey_year"),
+        t("table.survey_year_end"),
+        t("table.period_end"),
+        t("table.hbsir_indicators"),
+        t("table.hbsir_observations"),
+    ):
+        assert f'<th scope="col">{header}</th>' in markup
+    # Cell values from the shared fixture: the Jalali survey-year labels and
+    # the coverage counts produced by ``survey_year_panel``.
+    expected = _expected_panel()
+    for label in expected[t("table.survey_year")].tolist():
+        assert label in markup
+    for count in expected[t("table.hbsir_observations")].tolist():
+        assert str(count) in markup
+
+
+def test_build_survey_year_panel_rows_maps_every_cell_to_plain_text() -> None:
+    """Task 39: the pure builder maps the localized frame to typed cells.
+
+    Every cell is plain :class:`~dashboard.components.html_table.Text`, so the
+    rendered table is byte-identical to the grid it replaces; a null falls back
+    to the shared em-dash. The builder adds nothing and recomputes nothing.
+    """
+    from dashboard.components.html_table import Text
+
+    frame = survey_year_panel(_survey_frame())
+
+    table = build_survey_year_panel_rows(frame)
+
+    assert table.columns == tuple(str(column) for column in frame.columns)
+    assert len(table.rows) == len(frame)
+    for row, (_, source_row) in zip(table.rows, frame.iterrows(), strict=True):
+        assert all(isinstance(cell, Text) for cell in row)
+        assert tuple(cell.value for cell in row) == tuple(
+            str(source_row[column]) for column in frame.columns
+        )
+
+
+def test_build_survey_year_panel_rows_is_empty_safe() -> None:
+    assert build_survey_year_panel_rows(pd.DataFrame()).columns == ()
+    assert build_survey_year_panel_rows(pd.DataFrame()).rows == ()

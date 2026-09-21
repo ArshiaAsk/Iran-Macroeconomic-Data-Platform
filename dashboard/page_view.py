@@ -1626,17 +1626,23 @@ def render_welfare_page(repository: DashboardRepository | None = None) -> None:
     panel. The remaining ``welfare`` members -- World Bank population and IMF
     ``LUR`` -- render through the generic domain composition, so the page owns
     everything the catalog assigns to the domain.
+
+    The composition follows the D11 layout contract (Task 39): the page header
+    and the two HBSIR caveats through shared components, the shared section
+    headers, and the survey-year panel as the shared RTL HTML table. The filter
+    set is unchanged (:func:`render_filters`), so the selection and every value
+    are exactly as before.
     """
-    st.title(t("page.welfare"))
-    st.warning(_relative_poverty_note())
-    st.info(t("warn.hbsir_computed_values"))
+    render_page_header("page.welfare")
+    render_callout("warn.hbsir_relative_poverty", tone="warn", body=_relative_poverty_note())
+    render_callout("warn.hbsir_computed_values", tone="info")
     domain_list = ["welfare"]
     if repository is None:
         catalog = cached_list_indicators(domains=tuple(domain_list))
     else:
         catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     hbsir_ids = [
         indicator for indicator in catalog["indicator_id"] if indicator in HBSIR_INDICATORS
@@ -1647,7 +1653,7 @@ def render_welfare_page(repository: DashboardRepository | None = None) -> None:
     filters = render_filters(catalog, "welfare", context_ids)
     series = _load_series(hbsir_ids, filters.start_date, filters.end_date, repository)
     _render_hbsir_sections(series)
-    st.subheader(t("section.welfare_other_indicators"))
+    render_section_header("section.welfare_other_indicators")
     render_domain_body(
         domain_list,
         "welfare",
@@ -1915,12 +1921,68 @@ def _relative_poverty_note() -> str:
     )
 
 
+class SurveyYearPanelTable(NamedTuple):
+    """The survey-year panel ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in :func:`survey_year_panel`'s order
+        rows: One tuple of typed cells per survey year
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def build_survey_year_panel_rows(frame: pd.DataFrame) -> SurveyYearPanelTable:
+    """Build the survey-year panel as typed cells from the localized frame.
+
+    The frame is the output of :func:`survey_year_panel`, whose cells are already
+    Persian display text (the Jalali survey-year label, the Esfand 29/30
+    year-end, the Gregorian period end, and the formatted coverage counts). Each
+    value therefore maps to a plain :class:`~dashboard.components.html_table.Text`
+    cell, so the rendered table is byte-identical to the grid it replaces; a null
+    (never produced today) falls back to the shared em-dash through ``Text(None)``.
+
+    Args:
+        frame: Frame from :func:`survey_year_panel`
+
+    Returns:
+        A :class:`SurveyYearPanelTable`; an empty frame yields no columns and no
+        rows
+    """
+    if frame.empty:
+        return SurveyYearPanelTable((), ())
+    rows = tuple(
+        tuple(_survey_year_cell(value) for value in row)
+        for row in frame.itertuples(index=False, name=None)
+    )
+    return SurveyYearPanelTable(tuple(str(column) for column in frame.columns), rows)
+
+
+def _survey_year_cell(value: object) -> Cell:
+    """One survey-year cell: plain text, or the shared em-dash for a null."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return Text(None)
+    return Text(str(value))
+
+
 def _render_hbsir_sections(series: pd.DataFrame) -> None:
-    """Render the HBSIR emphasis sections: trend, decile shares, survey years."""
+    """Render the HBSIR emphasis sections: trend, decile shares, survey years.
+
+    Each section opens with a shared section header. An empty section renders the
+    shared empty callout with a distinct ``container_key`` per section, because
+    the same ``empty.no_hbsir_observations`` key can legitimately fire in more
+    than one section on the same run. The survey-year panel is the shared RTL
+    HTML table (:func:`render_html_table`) fed by the pure builder
+    :func:`build_survey_year_panel_rows`; its values are byte-identical to the
+    grid it replaces.
+    """
     trend = _hbsir_subset(series, HBSIR_GINI_POVERTY_INDICATORS)
-    st.subheader(t("section.hbsir_gini_poverty"))
+    render_section_header("section.hbsir_gini_poverty")
     if trend.empty:
-        st.info(t("empty.no_hbsir_observations"))
+        render_callout(
+            "empty.no_hbsir_observations", tone="info", container_key="hbsir-gini-poverty"
+        )
     else:
         st.plotly_chart(
             build_survey_year_chart(survey_year_frame(trend)),
@@ -1928,21 +1990,24 @@ def _render_hbsir_sections(series: pd.DataFrame) -> None:
         )
 
     deciles = _hbsir_subset(series, tuple(DECILE_INDICATORS))
-    st.subheader(t("section.hbsir_deciles"))
+    render_section_header("section.hbsir_deciles")
     if deciles.empty:
-        st.info(t("empty.no_hbsir_observations"))
+        render_callout("empty.no_hbsir_observations", tone="info", container_key="hbsir-deciles")
     else:
         st.plotly_chart(
             build_survey_year_chart(survey_year_frame(deciles), facet_indicators=False),
             use_container_width=True,
         )
 
-    st.subheader(t("section.hbsir_survey_years"))
+    render_section_header("section.hbsir_survey_years")
     panel = survey_year_panel(_hbsir_subset(series, HBSIR_INDICATORS))
     if panel.empty:
-        st.info(t("empty.no_hbsir_observations"))
+        render_callout(
+            "empty.no_hbsir_observations", tone="info", container_key="hbsir-survey-years"
+        )
     else:
-        st.dataframe(panel, use_container_width=True, hide_index=True)
+        table = build_survey_year_panel_rows(panel)
+        render_html_table(table.columns, table.rows)
 
 
 def _hbsir_subset(series: pd.DataFrame, indicator_ids: tuple[str, ...]) -> pd.DataFrame:

@@ -2605,3 +2605,78 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** the `coverage` variant on the provenance table and the
   caption→callout conversion are recorded above for the owner.
 - **Commit:** this entry is committed with the Task 38 commit.
+
+## Wave E — Task 39 (Welfare page emphasis sections)
+
+- **Files:** `dashboard/page_view.py` (`render_welfare_page`,
+  `_render_hbsir_sections`, new `build_survey_year_panel_rows` +
+  `SurveyYearPanelTable` + `_survey_year_cell`),
+  `tests/unit/dashboard/test_layout_guard.py` (MIGRATED_PAGES +=
+  `render_welfare_page` + `_render_hbsir_sections`),
+  `tests/unit/dashboard/test_app_welfare.py` (imports `html_texts` +
+  `build_survey_year_panel_rows`; rewrote the `app.dataframe` survey-year
+  assertion to the markup strategy; added a markup assertion, a builder test
+  and an empty-safe test).
+- **Build (Task 35 pattern):**
+  - `render_welfare_page` opens with `render_page_header("page.welfare")`;
+    the relative-poverty `st.warning` is
+    `render_callout("warn.hbsir_relative_poverty", tone="warn",
+    body=_relative_poverty_note())` (the note carries the `{k}` placeholder,
+    so its resolved text passes through `body=` and the key is the container
+    hook only); the computed-values `st.info` is
+    `render_callout("warn.hbsir_computed_values", tone="info")`; the
+    catalog-empty `st.info` is `render_empty`; the "other indicators"
+    subheader is `render_section_header`.
+  - `_render_hbsir_sections` opens with `render_section_header` for each of
+    the three sections; every empty `st.info` is `render_callout(...,
+    tone="info", container_key=...)` with distinct keys (`hbsir-gini-poverty`,
+    `hbsir-deciles`, `hbsir-survey-years`), because the same
+    `empty.no_hbsir_observations` key can legitimately fire in more than one
+    section on the same run.
+  - The survey-year panel `st.dataframe` becomes
+    `render_html_table(table.columns, table.rows)` fed by the pure builder
+    `build_survey_year_panel_rows(panel)` — a `NamedTuple` of typed cells,
+    every value is a `Text` so the rendered table is byte-identical to the
+    grid it replaces. The panel uses the `default` variant (five short
+    columns; measured 957 px in the 1042 px column — well within the column,
+    no sideways scroll needed).
+- **Changed assertions in `test_app_welfare.py`:**
+  - `test_welfare_page_renders_with_the_hbsir_sections`: the
+    `any(frame.value.equals(expected) for frame in app.dataframe)` survey-year
+    panel assertion was removed; the panel is now a `render_html_table` and is
+    read through `html_texts`. The `app.title` / `app.subheader` /
+    `app.plotly_chart` assertions stay — `render_page_header` keeps the
+    native `st.title` and `render_section_header` keeps the native
+    `st.subheader`, so `app.title` / `app.subheader` are unchanged.
+  - `test_welfare_page_states_that_the_poverty_rate_is_relative`: no change.
+    `render_callout(..., tone="warn")` calls `st.warning(text)` and
+    `render_callout(..., tone="info")` calls `st.info(text)`, so the
+    `app.warning` / `app.info` assertions still see the same values.
+  - New `test_the_survey_year_panel_is_an_html_table_with_localized_headers`
+    (markup strategy: reads the panel through `html_texts`, asserts the five
+    `<th scope="col">` headers and the survey-year/coverage values from
+    `survey_year_panel`'s output).
+  - New `test_build_survey_year_panel_rows_maps_every_cell_to_plain_text`
+    (pure builder: every cell is `Text`; values equal the frame's cells).
+  - New `test_build_survey_year_panel_rows_is_empty_safe`.
+- **Verify:** `poetry run pytest
+  tests/unit/dashboard/test_app_welfare.py
+  tests/unit/dashboard/test_layout_guard.py -q --no-cov` → **29 passed**
+  (12 guard + 17 welfare); dashboard subset → **637 passed** (was 634; +3 new
+  Welfare tests); `poetry run mypy src dashboard` → **0 errors**, 32 source
+  files; `poetry run ruff format` → one file reformatted (whitespace).
+- **Visual evidence:** `docs/phase-7.2/wave-e-assets/task-39/` — `before-top/`
+  (copied from `wave-d-assets/partB-all-pages/welfare.png`, the pre-Wave-E
+  reference), `after-top/welfare.png` (page header + two HBSIR callouts with
+  their accent bars + filter bar — the same layout the wave-d crop had,
+  with the callouts now carrying the scoped CSS), and
+  `after-scroll/{hbsir-gini-poverty,hbsir-deciles,survey-year-panel}.png`.
+  The survey-year-panel crop shows the section header, the `default`-variant
+  RTL HTML table (Persian-digit coverage counts, Jalali Esfand 29/30 ends,
+  no sideways scroll) and the generic composition below it.
+- **Note:** the dev Streamlit server was restarted once (the prior run was
+  stale and would not reload the new `page_view.py`/`test_app_welfare.py`
+  edits in this sandbox). AppTest runs the fresh code regardless.
+- **Deviations:** none — the panel is the `default` variant by measurement
+  (957 px in a 1042 px column).
+- **Commit:** this entry is committed with the Task 39 commit.
