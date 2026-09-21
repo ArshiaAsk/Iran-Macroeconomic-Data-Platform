@@ -213,10 +213,16 @@ def test_overview_freshness_uses_the_markup_strategy_not_a_dataframe(
 def test_overview_states_that_forecasts_are_indistinguishable(
     fake_streamlit_connection,
 ) -> None:
-    """IMF forecast labeling is deferred, so the disclaimer must stay visible."""
+    """IMF forecast labeling is deferred, so the disclaimer must stay visible.
+
+    The header's callout carries the bold methodology label (Task 33), so the
+    disclaimer is a *substring* of the warning body rather than the whole body.
+    """
     app = _overview_app()
 
-    assert t("warn.forecasts_indistinguishable") in [warning.value for warning in app.warning]
+    bodies = [warning.value for warning in app.warning]
+    assert any(t("warn.forecasts_indistinguishable") in body for body in bodies)
+    assert any(t("note.methodology_label") in body for body in bodies)
 
 
 def test_fake_orphan_series_has_no_catalog_row_or_parent() -> None:

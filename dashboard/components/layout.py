@@ -219,6 +219,7 @@ def render_page_header(
     title_key: str,
     *,
     callout_key: str | None = None,
+    label_key: str | None = None,
     tone: str = "warn",
 ) -> None:
     """Render the dashboard's single page-header pattern (D11, AM-22).
@@ -235,6 +236,9 @@ def render_page_header(
     Args:
         title_key: Catalog key of the page title (``page.<key>``)
         callout_key: Optional catalog key of a callout rendered beneath the title
+        label_key: Optional catalog key rendered as a bold prefix inside the
+            callout body (the mockup's methodology label). Only meaningful with
+            ``callout_key``
         tone: Callout tone when ``callout_key`` is given
 
     Raises:
@@ -243,7 +247,7 @@ def render_page_header(
     """
     st.title(t(title_key))
     if callout_key is not None:
-        render_callout(callout_key, tone=tone)
+        render_callout(callout_key, label_key=label_key, tone=tone)
 
 
 def render_top_bar(

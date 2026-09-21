@@ -1951,3 +1951,82 @@ were never staged or committed (Task 7 owns them).
   three P5 breadcrumb/height differences are restated in `VALIDATION.md` under
   "Accepted deviations and carry items" and carried to the Task 34 review.
 - **Commit:** this entry is committed with the part 2a gate commit.
+
+## Wave C part 2 — Scope B (Tasks 33–34)
+
+### Task 33 — page header + methodology callout and the D11 guard
+
+- **Files:** `dashboard/page_view.py` (`render_overview_page` opens with
+  `render_page_header`; the conditional empty-catalog warning becomes
+  `render_callout`), `dashboard/components/layout.py` (`render_page_header` gains
+  an optional `label_key`), `tests/unit/dashboard/test_layout_guard.py` (new, 10
+  tests), `tests/unit/dashboard/test_layout.py` (2 new header-label tests),
+  `tests/unit/dashboard/test_app_overview.py` (the disclaimer assertion becomes a
+  substring check), `docs/phase-7.2/design-system.md` (§4.1 signature + worked
+  example, §11 row, §12 status, §14 new row, §15 item),
+  `docs/plans/phase-7.2-dashboard-redesign.md` (Task 33 acceptance boxes),
+  `docs/phase-7.2/wave-c-assets/task33/`.
+- **Build:**
+  - **The header.** `render_overview_page` now opens with
+    `render_page_header("page.overview", callout_key="warn.forecasts_indistinguishable", label_key="note.methodology_label")`,
+    replacing the raw `st.title` + `st.warning`. The conditional
+    `st.warning(t("warn.catalog_empty"))` on the empty-catalog path becomes
+    `render_callout("warn.catalog_empty")` — same warn tone, same text, same early
+    return, but no longer a raw call the guard would flag.
+  - **The label.** The mockup's callout carries a bold `یادداشت روش‌شناسی` prefix
+    (`.note b{font-weight:600}`). `render_page_header`'s Task 18 signature had no
+    way to pass one, so it gained an optional `label_key` forwarded straight to
+    `render_callout`. The parameter is additive and defaults to `None`, so the
+    ratified Task 18 shape is unchanged for every other caller — **the plan's
+    Task 33 file list named only `page_view.py` and the new guard**, and this
+    `layout.py` addition is recorded as a §14 deviation rather than a silent
+    expansion of scope.
+  - **The guard.** `tests/unit/dashboard/test_layout_guard.py` walks the migrated
+    functions with an AST, exactly as `test_literal_guard.py` walks the dashboard
+    tree. `MIGRATED_PAGES` maps module → **function names** (function-scoped
+    because every page composition lives in one module, AM-14) and starts with the
+    Overview: `render_overview_page`, `_render_domain_counts`,
+    `_render_coverage_section` — the page's whole composition, not just its entry
+    call. `BANNED_FUNCTIONS` is exactly the §12 list (`st.title`, `st.metric`,
+    `st.warning`/`st.info`/`st.error`) plus the `unsafe_allow_html` keyword.
+    `LAYOUT_WHITELIST` is the four shared-component modules, and
+    `test_the_whitelist_matches_the_design_system_contract` derives the §12 list
+    from the document and asserts set equality, so the guard and the contract
+    cannot drift.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout_guard.py
+    tests/unit/dashboard/test_app_overview.py tests/unit/dashboard/test_layout.py
+    -q --no-cov` → **117 passed**. Full dashboard subset → **622 passed** (was
+    610; **+12** = the 10 guard tests and the 2 header-label tests).
+    `poetry run mypy src dashboard` → **no issues in 68 source files**;
+    `ruff check`/`ruff format` clean.
+  - **Guard is not vacuous, in both directions.** `test_no_layout_violation_in_a_migrated_function`
+    runs the guard over the real `page_view.py` and finds nothing;
+    `test_guard_flags_a_raw_metric_in_a_migrated_function` plants
+    `st.metric("Sources", 7)` in a synthetic `render_overview_page` and gets
+    `("render_overview_page", "st.metric")` at line 3;
+    `test_guard_ignores_a_banned_call_outside_a_migrated_function` proves the
+    scoping (the same call in `render_gdp_page` is **not** reported), and
+    `test_guard_ignores_a_banned_call_in_an_unlisted_module` proves a module
+    absent from the map is not scanned at all.
+  - **Measured (live DOM, 1440 px).** The callout container is
+    `st-key-callout-warn-forecasts_indistinguishable`; the bold run is
+    `یادداشت روش‌شناسی` at `font-weight: 600`, `color: rgb(154, 91, 0)`
+    (= `--warn`); the alert computes `background: rgb(251, 241, 220)`
+    (= `--warn-bg`), `border-inline-start: 3px solid currentColor`, `gap: 10px`,
+    `padding: 14px`. The alert's full text is the label, a space, then the
+    disclaimer. `scrollWidth == clientWidth == 1184` — no sideways page scroll.
+  - **Visual.** `header-live.png` (1044×150) shows the `h1` (`مرور کلی`, RTL start)
+    above the amber callout with the info glyph and the bold label;
+    `methodology-callout-live.png` (1044×80) vs `methodology-callout-mockup.png`
+    (1915×65): same sentence, same bold prefix, same amber tint, same glyph at the
+    RTL start. Differences (all the callout component's ratified Task 17 styling,
+    outside Task 33): the live text wraps to two lines where the mockup's wider
+    crop fits one; the accent bar is `currentColor` (`--warn`, `#9A5B00`) vs the
+    mockup's lighter `#C98A1B`; the live font is the native alert's 14px/21px vs
+    the mockup's 13.5px/1.8; padding 14px vs 10px 14px.
+- **Deviations:** one — `render_page_header` gained `label_key`, which the plan's
+  Task 33 file list did not anticipate (recorded in design-system §14). The
+  callout's remaining pixel differences are Task 17's ratified native-alert
+  styling and are carried to the Task 34 review, not fixed here.
+- **Commit:** recorded in the "Wave C part 2b gate" entry below.

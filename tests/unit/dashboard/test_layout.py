@@ -177,6 +177,34 @@ def test_page_header_rejects_an_unknown_callout_tone() -> None:
     assert "unknown callout tone" in str(app.exception[0].value)
 
 
+def test_page_header_forwards_the_callout_label() -> None:
+    """Task 33: the Overview's header callout carries the methodology label."""
+    app = _run(
+        "from dashboard.components.layout import render_page_header\n"
+        "render_page_header(\n"
+        '    "page.overview",\n'
+        '    callout_key="warn.forecasts_indistinguishable",\n'
+        '    label_key="note.methodology_label",\n'
+        ")\n"
+    )
+
+    assert not app.exception
+    assert [warning.value for warning in app.warning] == [
+        f"**{t('note.methodology_label')}** {t('warn.forecasts_indistinguishable')}"
+    ]
+
+
+def test_page_header_label_defaults_to_none() -> None:
+    """Omitting ``label_key`` keeps the callout body unlabelled (Task 18 shape)."""
+    app = _run(
+        "from dashboard.components.layout import render_page_header\n"
+        'render_page_header("page.overview", callout_key="warn.forecasts_indistinguishable")\n'
+    )
+
+    assert not app.exception
+    assert [warning.value for warning in app.warning] == [t("warn.forecasts_indistinguishable")]
+
+
 # --- Task 19: KPI band -----------------------------------------------------
 
 KPI_BAND_SCRIPT = """

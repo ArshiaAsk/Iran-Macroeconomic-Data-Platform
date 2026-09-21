@@ -999,8 +999,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `note.methodology_label` (Task 17).
 - **Depends:** Tasks 18, 32.
 - **Acceptance:**
-  - [ ] Overview renders the amber methodology callout with the bold label.
-  - [ ] The guard fails on a deliberate raw `st.metric` in a migrated function and passes on the current tree.
+  - [x] Overview renders the amber methodology callout with the bold label.
+  - [x] The guard fails on a deliberate raw `st.metric` in a migrated function and passes on the current tree.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout_guard.py tests/unit/dashboard/test_app_overview.py -q`.
 
 ### 34. (C) OWNER VISUAL REVIEW — shell + Overview vs mockup (AM-23)

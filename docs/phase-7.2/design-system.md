@@ -163,7 +163,7 @@ needs no `unsafe_allow_html`.
 
 | Component | Signature | Purpose |
 |---|---|---|
-| `render_page_header` | `(title_key, *, callout_key=None, tone="warn")` | The one page-header pattern: a native `st.title` plus an optional callout. |
+| `render_page_header` | `(title_key, *, callout_key=None, label_key=None, tone="warn")` | The one page-header pattern: a native `st.title` plus an optional callout (with an optional bold label, e.g. the methodology note). |
 | `render_callout` | `(key, *, tone="warn", label_key=None, detail=None, container_key=None)` | The mockup's callout as a native `st.warning`/`st.info`/`st.error`. |
 | `render_kpi_band` | `(cells, *, key="default")` | One bordered row of metric cells, with an optional separated secondary group. |
 | `render_section_header` | `(title_key, *, subtitle=None, trailing=None, key=None)` | A native `st.subheader` with optional secondary text, laid out as one baseline-aligned row. |
@@ -181,7 +181,11 @@ needs no `unsafe_allow_html`.
 from dashboard.components.layout import KpiCell, render_kpi_band, render_page_header
 from dashboard.components.states import render_empty
 
-render_page_header("page.overview", callout_key="warn.forecasts_indistinguishable")
+render_page_header(
+    "page.overview",
+    callout_key="warn.forecasts_indistinguishable",
+    label_key="note.methodology_label",
+)
 render_kpi_band(
     [
         KpiCell("metric.sources", "۷"),
@@ -577,7 +581,7 @@ poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-co
 | **`st.html` output is asserted through `html_texts(app)`.** | `AppTest` has no `html` accessor; `element.proto.body` is the only route. |
 | **`st.badge` surfaces as Markdown.** | `st.badge("tag", color="orange")` appears to `AppTest` as `app.markdown == [":orange-badge[tag]"]`. |
 | **The literal guard scans the dashboard tree.** | `test_literal_guard.py` fails on `st.<display>(<literal>)`, so every user-visible string resolves through `t()`. The shared-component modules are whitelisted for the D11 guard but **not** for the literal guard. |
-| **The D11 layout guard is function-scoped.** | Every page composition lives in one large module, so `MIGRATED_PAGES` maps module → migrated function names and grows per wave. It lands in Task 33. |
+| **The D11 layout guard is function-scoped.** | Every page composition lives in one large module, so `MIGRATED_PAGES` maps module → migrated function names and grows per wave. It landed in Task 33 as `tests/unit/dashboard/test_layout_guard.py`. |
 
 ## 12. The page-layout contract (D11)
 
@@ -601,9 +605,11 @@ The whitelist is the shared-component modules —
 `components/states.py`, `components/html_table.py` and `components/direction.py` —
 not the page modules, because the components themselves must call those APIs.
 
-**Status:** the contract above is ratified (D11); the guard itself lands with
-Task 33 and its `MIGRATED_PAGES` map starts with the Overview's migrated
-functions, growing once per wave. Until a function is listed, it is not checked.
+**Status:** the contract above is ratified (D11) and **enforced** since Task 33 by
+`tests/unit/dashboard/test_layout_guard.py`, whose `MIGRATED_PAGES` map starts
+with the Overview's migrated functions and grows once per wave. Until a function
+is listed, it is not checked. The guard's whitelist is pinned against the list
+above by its own test, so the two cannot drift.
 
 ## 13. Do / Don't
 
@@ -658,12 +664,13 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | Coverage table width | The ten columns need 1169 px inside a 1042 px wrapper at 1440 px, so the last column is partly scrolled out; the mockup's shorter sample fits in 1102 px | Real data: 54 catalog rows with longer Persian names than the mockup's eight. The wrapper scrolls the table inside its own box and the page never scrolls sideways (AM-26, measured at 1440/1280/1024 px) |
 | Coverage footnote wording | `تاریخ دقیق در راهنمای هر خانه است.` rather than the mockup's `تاریخ دقیق در tooltip است.` | The Task 13 catalog key predates Task 32 and keeps the Persian UI free of the English word "tooltip"; the literal guard forbids a hardcoded replacement |
 | Native `st.caption` direction (shell-wide) | A caption inherits the main block's LTR direction, so a Persian sentence hugs the left edge. **Fixed for the coverage footnote only** by the scoped `coverage_footnote` hook; every other page's captions are unchanged | A shell-wide caption rule would move every un-migrated page's captions, which the wave discipline forbids. Filed for the Task 34 review as a shell defect |
+| `render_page_header`'s callout label | **Added in Task 33** — the component gained an optional `label_key` forwarded to `render_callout`, so the header renders the mockup's bold `یادداشت روش‌شناسی` prefix | The plan's Task 33 file list named only `page_view.py` and the new guard, but the acceptance requires the Overview's amber callout to carry the bold label and Task 18's signature had no way to pass one. The parameter is additive and defaults to `None`, so the ratified Task 18 shape is unchanged for every other caller |
 
 ## 15. Open items
 
 - **Task 27** records which sidebar-brand fallback shipped and extends section 6.
 - **Task 28** ships the top bar/breadcrumb and the last-collection stamp (done).
-- **Task 33** lands the D11 AST guard with its first `MIGRATED_PAGES` entry.
+- **Task 33** landed the D11 AST guard with its first `MIGRATED_PAGES` entry (done).
 - **Task 47** extends this document with the top bar, the sidebar shell and the
   screenshot script, plus the per-archetype review outcomes.
 - **Type-scale gaps (Step 0e → closed by Task 29).** The theme matches the

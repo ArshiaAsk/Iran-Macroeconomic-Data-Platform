@@ -34,8 +34,10 @@ from dashboard.components.layout import (
     BarRow,
     KpiCell,
     render_bar_list,
+    render_callout,
     render_filter_bar,
     render_kpi_band,
+    render_page_header,
     render_section_header,
     status_chip_cell,
 )
@@ -777,11 +779,14 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
     against the presentation cadence map in :mod:`dashboard.labels` (the platform
     does not store an expected frequency, so this is a dashboard convention).
     """
-    st.title(t("page.overview"))
-    st.warning(t("warn.forecasts_indistinguishable"))
+    render_page_header(
+        "page.overview",
+        callout_key="warn.forecasts_indistinguishable",
+        label_key="note.methodology_label",
+    )
     catalog = repository.list_indicators() if repository else cached_list_indicators()
     if catalog.empty:
-        st.warning(t("warn.catalog_empty"))
+        render_callout("warn.catalog_empty")
         return
     coverage = repository.coverage_summary() if repository else cached_coverage_summary()
     freshness = repository.source_freshness() if repository else cached_source_freshness()
