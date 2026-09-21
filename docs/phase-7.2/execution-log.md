@@ -2955,3 +2955,26 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** the tall shared filter set now sits in a narrow bar column (a
   layout observation recorded for the owner in the Task 45 review).
 - **Commit:** Task 44 commit.
+
+## Wave G — Task 45 (catalog owner review, PREPARED — not signed off)
+
+- **Files:** `docs/phase-7.2/validation/archetype-catalog.md` (new),
+  `docs/phase-7.2/README.md` (status → "Waves F and G awaiting owner review"),
+  `docs/phase-7.2/wave-g-assets/task45/` (default top, full-height, search state,
+  grid).
+- **Build (documentation only):** the A5 owner review doc, modelled on
+  `validation/archetype-emphasis.md` / `archetype-correlation.md`. It records the
+  inventory (§2), the D11 contract matrix plus the catalog-specific rows (§3), the
+  recorded layout deviation and the empty-catalog micro-deviation, cross-page
+  consistency (§4), the changed-assertions list (§5), the pixel-diff evidence
+  (§6), the defects/recommendations (§7) and the owner checklist (§8). The
+  checklist boxes are **unticked** and the doc ends `Owner sign-off: PENDING.`
+- **Verdict tally:** 15 MATCH, 1 DEVIATION (row 22, the shared filter set hosted
+  as a tall narrow bar column), 8 N/A, **0 presentation-layer DEFECT**.
+- **Plan acceptance box:** left unticked — the acceptance is "owner sign-off
+  recorded, or defects filed", and neither has happened.
+- **Verify:** the review cites the committed evidence under
+  `wave-g-assets/task45/` and `wave-g-assets/task-44/`. No test run is needed for a
+  docs-only task; the Scope B gate re-runs the suite.
+- **Deviations:** none.
+- **Commit:** Task 45 commit.

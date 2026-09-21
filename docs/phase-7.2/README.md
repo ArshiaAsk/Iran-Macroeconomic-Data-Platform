@@ -2,7 +2,7 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Wave F awaiting owner review** (Overview reference
+Status: **Waves F and G awaiting owner review** (Overview reference
 implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
 Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
 deviations A1–A9 approved as recorded; see
@@ -19,6 +19,9 @@ the emphasis owner review is
 approved deviations are recorded in its §10). Wave F (the comparison /
 correlation page, Task 42) is **complete through Task 43**; its owner review is
 [`validation/archetype-correlation.md`](validation/archetype-correlation.md),
+**prepared and awaiting the owner's sign-off**. Wave G (the data catalog page,
+Task 44) is **complete through Task 45**; its owner review is
+[`validation/archetype-catalog.md`](validation/archetype-catalog.md),
 **prepared and awaiting the owner's sign-off**. Wave 0 is
 recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
@@ -57,6 +60,9 @@ Documents:
 - [`validation/archetype-correlation.md`](validation/archetype-correlation.md) —
   the Wave F review of the comparison / correlation page against the layout
   contract (**prepared, awaiting owner sign-off**).
+- [`validation/archetype-catalog.md`](validation/archetype-catalog.md) — the
+  Wave G review of the data catalog page against the layout contract
+  (**prepared, awaiting owner sign-off**).
 - [`execution-log.md`](execution-log.md) — per-task execution log (files, Verify
   result, deviations, commit hash).
 - `README.md` — this file, completed in Wave H.
