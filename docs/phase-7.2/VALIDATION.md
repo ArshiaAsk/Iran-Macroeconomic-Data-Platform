@@ -1,10 +1,8 @@
 # Phase 7.2 Validation Report
 
-**Status:** Wave B complete (shell — Tasks 25–28 + Step 0 close-out); **Wave C
-complete pending the owner's sign-off** (part 1: Step 0f + Tasks 29–31; part 2a:
-the P1–P5 polish + the Task 32 coverage table; part 2b: Task 33's page header +
-methodology callout and the D11 guard; Task 34's AM-23 review is **prepared, not
-signed off** — see [validation/reference-overview.md](validation/reference-overview.md)).
+**Status:** Wave D complete (owner sign-off APPROVED); **Wave E part A complete**
+(Step 0 + Tasks 38–39: Inflation and Welfare emphasis sections on the layout
+contract); part B (Task 40: Market; Task 41: emphasis owner review) pending.
 The visual review recorded here is 2026-09-21 against a populated local database.
 **Plan:** [phase-7.2-dashboard-redesign.md](../plans/phase-7.2-dashboard-redesign.md)
 **Design system:** [design-system.md](design-system.md) ·
@@ -856,3 +854,69 @@ The ten-page 1440×900 captures after Task 36 are in
 in `task-36/after-scroll/`. The Task 35 before/after diff shows `gdp` and
 `trade_energy` byte-identical (0 px) and `fx_gold`/`labor` differing only in the
 caveat callout strip, so `render_page_header` reproduces `st.title` exactly.
+
+## Wave E part A — Step 0 + Tasks 38–39 (Inflation and Welfare emphasis sections)
+
+**Scope.** Wave E part A is the first two of the three emphasis-domain pages
+(A3 archetype): Step 0a records the Wave D owner sign-off, Step 0b fixes the
+`warn.single_observation` string to be source-neutral, Task 38 migrates the
+Inflation page, and Task 39 migrates the Welfare page. The Market page (Task 40)
+and the owner review (Task 41) are part B.
+
+| Item | Commit | Delta |
+|---|---|---|
+| Step 0a | `6da57d4` | Wave D owner sign-off APPROVED recorded in `validation/archetype-domain.md` and `VALIDATION.md` |
+| Step 0b | `fb2c0b3` | `warn.single_observation` rewritten source-neutral; new source-neutrality test |
+| Task 38 | `8512a44` | Inflation page: `render_page_header`/`render_callout`/`render_section_header`; provenance table via `render_html_table` (`coverage` variant) |
+| Task 39 | `013d1fb` | Welfare page: `render_page_header`/`render_callout`/`render_section_header`; survey-year panel via `render_html_table` (`default` variant) |
+
+### Per-page pixel diff (wave-e part A vs wave-d part B)
+
+Ten PNGs, 1440×900, viewport-only, captured to
+`docs/phase-7.2/wave-e-assets/partA-all-pages/`. Baseline:
+`docs/phase-7.2/wave-d-assets/partB-all-pages/`.
+
+| Page | Changed pixels | What changed |
+|---|---|---|
+| `overview` | 0.0 % (51×12 px at x≈1000) | timing artifact (not a regression) |
+| `correlation` | 0 | nothing |
+| `catalog` | 0 | nothing |
+| `inflation` | 0 | the Inflation emphasis sections are below the fold; the top viewport is the title + filters, which `render_page_header` reproduces exactly |
+| `gdp` | 0 | nothing (GDP is an A2 page, not migrated in Wave E) |
+| `trade_energy` | 0 | nothing |
+| `welfare` | 30.2 % | the two HBSIR callouts at the top now carry the scoped accent bars and info glyph (`render_callout` vs raw `st.warning`/`st.info`); the survey-year panel below the fold is the shared HTML table |
+| `fx_gold` | 0 | nothing |
+| `market` | 0 | nothing (Market is Task 40, part B) |
+| `labor` | 0 | nothing |
+
+**No regressions.** The 8 un-migrated pages are byte-identical (the overview's
+0.0 % is a 51×12 px tooltip artifact, not a layout change). The Welfare page's
+30.2 % is the expected callout-styling delta, confirmed in the Task 39
+`after-top/welfare.png` and `after-scroll/survey-year-panel.png` crops.
+
+### Wave E part A gate
+
+| Gate | Command | Result |
+|---|---|---|
+| Full quality gate | `make check` | **1453 passed, 3 skipped, 136 deselected** in 182.3 s; ruff format/lint and mypy clean; coverage **89.22 %** (≥ 80 %) |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **637 passed** (was 634; +3 new Welfare tests) |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -q --no-cov` | **16 passed** |
+| Ten-page AppTest smoke | `poetry run pytest tests/unit/dashboard/test_all_pages_smoke.py -q --no-cov` | **10 passed**, no page raises |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+| Working tree | `git status --short` | clean (assets committed) |
+
+**Against the Wave D part B gate.** Wave D part B ended at **630 passed**
+(dashboard subset); part A ends at **637**. The **+7** is the Step 0b
+source-neutrality test (+1), the four Inflation tests (+4) and the three Welfare
+tests (+3), minus one removed `app.dataframe` assertion that was rewritten to
+the markup strategy (−1). **Nothing regressed.**
+
+### Carry-forward items for Wave E part B
+
+- The Market page (Task 40) is not yet migrated; its five TSETMC caveats and
+  sessions metric are still raw `st.warning`/`st.info`/`st.metric`.
+- The emphasis owner review (Task 41) is not yet prepared.
+- The Wave H carry list from Wave D (F1, F2, F5, F7, filter-bar shape,
+  Gregorian/Jalali range direction, `neutralise()` scroll no-op Task 47) is
+  unchanged.

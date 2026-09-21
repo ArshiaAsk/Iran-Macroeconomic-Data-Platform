@@ -130,7 +130,7 @@ def capture(base_url: str, out_dir: Path) -> dict[str, Path]:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": _VIEWPORT_WIDTH, "height": _VIEWPORT_HEIGHT})
-        page.goto(base_url, wait_until="networkidle", timeout=60000)
+        page.goto(base_url, wait_until="domcontentloaded", timeout=60000)
 
         # The first registered page is the default; capture it first, then
         # click through the rest in registry order.
