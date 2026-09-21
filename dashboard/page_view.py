@@ -3,7 +3,7 @@
 import math
 from collections.abc import Hashable, Iterable, Mapping
 from datetime import UTC, datetime
-from typing import Any, Final
+from typing import Any, Final, NamedTuple
 
 import pandas as pd
 import streamlit as st
@@ -20,14 +20,30 @@ from dashboard.components.charts import (
 )
 from dashboard.components.exports import render_chart_downloads, render_data_downloads
 from dashboard.components.filters import FilterState, render_filters
-from dashboard.components.layout import KpiCell, render_kpi_band
+from dashboard.components.html_table import (
+    Cell,
+    Dot,
+    Text,
+    Tone,
+    TwoLine,
+    render_html_table,
+)
+from dashboard.components.layout import (
+    KpiCell,
+    render_kpi_band,
+    render_section_header,
+    status_chip_cell,
+)
 from dashboard.components.quality import render_quality_summary, summarize_quality
+from dashboard.components.states import render_empty
 from dashboard.components.tables import cap_table_rows, localize_table_frame
 from dashboard.formatting import (
     format_number,
     gregorian_to_jalali,
     jalali_date_label,
     jalali_year_label,
+    relative_time_label,
+    tehran_clock_label,
     tehran_timestamp_label,
     to_ascii_digits,
     to_persian_digits,
@@ -777,15 +793,27 @@ def render_overview_page(repository: DashboardRepository | None = None) -> None:
     st.subheader(t("section.indicators_by_domain"))
     _render_domain_counts(domain_counts)
 
-    st.subheader(t("section.source_freshness"))
+    # One reference instant for the whole freshness section, so the verdict, the
+    # summary and every relative age agree with each other.
+    now = datetime.now(UTC)
+    fresh, stale = freshness_summary(freshness, now=now)
+    render_section_header(
+        "section.source_freshness",
+        trailing=(
+            None
+            if freshness.empty
+            else t(
+                "section.freshness_summary",
+                fresh=format_number(fresh),
+                stale=format_number(stale),
+            )
+        ),
+    )
     if freshness.empty:
-        st.info(t("empty.no_collection_runs"))
+        render_empty("empty.no_collection_runs")
     else:
-        st.dataframe(
-            freshness_display(freshness),
-            use_container_width=True,
-            hide_index=True,
-        )
+        table = build_freshness_rows(freshness, now=now)
+        render_html_table(table.columns, table.rows)
 
     st.subheader(t("section.available_coverage"))
     st.dataframe(localize_table_frame(coverage), use_container_width=True, hide_index=True)
@@ -881,6 +909,104 @@ def _render_domain_counts(domain_counts: pd.DataFrame) -> None:
             st.markdown(f"- {label}")
         else:
             st.page_link(owner.path, label=label)
+
+
+class FreshnessTable(NamedTuple):
+    """A freshness table ready for ``render_html_table``.
+
+    Attributes:
+        columns: Localized column headers, in mockup order
+        rows: One tuple of typed cells per source, stale rows first
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+def _freshness_dot_tone(verdict: str) -> Tone:
+    """Tone of the freshness dot: amber when stale, green when fresh, grey unknown.
+
+    A source with no known cadence is reported as *unknown* and must not be
+    dressed as either verdict, so it gets the neutral dot.
+    """
+    if verdict == t("value.stale"):
+        return "warn"
+    if verdict == t("value.fresh"):
+        return "ok"
+    return "neutral"
+
+
+def build_freshness_rows(frame: pd.DataFrame, *, now: datetime) -> FreshnessTable:
+    """Build the freshness table as typed cells, stale rows first.
+
+    One row per source, exactly the latest ``DataCollectionLog`` run
+    :meth:`DashboardRepository.source_freshness` returns. The cells are:
+
+    - source — :class:`Text` through the label layer
+    - freshness — :class:`Dot` (amber stale / green fresh / neutral unknown) with
+      the verdict label, against the source's expected cadence
+      (:func:`dashboard.labels.source_expected_cadence`)
+    - last collection — :class:`TwoLine`: the Jalali date on the primary line,
+      ``time · relative age`` on the secondary line. The relative age is the
+      Task 11 formatter and the date is coloured by the verdict, as in the mockup
+    - collected records — :class:`Text` with the formatted count (unknown, never
+      an invented zero, when the source did not report one)
+    - run status — :class:`StatusChip` from the shared slug mapping
+      (:func:`dashboard.components.layout.status_chip_cell`)
+
+    Ordering is the Task 12 semantics: stale rows first, and a stable sort keeps
+    the input order within one verdict. Nothing is invented and no value is
+    recomputed.
+
+    Args:
+        frame: Freshness frame from ``source_freshness()``
+        now: Reference instant for the verdict and the relative ages. The caller
+            captures it once per render and passes it in, so every verdict, age
+            and the section summary agree; tests inject it.
+
+    Returns:
+        A :class:`FreshnessTable`; an empty frame yields the headers with no rows
+    """
+    columns = (
+        t("table.source_name"),
+        t("table.staleness"),
+        t("table.collection_timestamp"),
+        t("table.records_collected"),
+        t("table.run_status"),
+    )
+    if frame.empty:
+        return FreshnessTable(columns, ())
+    reference = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+    stale_label = t("value.stale")
+    ordered: list[tuple[bool, tuple[Cell, ...]]] = []
+    for row in frame.itertuples(index=False):
+        source_name = str(row.source_name)
+        collected = _aware_utc(row.collection_timestamp)
+        verdict = _staleness_label(source_name, collected, reference)
+        if collected is None:
+            date_text = time_text = age_text = t("value.unknown")
+        else:
+            date_text = jalali_date_label(collected)
+            time_text = tehran_clock_label(collected)
+            age_text = relative_time_label(collected, now=reference)
+        ordered.append(
+            (
+                verdict != stale_label,
+                (
+                    Text(source_label(source_name)),
+                    Dot(verdict, _freshness_dot_tone(verdict)),
+                    TwoLine(
+                        date_text,
+                        (Text(time_text), Text(age_text)),
+                        primary_tone=_freshness_dot_tone(verdict),
+                    ),
+                    Text(_count_label(row.records_collected)),
+                    status_chip_cell(str(row.status)),
+                ),
+            )
+        )
+    ordered.sort(key=lambda item: item[0])
+    return FreshnessTable(columns, tuple(cells for _, cells in ordered))
 
 
 def freshness_display(frame: pd.DataFrame, *, now: datetime | None = None) -> pd.DataFrame:

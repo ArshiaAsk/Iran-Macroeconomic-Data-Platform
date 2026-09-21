@@ -31,6 +31,7 @@ from dashboard.formatting import (
     jalali_year_label,
     range_label,
     relative_time_label,
+    tehran_clock_label,
     tehran_day_bounds,
     tehran_timestamp_label,
     to_ascii_digits,
@@ -180,6 +181,16 @@ def test_tehran_timestamp_label_localizes_the_instant() -> None:
         tehran_timestamp_label(datetime(2026, 9, 8, 12, 5, tzinfo=UTC), digit_mode="latin")
         == "17 شهریور 1405، 15:35"
     )
+
+
+def test_tehran_clock_label_is_the_clock_without_the_date() -> None:
+    """Task 30: the freshness two-line cell shows the date above time · age."""
+    assert tehran_clock_label(EVENING_UTC) == "۰۰:۰۰"
+    assert (
+        tehran_clock_label(datetime(2026, 9, 8, 12, 5, tzinfo=UTC), digit_mode="latin") == "15:35"
+    )
+    # The date-bearing label still starts with the date and ends with this clock.
+    assert tehran_timestamp_label(EVENING_UTC).endswith(tehran_clock_label(EVENING_UTC))
 
 
 def test_tehran_day_bounds_are_inclusive_utc_bounds() -> None:

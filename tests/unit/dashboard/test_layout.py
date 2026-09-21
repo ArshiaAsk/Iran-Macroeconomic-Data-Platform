@@ -14,7 +14,13 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from dashboard.components.direction import CSS_SELECTORS, direction_css
-from dashboard.components.layout import BarRow, render_bar_list
+from dashboard.components.html_table import StatusChip
+from dashboard.components.layout import (
+    STATUS_CHIPS,
+    BarRow,
+    render_bar_list,
+    status_chip_cell,
+)
 from dashboard.formatting import format_number
 from dashboard.i18n import t
 from dashboard.labels import domain_label
@@ -372,6 +378,17 @@ def test_status_chip_mapping_is_total_for_an_unknown_slug() -> None:
     assert [element.value for element in app.markdown] == [
         f":gray-badge[{t('value.status_unknown')}]"
     ]
+
+
+def test_status_chip_cell_reuses_the_standalone_slug_mapping() -> None:
+    """Task 30: the table chip and the standalone chip share one slug mapping."""
+    assert status_chip_cell("success") == StatusChip(t("value.status_success"), "ok")
+    assert status_chip_cell("failed") == StatusChip(t("value.status_failed"), "err")
+    assert status_chip_cell("partial") == StatusChip(t("value.status_partial"), "warn")
+    # Total mapping: an unrecognised slug renders the unknown chip, not a raise.
+    assert status_chip_cell("brand_new_slug") == StatusChip(t("value.status_unknown"), "neutral")
+    # The standalone chip reads the very same mapping, so the two cannot drift.
+    assert STATUS_CHIPS["success"] == ("value.status_success", "green")
 
 
 def test_status_dot_renders_one_escaped_fragment() -> None:

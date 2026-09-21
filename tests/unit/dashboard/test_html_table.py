@@ -26,6 +26,7 @@ def _one_cell(cell: Cell) -> str:
 
 
 #: Every cell variant carrying the hostile payload, for the escaping sweep.
+#: ``TwoLine`` appears twice: plain, and with a primary tone (the freshness date).
 HOSTILE_CELLS = [
     Text(HOSTILE),
     Ltr(HOSTILE),
@@ -33,6 +34,7 @@ HOSTILE_CELLS = [
     StatusChip(HOSTILE, "ok"),
     Dot(HOSTILE, "warn"),
     TwoLine(HOSTILE, (Ltr(HOSTILE),)),
+    TwoLine(HOSTILE, (Ltr(HOSTILE),), primary_tone="warn"),
 ]
 
 
@@ -58,8 +60,29 @@ def _replace_payload(cell: Cell, value: str) -> Cell:
     if isinstance(cell, StatusChip | Dot):
         return type(cell)(value, cell.tone)
     if isinstance(cell, TwoLine):
-        return TwoLine(value, (Ltr(value),))
+        return TwoLine(value, (Ltr(value),), primary_tone=cell.primary_tone)
     return type(cell)(value)
+
+
+def test_two_line_primary_tone_colours_only_the_primary_line() -> None:
+    """Task 30: the freshness date is amber when the source is stale."""
+    markup = _one_cell(TwoLine("شهریور", (Text("ساعت"),), primary_tone="warn"))
+
+    assert '<span class="name tone-warn">شهریور</span>' in markup
+    # The secondary line stays at the muted `.sm` type, not the tone colour.
+    assert '<span class="sm tm"><span>ساعت</span></span>' in markup
+
+
+def test_two_line_primary_tone_defaults_to_no_tone_class() -> None:
+    markup = _one_cell(TwoLine("شهریور"))
+
+    assert '<span class="name">شهریور</span>' in markup
+    assert "tone-" not in markup
+
+
+def test_two_line_rejects_an_unknown_primary_tone() -> None:
+    with pytest.raises(ValueError, match="unknown tone"):
+        _one_cell(TwoLine("x", primary_tone="danger"))
 
 
 def test_escapes_the_title_attribute() -> None:

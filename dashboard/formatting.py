@@ -58,6 +58,7 @@ __all__ = [
     "jalali_year_label",
     "range_label",
     "relative_time_label",
+    "tehran_clock_label",
     "tehran_day_bounds",
     "tehran_timestamp_label",
     "to_ascii_digits",
@@ -428,6 +429,24 @@ def range_label(
     return f"{first}{RANGE_SEPARATOR}{last}"
 
 
+def tehran_clock_label(value: datetime, *, digit_mode: DigitMode = "fa") -> str:
+    """Label a stored instant with its Tehran-local wall clock (``HH:MM``).
+
+    The clock alone, without the date: the freshness table's two-line date cell
+    shows the Jalali date on the primary line and ``time · relative age`` on the
+    secondary line, so the date must not be repeated.
+
+    Examples:
+        >>> tehran_clock_label(datetime(2026, 9, 8, 20, 30, tzinfo=UTC))
+        '۰۰:۰۰'
+        >>> tehran_clock_label(datetime(2026, 9, 8, 20, 30, tzinfo=UTC), digit_mode="latin")
+        '00:00'
+    """
+    local = to_tehran(value)
+    clock = f"{local.hour:02d}:{local.minute:02d}"
+    return to_persian_digits(clock) if digit_mode == "fa" else clock
+
+
 def tehran_timestamp_label(value: datetime, *, digit_mode: DigitMode = "fa") -> str:
     """Label a stored instant as a Tehran-local Jalali date and time.
 
@@ -435,11 +454,7 @@ def tehran_timestamp_label(value: datetime, *, digit_mode: DigitMode = "fa") -> 
         >>> tehran_timestamp_label(datetime(2026, 9, 8, 20, 30, tzinfo=UTC))
         '۱۸ شهریور ۱۴۰۵، ۰۰:۰۰'
     """
-    local = to_tehran(value)
-    clock = f"{local.hour:02d}:{local.minute:02d}"
-    if digit_mode == "fa":
-        clock = to_persian_digits(clock)
-    return f"{jalali_date_label(value, digit_mode=digit_mode)}، {clock}"
+    return f"{jalali_date_label(value, digit_mode=digit_mode)}، {tehran_clock_label(value, digit_mode=digit_mode)}"
 
 
 def tehran_day_bounds(day: date) -> tuple[datetime, datetime]:

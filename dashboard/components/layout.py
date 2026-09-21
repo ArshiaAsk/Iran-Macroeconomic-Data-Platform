@@ -40,7 +40,7 @@ import pandas as pd
 import streamlit as st
 
 from dashboard.components.escaping import escape_html
-from dashboard.components.html_table import TONES
+from dashboard.components.html_table import TONES, StatusChip, Tone
 from dashboard.formatting import format_number, jalali_date_label, tehran_timestamp_label, to_tehran
 from dashboard.i18n import t
 from dashboard.labels import domain_label
@@ -64,6 +64,7 @@ __all__ = [
     "render_status_chip",
     "render_status_dot",
     "render_top_bar",
+    "status_chip_cell",
 ]
 
 BadgeColor: TypeAlias = Literal[
@@ -92,6 +93,24 @@ STATUS_CHIPS: Final[Mapping[str, tuple[str, BadgeColor]]] = MappingProxyType(
 
 STATUS_CHIP_FALLBACK: Final[tuple[str, BadgeColor]] = ("value.status_unknown", "gray")
 """The chip for a slug outside :data:`STATUS_CHIPS`, so the mapping is total."""
+
+#: ``st.badge`` colour -> RTL-table tone. The two chip renderers share the
+#: slug -> (label key, colour) mapping in :data:`STATUS_CHIPS`; only the tone
+#: vocabulary differs (``TONES`` for the HTML table, ``BadgeColor`` for
+#: ``st.badge``), and this is the total conversion between them.
+_STATUS_CHIP_TABLE_TONES: Final[Mapping[BadgeColor, Tone]] = MappingProxyType(
+    {
+        "red": "err",
+        "orange": "warn",
+        "yellow": "warn",
+        "blue": "accent",
+        "green": "ok",
+        "violet": "accent",
+        "gray": "neutral",
+        "grey": "neutral",
+        "primary": "accent",
+    }
+)
 
 
 class BarRow(NamedTuple):
@@ -353,6 +372,28 @@ def render_status_chip(status: str) -> None:
     """
     label_key, colour = STATUS_CHIPS.get(status, STATUS_CHIP_FALLBACK)
     st.badge(t(label_key), color=colour)
+
+
+def status_chip_cell(status: str) -> StatusChip:
+    """Build the RTL-table :class:`StatusChip` for a collection-run status slug.
+
+    The slug -> (label key, colour) mapping is :data:`STATUS_CHIPS` — the same one
+    :func:`render_status_chip` uses — so the two chip renderers cannot drift; only
+    the tone vocabulary differs and is converted through
+    :data:`_STATUS_CHIP_TABLE_TONES`.
+
+    The mapping stays **total**: an unrecognised slug renders the unknown chip
+    instead of raising, because the slug is a data value
+    (``DataCollectionLog.status``) and a new source status must not blank a page.
+
+    Args:
+        status: Collection status slug (``success``/``failed``/``partial``)
+
+    Returns:
+        A :class:`StatusChip` cell ready for ``render_html_table``
+    """
+    label_key, colour = STATUS_CHIPS.get(status, STATUS_CHIP_FALLBACK)
+    return StatusChip(t(label_key), _STATUS_CHIP_TABLE_TONES[colour])
 
 
 def render_status_dot(label: str, tone: str) -> None:

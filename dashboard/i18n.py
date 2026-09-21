@@ -245,6 +245,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
         # Overview freshness (Task 16): the staleness verdict against the
         # source's expected collection cadence (dashboard.labels).
         "table.staleness": "وضعیت تازگی",
+        # The freshness table's run-status column (Task 30). The verdict column
+        # reuses `table.staleness` (the same "وضعیت تازگی" header) rather than
+        # duplicating it under a second key.
+        "table.run_status": "وضعیت اجرا",
         # Chain-linking provenance (Task 23) and the correlation matched-
         # observation summary (Task 24).
         "table.base_year_segments": "بازه‌های سال پایه",

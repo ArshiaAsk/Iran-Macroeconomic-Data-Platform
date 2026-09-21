@@ -169,6 +169,7 @@ needs no `unsafe_allow_html`.
 | `render_section_header` | `(title_key, *, subtitle=None, trailing=None, key=None)` | A native `st.subheader` with optional secondary text, laid out as one baseline-aligned row. |
 | `render_filter_bar` | `(controls, *, trailing=(), key="default")` | One filter-bar row over an arbitrary number of control callables. |
 | `render_status_chip` | `(status)` | A standalone collection-run chip (`st.badge`), for use **outside** tables. |
+| `status_chip_cell` | `(status)` | The same slug → (label, tone) mapping as `render_status_chip`, as an RTL-table `StatusChip` cell (Task 30). Not a renderer: it returns a cell. |
 | `render_status_dot` | `(label, tone)` | A standalone coloured dot with a label; the one escaped fragment here. |
 | `render_bar_list` | `(rows, total_label, *, key="default")` | The indicators-by-domain bar panel. |
 | `render_top_bar` | `(group_label, page_label, *, key="top-bar")` | The shell top bar: breadcrumb (root › group › page) and last-collection stamp (Jalali date · clock · Tehran zone). The stamp reads `cached_source_freshness()` and formats the latest `collection_timestamp` through the Tehran/Jalali helpers; an empty or unparseable frame falls back to `t("value.unknown")`. |
@@ -442,7 +443,7 @@ is checked by the type checker rather than by a format string:
 | `UnitChip(value, title=None)` | A left-to-right mono chip for a unit (`current US$`) |
 | `StatusChip(label, tone, title=None)` | An HTML/CSS chip with a tone dot — **never** `st.badge` |
 | `Dot(label, tone, title=None)` | An HTML/CSS status dot |
-| `TwoLine(primary, secondary_parts=(), title=None)` | A bold primary line above inline parts joined by the mockup's `·` |
+| `TwoLine(primary, secondary_parts=(), title=None, primary_tone=None)` | A bold primary line above inline parts joined by the mockup's `·`; `primary_tone` colours the primary line (the stale freshness date is amber) |
 
 `TONES` (`ok`/`warn`/`err`/`accent`/`neutral`) and `DENSITIES`
 (`comfortable`/`compact`) are closed sets; an unknown value raises. Density is a
@@ -626,6 +627,8 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | KPI tag placement | A real `st.badge` beneath the metric, not the mockup's inline label tag (Task 29) | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
 | KPI tooltip glyph | Streamlit's native `help=` marker (a circled `?`) rather than the mockup's circled `i` (Task 29) | The tooltip is the native `st.metric(help=…)`; `st.html` strips `<svg>`, and the native marker cannot be restyled without targeting a hashed class |
 | Secondary KPI cell width | The two secondary cells are equal-width, not the mockup's `flex: 1.35` (Task 29) | `render_kpi_band` composes one equal-weight `st.columns` row; the mockup's wider secondary cells are a component-geometry change, recorded for the Task 34 owner review rather than made in Task 29 |
+| Freshness last-collection header | `زمان گردآوری` (`table.collection_timestamp`, reused) rather than the mockup's `آخرین گردآوری` (Task 30) | The plan says to reuse the existing key; a second key with the mockup's wording would duplicate one header |
+| Freshness section summary | The `{fresh} بهروز · {stale} کهنه` trailing text is one muted run, not the mockup's amber stale count (Task 30) | The section header's trailing slot is markdown; colouring one number inside it would need HTML the component does not emit |
 | Standalone `st.badge` chip at the top of the main block | Anchors to the host block's inline start (left in the LTR main block) | It is a native element, so its position follows the surrounding block. Its planned homes are RTL contexts (the sidebar, an RTL component container); wrap it in a keyed container declaring `direction: rtl` if a page needs it elsewhere |
 | Filter-bar spacer | A `st.columns` weight, not `flex: 1` | `st.columns` expresses fixed proportions, not "absorb the remainder" |
 

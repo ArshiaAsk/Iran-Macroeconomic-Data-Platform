@@ -103,12 +103,15 @@ class TwoLine:
 
     Renders a name above its mono id (coverage) or a Jalali date above
     ``time · relative age`` (freshness). The secondary parts are joined by the
-    mockup's ``·`` separator through the ``.tm`` CSS rule.
+    mockup's ``·`` separator through the ``.tm`` CSS rule. ``primary_tone``
+    colours the primary line with one of the shared tones — the mockup colours a
+    stale freshness date amber while a fresh one stays at the default colour.
     """
 
     primary: str | None
     secondary_parts: tuple[InlineCell, ...] = ()
     title: str | None = None
+    primary_tone: Tone | None = None
 
 
 Cell: TypeAlias = Text | Ltr | UnitChip | StatusChip | Dot | TwoLine
@@ -176,7 +179,10 @@ def _render_cell(cell: Cell, null_placeholder: str) -> str:
             f"<span>{_render_inline(part, null_placeholder)}</span>"
             for part in cell.secondary_parts
         )
-        inner = f'<span class="name">{_or_missing(cell.primary, null_placeholder)}</span>'
+        name_class = "name"
+        if cell.primary_tone is not None:
+            name_class = f"name tone-{_validated_tone(cell.primary_tone)}"
+        inner = f'<span class="{name_class}">{_or_missing(cell.primary, null_placeholder)}</span>'
         if parts:
             inner += f'<span class="sm tm">{parts}</span>'
         return _with_title(inner, cell.title)

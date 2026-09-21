@@ -948,10 +948,10 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `table.freshness_dot`="وضعیت تازگی", `table.relative_age`="عمر نسبی", `table.run_status`="وضعیت اجرا"; reuse `table.source_name`, `table.collection_timestamp`, `table.records_collected`, `section.freshness_summary`.
 - **Depends:** Tasks 12, 15, 20, 21, 29.
 - **Acceptance:**
-  - [ ] Relative age and run-status chip render; stale rows sort first.
-  - [ ] Empty log renders the shared empty state.
-  - [ ] The freshness assertions use the markup strategy, not `app.dataframe`.
-  - [ ] The `section.freshness_summary` string (Task 12) is rendered as the
+  - [x] Relative age and run-status chip render; stale rows sort first.
+  - [x] Empty log renders the shared empty state.
+  - [x] The freshness assertions use the markup strategy, not `app.dataframe`.
+  - [x] The `section.freshness_summary` string (Task 12) is rendered as the
     `trailing` text of the freshness section header via `render_section_header`
     (Task 21).
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_overview.py -q`.

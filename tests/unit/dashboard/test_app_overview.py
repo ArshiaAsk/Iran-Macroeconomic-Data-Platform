@@ -11,10 +11,17 @@ from datetime import UTC, datetime
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
-from dashboard.formatting import format_number
+from dashboard.components.html_table import Dot, StatusChip, Text, TwoLine
+from dashboard.formatting import (
+    format_number,
+    jalali_date_label,
+    relative_time_label,
+    tehran_clock_label,
+)
 from dashboard.i18n import t
 from dashboard.labels import source_label
 from dashboard.page_view import (
+    build_freshness_rows,
     freshness_display,
     freshness_summary,
     overview_kpi_cells,
@@ -25,6 +32,7 @@ from tests.unit.dashboard.app_smoke import (
     ORPHAN_INDICATOR,
     REPOSITORY_ROOT,
     FakeDashboardRepository,
+    html_texts,
 )
 
 
@@ -141,11 +149,48 @@ def test_overview_staleness_verdict_is_rendered(fake_streamlit_connection) -> No
     app = _overview_app()
 
     # The fake collection log's only run is years old, so the monthly-cadence
-    # source is reported stale.
-    freshness = next(
-        frame.value for frame in app.dataframe if t("table.staleness") in frame.value.columns
+    # source is reported stale. The freshness surface is an RTL HTML table now
+    # (Task 30), so it is read through the markup helper, not `app.dataframe`.
+    markup = next(body for body in html_texts(app) if t("table.run_status") in body)
+    for header in (
+        t("table.source_name"),
+        t("table.staleness"),
+        t("table.collection_timestamp"),
+        t("table.records_collected"),
+        t("table.run_status"),
+    ):
+        assert f'<th scope="col">{header}</th>' in markup
+    assert source_label("world_bank") in markup
+    assert f'<span class="dot tone-warn">{t("value.stale")}</span>' in markup
+    assert f'<span class="chip tone-ok">{t("value.status_success")}</span>' in markup
+
+
+def test_overview_freshness_section_header_carries_the_summary(
+    fake_streamlit_connection,
+) -> None:
+    """Task 12's `section.freshness_summary` is the section header's trailing text."""
+    app = _overview_app()
+    fresh, stale = freshness_summary(
+        FakeDashboardRepository().source_freshness(), now=datetime.now(UTC)
     )
-    assert freshness[t("table.staleness")].tolist() == [t("value.stale")]
+
+    expected = t(
+        "section.freshness_summary",
+        fresh=format_number(fresh),
+        stale=format_number(stale),
+    )
+    assert expected in [element.value for element in app.markdown]
+
+
+def test_overview_freshness_uses_the_markup_strategy_not_a_dataframe(
+    fake_streamlit_connection,
+) -> None:
+    app = _overview_app()
+
+    # No dataframe carries the freshness headers any more (Task 16 map, Task 30).
+    frames = [frame.value for frame in app.dataframe]
+    assert all(t("table.staleness") not in frame.columns for frame in frames)
+    assert any(t("table.run_status") in body for body in html_texts(app))
 
 
 def test_overview_states_that_forecasts_are_indistinguishable(
@@ -263,3 +308,81 @@ def test_freshness_summary_counts_fresh_and_stale_and_ignores_unknown() -> None:
 
 def test_freshness_summary_is_zero_for_an_empty_frame() -> None:
     assert freshness_summary(pd.DataFrame(), now=datetime(2026, 1, 3, tzinfo=UTC)) == (0, 0)
+
+
+# --- Task 30: the freshness table (typed cells) -----------------------------
+
+
+def test_build_freshness_rows_orders_stale_first_with_typed_cells() -> None:
+    now = datetime(2026, 1, 3, tzinfo=UTC)
+    collected = datetime(2026, 1, 1, tzinfo=UTC)
+    table = build_freshness_rows(_ordering_frame(), now=now)
+
+    assert table.columns == (
+        t("table.source_name"),
+        t("table.staleness"),
+        t("table.collection_timestamp"),
+        t("table.records_collected"),
+        t("table.run_status"),
+    )
+    # Stale rows first (tgju, tsetmc), then the fresh one; stable within a verdict.
+    assert [row[0] for row in table.rows] == [
+        Text(source_label("tgju")),
+        Text(source_label("tsetmc")),
+        Text(source_label("hbsir")),
+    ]
+    assert [row[1] for row in table.rows] == [
+        Dot(t("value.stale"), "warn"),
+        Dot(t("value.stale"), "warn"),
+        Dot(t("value.fresh"), "ok"),
+    ]
+    # The two-line date cell: Jalali date, then time · relative age, amber when stale.
+    assert table.rows[0][2] == TwoLine(
+        jalali_date_label(collected),
+        (Text(tehran_clock_label(collected)), Text(relative_time_label(collected, now=now))),
+        primary_tone="warn",
+    )
+    assert table.rows[2][2].primary_tone == "ok"
+    assert [row[3] for row in table.rows] == [
+        Text(format_number(2)),
+        Text(format_number(3)),
+        Text(format_number(1)),
+    ]
+    assert [row[4] for row in table.rows] == [StatusChip(t("value.status_success"), "ok")] * 3
+
+
+def test_build_freshness_rows_gives_an_unknown_cadence_a_neutral_dot() -> None:
+    table = build_freshness_rows(_freshness_frame(), now=datetime(2026, 1, 3, tzinfo=UTC))
+
+    # tgju stale, hbsir fresh, unknown_source has no cadence: neutral, sorted last.
+    assert [row[1] for row in table.rows] == [
+        Dot(t("value.stale"), "warn"),
+        Dot(t("value.fresh"), "ok"),
+        Dot(t("value.unknown"), "neutral"),
+    ]
+    assert table.rows[-1][0] == Text("unknown_source")
+
+
+def test_build_freshness_rows_maps_an_unknown_status_to_the_unknown_chip() -> None:
+    frame = pd.DataFrame(
+        {
+            "source_name": ["tgju"],
+            "collection_timestamp": [datetime(2026, 1, 1, tzinfo=UTC)],
+            "status": ["brand_new_slug"],
+            "records_collected": [None],
+            "error_message": [None],
+        }
+    )
+
+    table = build_freshness_rows(frame, now=datetime(2026, 1, 3, tzinfo=UTC))
+
+    assert table.rows[0][4] == StatusChip(t("value.status_unknown"), "neutral")
+    # A missing count renders unknown, never an invented zero.
+    assert table.rows[0][3] == Text(t("value.unknown"))
+
+
+def test_build_freshness_rows_returns_headers_only_for_an_empty_frame() -> None:
+    table = build_freshness_rows(pd.DataFrame(), now=datetime(2026, 1, 3, tzinfo=UTC))
+
+    assert table.rows == ()
+    assert t("table.run_status") in table.columns

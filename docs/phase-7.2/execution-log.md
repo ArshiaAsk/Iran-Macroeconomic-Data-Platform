@@ -1539,3 +1539,69 @@ were never staged or committed (Task 7 owns them).
      mockup's `flex: 1.35`. This is `render_kpi_band`'s equal-weight `st.columns`
      row (Task 19 component geometry), so it was **not** changed in Task 29;
      flagged for the Task 34 owner review.
+
+## Task 30 — (C) Overview freshness table
+
+- **Files:** `dashboard/page_view.py` (`FreshnessTable`, `_freshness_dot_tone`,
+  `build_freshness_rows`; the section wired through `render_section_header` +
+  `render_html_table`), `dashboard/components/html_table.py` (`TwoLine.primary_tone`),
+  `dashboard/components/layout.py` (`status_chip_cell` + the total
+  `_STATUS_CHIP_TABLE_TONES` map), `dashboard/formatting.py` (`tehran_clock_label`),
+  `dashboard/i18n.py` (`table.run_status`), `tests/unit/dashboard/`
+  (`test_app_overview.py`, `test_html_table.py`, `test_layout.py`,
+  `test_formatting.py`), `docs/phase-7.2/design-system.md` (§4.1, §8, §14),
+  `docs/phase-7.2/wave-c-assets/task30/` (`overview.png`, `freshness-live.png`,
+  `freshness-mockup.png`).
+- **Build:**
+  - **Pure builder.** `build_freshness_rows(frame, *, now) -> FreshnessTable`
+    returns the localized headers plus one tuple of typed cells per source:
+    `Text` (source, via `labels.source_label`), `Dot` (verdict; amber stale /
+    green fresh / **neutral unknown** — an unknown cadence is not dressed as
+    either verdict), `TwoLine` (Jalali date; `time · relative age`, the date
+    coloured by the verdict via the new `primary_tone`), `Text` (formatted
+    record count, unknown rather than an invented zero) and `StatusChip`
+    (`status_chip_cell`). Ordering is Task 12's: stale rows first, stable within
+    a verdict.
+  - **No duplicated chip mapping.** `status_chip_cell` reads the same
+    `STATUS_CHIPS` slug → (label key, colour) mapping `render_status_chip` uses
+    and converts only the tone vocabulary (`BadgeColor` → table `Tone`) through a
+    total map. An unrecognised slug still renders the unknown chip.
+  - **One `now` per render.** `render_overview_page` captures `now = datetime.now(UTC)`
+    once and passes it to both `freshness_summary` (the header's trailing text)
+    and `build_freshness_rows`, so the verdict, the summary and every relative age
+    agree. The page no longer renders `freshness_display`; that function stays
+    (it is still exercised by the unit tests and
+    `tests/integration/test_dashboard_repository.py`, which must pass unchanged).
+  - **Empty log** → `render_empty("empty.no_collection_runs")` (the shared state),
+    and the header omits the trailing summary rather than claiming "۰ … ۰".
+  - Rendered as a **full-width** section; Task 31 composes the two-column row.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → **555 passed** (13 new:
+    stale-first typed-cell order, neutral dot for an unknown cadence, unknown
+    status slug, empty frame, the Overview markup + header summary + "no
+    dataframe" migration, `status_chip_cell` mapping, `tehran_clock_label`,
+    `TwoLine` primary tone + default + rejection, and the extended hostile-payload
+    sweep). `test_overview_staleness_verdict_is_rendered` was **migrated** to the
+    markup strategy (Task 16 map) — it was the only assertion the new structure
+    required changing. The four `freshness_display` unit tests are untouched and
+    pass.
+  - `poetry run mypy src dashboard` → 0 errors; ruff check/format clean.
+  - **Visual.** `freshness-live.png` vs `freshness-mockup.png`: column order and
+    the RTL reading order identical; amber "کهنه" dots on the stale rows and green
+    "بهروز" dots on the fresh ones; the two-line cell shows the Jalali date above
+    `time · relative age` with the date amber only when stale; the run chip is a
+    green "موفق"; the section header carries `۴ بهروز · ۳ کهنه` at the far end.
+- **Deviations:**
+  1. **i18n keys.** The plan listed `table.freshness_dot`, `table.relative_age` and
+     `table.run_status`. `table.freshness_dot` would duplicate the existing
+     `table.staleness` (`وضعیت تازگی`, the same value), so the existing key is
+     reused; `table.relative_age` is unused (the age sits inside the two-line
+     cell, not a column) and was not added; only `table.run_status` is new.
+  2. **Last-collection header wording.** `زمان گردآوری` (reused
+     `table.collection_timestamp`) instead of the mockup's `آخرین گردآوری`.
+  3. **Header summary colour.** The trailing `{fresh} بهروز · {stale} کهنه` is one
+     muted run; the mockup colours the stale count amber (the trailing slot is
+     markdown).
+  4. **`TwoLine.primary_tone`** was added (an optional trailing field, so existing
+     call sites are unchanged) to match the mockup's amber stale date; recorded in
+     `design-system.md` §8.
