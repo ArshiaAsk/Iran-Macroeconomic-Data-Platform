@@ -2424,3 +2424,45 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
 - **Deviations:** none in behaviour. The `MIGRATED_PAGES` page-module question
   above is the one interpretation recorded.
 - **Commit:** this entry is committed with the Task 36 commit.
+
+---
+
+## Wave D — Task 37 (owner visual review — generic domain explorer)
+
+- **Files:** `docs/phase-7.2/validation/archetype-domain.md` (new),
+  `docs/phase-7.2/README.md` (status → "Wave D awaiting owner review").
+- **Build:** walked the four A2 pages (GDP, Trade & Energy, FX & Gold, Labor) in
+  the browser against the design system's page-layout contract (§11–§12) and
+  against the Overview, element by element, and wrote the review. The document
+  carries a 16-row contract matrix (verdicts MATCH / DEVIATION / DEFECT / N/A per
+  the four pages), a cross-page consistency table, an Overview comparison, the
+  F3/F4 verification, the defect list and the owner checklist ending
+  `Owner sign-off: PENDING`.
+- **Result — 14 MATCH, 1 DEVIATION, 1 N/A, 0 layout defects:**
+  - MATCH: page header, section headers, empty states, no raw alerts, no
+    `unsafe_allow_html`, one callout slot, F4 placeholder, F3 legend title, the
+    HTML quality table, the native observations grid, table semantics, escaping,
+    `t()` coverage, CSS scoping.
+  - **DEVIATION (carried):** the shared filter set is `render_filters` (four
+    multiselects + Jalali presets + date inputs), not the Overview's three-select
+    `render_filter_bar` — the recorded Task 35 interpretation, for the owner.
+  - **N/A:** no KPI band — a domain page has no aggregate metric to band.
+  - **DEFECT 1 (content, not layout):** `warn.single_observation` names TGJU, but
+    it fires on the Labor page where the lone observation is SCI's quarterly
+    unemployment. Recommended as a later-wave string fix (Wave H / ETL side), not
+    a Wave D change.
+  - **Carried:** the 24ch quality-table id cap (`SCI.UNEMPLOYMENT.QUART…`) with the
+    full id in the `title`.
+- **Evidence:** the Task 36 ten-page 1440×900 set (`partB-all-pages/`) and the
+  four-page scroll crops (`task-36/after-scroll/`), plus the Task 35 before/after
+  pixel diff and the Step 0a range-cell crops.
+- **Verify (Scope B gate):** `make check` → **1446 passed, 3 skipped**, coverage
+  **89.22 %**, ruff clean; `poetry run mypy src dashboard` → **0 errors**, 68
+  source files; dashboard subset `pytest tests/unit/dashboard -q --no-cov` →
+  **630 passed**; export smoke → **1 passed**. `git status --short` clean before
+  the commit.
+- **Deviations:** the plan's Task 37 acceptance box stays **unticked** — its
+  acceptance is "owner sign-off recorded", and the sign-off is PENDING. The
+  document is delivered for the owner's review; Wave E does not start until the
+  decision is recorded.
+- **Commit:** this entry is committed with the Task 37 commit.

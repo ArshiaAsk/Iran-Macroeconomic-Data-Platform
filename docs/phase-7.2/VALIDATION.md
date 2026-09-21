@@ -802,3 +802,46 @@ heading any more.
 | Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
 | Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
 | Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** |
+
+### Wave D part B — Task 36, the review and the Scope B gate
+
+**Task 36 — domain-page headers.** `render_domain_page` opens with
+`render_page_header`; `render_fx_gold_page` and `render_labor_page` route their
+TGJU / Labor caveats through `render_page_header(..., callout_key=…)` with the
+matching tone, and the Labor page's own catalog-empty alert became
+`render_empty`. The D11 guard's `MIGRATED_PAGES` grew by the A2 archetype's whole
+composition; two tests pin the four page modules to the thin-delegate shape.
+
+| Gate | Command | Result |
+|---|---|---|
+| Task 36 verify | `poetry run pytest tests/unit/dashboard/test_layout_guard.py tests/unit/dashboard/test_app_economy.py tests/unit/dashboard/test_app_trade_welfare.py tests/unit/dashboard/test_app_fx_gold.py tests/unit/dashboard/test_app_labor.py -q --no-cov` | **41 passed** |
+| Dashboard subset | `poetry run pytest tests/unit/dashboard -q --no-cov` | **630 passed** |
+| Full gate | `make check` | **1446 passed, 3 skipped**; coverage **89.22 %** |
+| Types | `poetry run mypy src dashboard` | **0 errors**, 68 source files |
+| Lint/format | `poetry run ruff check` / `ruff format --check` | clean |
+| Export smoke | `poetry run pytest tests/unit/dashboard/test_exports.py -m integration -q --no-cov` | **1 passed** |
+
+**Task 37 — owner visual review.** The review is
+[`validation/archetype-domain.md`](validation/archetype-domain.md). It walks the
+four A2 pages against the layout contract (§11–§12) and the Overview:
+
+- **14 MATCH** — page header, section headers, shared empty states, no raw
+  alerts, no `unsafe_allow_html`, one callout slot, the F4 placeholder, the F3
+  legend title, the HTML quality table (`coverage` variant), the native
+  observations grid (`row_height` 40 px), table semantics, escaping, `t()`
+  coverage and CSS scoping.
+- **1 DEVIATION (carried)** — the shared filter set is `render_filters`, not the
+  Overview's `render_filter_bar`; recorded in the Wave D part A carry items and
+  carried to the owner.
+- **1 N/A** — no KPI band on a domain page (no aggregate metric to band).
+- **0 layout defects.** One **content** defect is filed: `warn.single_observation`
+  names TGJU but fires on the Labor page (SCI's lone quarterly observation).
+  Recommended as a later-wave string fix; it does not block Wave E.
+- **Owner sign-off: PENDING.** The plan's Task 37 acceptance box stays unticked
+  until the decision is recorded; Wave E does not start before then.
+
+The ten-page 1440×900 captures after Task 36 are in
+`docs/phase-7.2/wave-d-assets/partB-all-pages/`, with the four-page scroll crops
+in `task-36/after-scroll/`. The Task 35 before/after diff shows `gdp` and
+`trade_energy` byte-identical (0 px) and `fx_gold`/`labor` differing only in the
+caveat callout strip, so `render_page_header` reproduces `st.title` exactly.
