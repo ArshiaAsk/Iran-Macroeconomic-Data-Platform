@@ -2,7 +2,7 @@
 
 Runbook and validation records for Phase 7.2 (design system, shell, all pages).
 
-Status: **Waves F and G awaiting owner review** (Overview reference
+Status: **Waves F and G approved; Wave H in progress** (Overview reference
 implementation — Step 0f, Tasks 29–33 and the P1–P5 polish are complete, and the
 Task 34 AM-23 visual review was **signed off APPROVED on 2026-09-21** with the
 deviations A1–A9 approved as recorded; see
@@ -19,22 +19,32 @@ the emphasis owner review is
 approved deviations are recorded in its §10). Wave F (the comparison /
 correlation page, Task 42) is **complete through Task 43**; its owner review is
 [`validation/archetype-correlation.md`](validation/archetype-correlation.md),
-**prepared and awaiting the owner's sign-off**. Wave G (the data catalog page,
-Task 44) is **complete through Task 45**; its owner review is
+**signed off APPROVED on 2026-09-22** (14 MATCH rows; the shared `render_filters`
+deviation accepted). Wave G (the data catalog page, Task 44) is **complete through
+Task 45**; its owner review is
 [`validation/archetype-catalog.md`](validation/archetype-catalog.md),
-**prepared and awaiting the owner's sign-off**. Wave 0 is
-recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
+**signed off APPROVED on 2026-09-22, conditional on P1** (the tall narrow filter
+column is a defect, fixed in Wave H P1). Wave H (the final polish, the consistency
+guard, the validation record and the cross-page audit) is **in progress**. Wave 0
+is recorded in [`wave-0-spike.md`](wave-0-spike.md) (capabilities, pre-change
 baseline and the per-wave gate rule). Per-task evidence lives in
 [`execution-log.md`](execution-log.md); the Wave A, Wave B and Wave C visual
 reviews and gates are in [`VALIDATION.md`](VALIDATION.md).
 
-Sign-off carry items (2026-09-21): **F3** (chart legend title `label`) and **F4**
+Sign-off carry items (2026-09-22): **F3** (chart legend title `label`) and **F4**
 (English `Choose options` placeholder) were scheduled in Waves D–G and have
 **landed in Wave D (Task 35)** on the shared chart builders and the shared filter
-set; **F1, F2, F5, F7** and the Gregorian-vs-Jalali range-cell direction are
-recorded as optional Wave H polish candidates and are **not scheduled**; the
-Gregorian range font-size defect is **fixed** (Step 0a); two data-quality findings
-(D1 TGJU coverage window, D2 SCI rows without Gold observations) are handed to the
+set; the Gregorian range font-size defect is **fixed** (Step 0a). The filter-set
+shapes are **not unified** — recorded as an **accepted deviation**: the Overview
+uses `render_filter_bar` of selects, the domain/emphasis/correlation pages use
+`render_filters`, and the catalog uses a bar of simple controls plus a full-width
+`render_filters`. **Not done, accepted deviations (with reasons):** **F1** content
+padding 70 px vs the mockup's 40 px (owner did not request; it is a global change);
+**F7** no-wrap of the short categorical coverage columns (owner did not request);
+the Gregorian ranges read LTR while the Jalali ranges read RTL (the D3 bidi
+decision); the `<td title>` hover tooltip is **unverified in a real browser** (an
+owner checklist item); and the ETL/catalog findings **D1** (TGJU snapshot coverage
+window) and **D2** (SCI rows without Gold observations) are handed to the
 ETL/catalog side and recorded in the plan's Deferred Scope.
 
 Documents:
@@ -59,10 +69,10 @@ Documents:
   against the layout contract (**owner sign-off APPROVED, 2026-09-22**).
 - [`validation/archetype-correlation.md`](validation/archetype-correlation.md) —
   the Wave F review of the comparison / correlation page against the layout
-  contract (**prepared, awaiting owner sign-off**).
+  contract (**owner sign-off APPROVED, 2026-09-22**).
 - [`validation/archetype-catalog.md`](validation/archetype-catalog.md) — the
   Wave G review of the data catalog page against the layout contract
-  (**prepared, awaiting owner sign-off**).
+  (**owner sign-off APPROVED, 2026-09-22, conditional on Wave H P1**).
 - [`execution-log.md`](execution-log.md) — per-task execution log (files, Verify
   result, deviations, commit hash).
 - `README.md` — this file, completed in Wave H.

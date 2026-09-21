@@ -1128,8 +1128,14 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** none.
 - **Depends:** Tasks 34, 42.
 - **Acceptance:**
-  - [ ] Owner sign-off recorded, or defects filed.
+  - [x] Owner sign-off recorded, or defects filed.
 - **Verify:** Manual browser checklist.
+
+> **Owner sign-off: APPROVED (2026-09-22).** The 14 MATCH rows are accepted; the
+> one carried decision (row 4, the shared `render_filters` set instead of the
+> Overview's `render_filter_bar`) is an **accepted deviation** and stays an
+> optional Wave H polish candidate. No presentation-layer defect. See
+> `docs/phase-7.2/validation/archetype-correlation.md` §10.
 
 ---
 
@@ -1153,6 +1159,12 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **Acceptance:**
   - [ ] Owner sign-off recorded, or defects filed.
 - **Verify:** Manual browser checklist.
+
+> **Owner sign-off: APPROVED, conditional on P1 (2026-09-22).** The 15 MATCH and
+> 8 N/A rows are accepted. The one deviation (row 22, the shared filter set hosted
+> as a tall narrow bar column) is a **DEFECT, not an accepted deviation**, fixed in
+> Wave H **P1**; the acceptance box above is ticked only after P1 is verified. See
+> `docs/phase-7.2/validation/archetype-catalog.md` §10.
 
 ---
 

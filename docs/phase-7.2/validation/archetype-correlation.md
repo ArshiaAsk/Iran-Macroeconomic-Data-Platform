@@ -1,7 +1,7 @@
 # Comparison / correlation review — Correlation (Wave F)
 
-**Status: PREPARED — AWAITING OWNER REVIEW.**
-**Owner sign-off: PENDING.**
+**Status: SIGNED OFF — APPROVED.**
+**Owner sign-off: APPROVED (2026-09-22).**
 
 This is the Wave F owner visual review (Task 43). It walks the A4
 **comparison / correlation** page against the design system's **page-layout
@@ -204,3 +204,17 @@ crops, then works down this list.
 When the owner records the decision above, Wave F closes. The one carried
 decision (row 4) does **not** block Wave G: it is either a Wave H polish candidate
 or an accepted shared interpretation.
+
+## 10. Owner sign-off (recorded 2026-09-22)
+
+The owner's decision, verbatim:
+
+- **Owner sign-off: APPROVED.** The **14 MATCH** rows are accepted.
+- **Row 4 — the shared `render_filters` filter set (not the Overview's
+  `render_filter_bar`): accepted as an accepted deviation.** The shared filter set
+  is the deliberate app-wide shape for the domain/emphasis/correlation pages;
+  aligning it with `render_filter_bar` stays an optional Wave H polish candidate
+  and is not scheduled.
+- **No presentation-layer defect** is filed on the correlation page.
+
+**Owner sign-off: APPROVED (2026-09-22).**

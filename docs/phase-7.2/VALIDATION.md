@@ -1137,3 +1137,42 @@ regressed.**
   shape is the Wave H candidate.
 - The Wave D carry list (F1, F2, F5, F7, filter-bar shape, Gregorian/Jalali range
   direction, `neutralise()` scroll no-op Task 47) is unchanged.
+
+## Wave H — Step 0 (Wave F and G owner decisions, docs only)
+
+**Scope.** Wave H opens by recording the owner's decisions on the two pending
+archetype reviews (Wave F correlation, Task 43; Wave G catalog, Task 45). No code
+change; this is a docs-only step.
+
+| Item | Commit | Delta |
+|---|---|---|
+| Step 0 | *(this commit)* | Wave F sign-off APPROVED recorded (`validation/archetype-correlation.md` §10); Wave G sign-off APPROVED **conditional on P1** recorded (`validation/archetype-catalog.md` §10, row 22 → DEFECT); README status → "Waves F and G approved; Wave H in progress"; plan Task 43 box ticked, Task 45 box left open until P1 |
+
+The owner's decisions, recorded verbatim on 2026-09-22:
+
+- **Wave F: owner sign-off APPROVED.** The **14 MATCH** rows are accepted; the one
+  carried decision (row 4, the shared `render_filters` filter set instead of the
+  Overview's `render_filter_bar`) is an **accepted deviation**.
+- **Wave G: owner sign-off APPROVED, conditional on P1.** The 15 MATCH and 8 N/A
+  rows are accepted. The one deviation (row 22, the shared filter set hosted as a
+  tall narrow bar column) is a **DEFECT, not an accepted deviation**; **P1** fixes
+  it and the Task 45 plan box is ticked only after P1 is verified.
+- **Filter-set shapes are not unified** — recorded as an **accepted deviation**:
+  the Overview uses `render_filter_bar` of selects; the domain/emphasis/correlation
+  pages use `render_filters`; the catalog uses a bar of simple controls plus a
+  full-width `render_filters`.
+- **Not done, accepted deviations (with reasons):**
+  - **F1** content padding 70 px vs the mockup's 40 px — owner did not request it;
+    it is a global change.
+  - **F7** no-wrap of the short categorical coverage columns — owner did not
+    request it.
+  - the Gregorian ranges read LTR while the Jalali ranges read RTL — the **D3**
+    bidi decision.
+  - the `<td title>` hover tooltip is **unverified in a real browser** — an owner
+    checklist item.
+  - the ETL/catalog findings **D1** and **D2** — handed to the ETL/catalog side
+    (the plan's Deferred Scope).
+- **README status:** "Waves F and G approved; Wave H in progress".
+
+**Gate.** Documentation-only change: no test run is required (the P1 and gate
+steps re-run the suite). The tree contains only `docs/` edits.

@@ -2994,3 +2994,24 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   row height); the other nine pages are byte-identical.
 - **Deviations:** none.
 - **Commit:** Scope B gate commit.
+
+## Wave H — Step 0 (Wave F and G owner decisions, docs only)
+
+- **Files:** `docs/phase-7.2/validation/archetype-correlation.md` (status →
+  SIGNED OFF; §10 owner sign-off), `docs/phase-7.2/validation/archetype-catalog.md`
+  (status → SIGNED OFF conditional on P1; row 22 → DEFECT; §7/§8/§9/§10),
+  `docs/phase-7.2/VALIDATION.md` (new "Wave H — Step 0" section),
+  `docs/phase-7.2/README.md` (status → "Waves F and G approved; Wave H in
+  progress"; carry items), `docs/plans/phase-7.2-dashboard-redesign.md` (Task 43
+  box ticked; Task 45 box left open with the conditional sign-off note).
+- **Build (documentation only):** recorded the owner's decisions verbatim —
+  Wave F APPROVED (14 MATCH; the shared `render_filters` deviation accepted);
+  Wave G APPROVED **conditional on P1** (the tall narrow filter column is a
+  **defect**, not an accepted deviation); the filter-set shapes are **not
+  unified** (accepted deviation); and the not-done accepted deviations (F1, F7,
+  the Gregorian-LTR/Jalali-RTL range direction, the `<td title>` hover tooltip,
+  and the ETL/catalog findings D1/D2).
+- **Verify:** docs-only; no test run required. The P1 step and the Scope A gate
+  re-run the suite.
+- **Deviations:** none.
+- **Commit:** Step 0 commit.
