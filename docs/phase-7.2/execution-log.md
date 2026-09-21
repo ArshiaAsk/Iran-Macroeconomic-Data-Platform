@@ -2351,3 +2351,76 @@ Tasks 35 (composition), 36 (headers + guard) and 37 (owner visual review).
   `render_fx_gold_page`, `render_labor_page`); the D11 guard is not yet enabled
   for them.
 - **Commit:** this entry is committed with the Wave D part A gate commit.
+
+## Wave D — Task 36: the domain-page headers migrate, and the D11 guard covers A2
+
+- **Files:** `dashboard/page_view.py` (`render_domain_page`, `render_fx_gold_page`,
+  `render_labor_page`), `dashboard/pages/3_GDP_Economy.py`,
+  `dashboard/pages/4_Trade_Welfare_Energy.py`,
+  `tests/unit/dashboard/test_layout_guard.py`, `docs/phase-7.2/design-system.md`.
+- **Build:** each of the four pages now opens with the shared page header.
+  - `render_domain_page(title, …)` became `render_domain_page(title_key, …)` and
+    calls `render_page_header(title_key)`; the two page modules pass the catalog
+    key (`"page.gdp"`, `"page.trade_energy"`) instead of `t(...)`, so the title
+    resolves in exactly one place. Their rendered output is unchanged —
+    `render_page_header` calls `st.title(t(key))`.
+  - `render_fx_gold_page` — `st.title` + `st.warning` became
+    `render_page_header("page.fx_gold", callout_key="warn.tgju_snapshot")`.
+  - `render_labor_page` — `st.title` + `st.info` became
+    `render_page_header("page.labor", callout_key="warn.labor_publication",
+    tone="info")`, and its own catalog-empty `st.info` became
+    `render_empty("empty.no_indicators_for_page")` (the guard found it; it was the
+    last raw alert in a migrated path).
+  - `MIGRATED_PAGES` grows by the A2 archetype's whole composition:
+    `render_domain_page`, `render_domain_body`, `_render_series_section`,
+    `_render_scaled_chart`, `_render_capped_rows`, `render_fx_gold_page`,
+    `render_labor_page`.
+- **Review — caveat text vs the Task 17 bold label.** The TGJU and Labor caveats
+  are routed **without** a `label_key`, so their rendered text is byte-identical
+  to before and every existing assertion stands unchanged: the component-level
+  `test_layout.py::test_page_header_honours_the_callout_tone` already pins
+  `render_page_header("page.labor", callout_key="warn.labor_publication",
+  tone="info")` to exactly `[t("warn.labor_publication")]` in `app.info`, and
+  `test_app_labor.py`'s `in [info.value …]` check matches it. The bold label stays
+  the Overview methodology callout's feature (Task 33): inventing Persian label
+  copy for these two caveats would be new product copy, not a migration.
+- **The four page modules.** `3_GDP_Economy.py`, `4_Trade_Welfare_Energy.py`,
+  `5_FX_Gold.py` and `10_Labor.py` are thin delegates: no function of their own,
+  no Streamlit import, one call to a migrated composition function. The plan asks
+  to "add the four page modules … to the mapping", but the guard is
+  function-scoped and these modules contain no function, so the equivalent is two
+  new tests that pin the shape: `test_the_four_a2_page_modules_are_thin_delegates`
+  (no `FunctionDef`, no `st.` access, exactly one call, and that call is a listed
+  entry point) and `test_the_guard_covers_the_a2_archetype` (the listed names exist
+  in the module, so a rename cannot leave the guard checking a stale name). A page
+  module that grows a composition of its own now fails instead of silently
+  escaping the guard.
+- **Verify:** the plan's command —
+  `poetry run pytest tests/unit/dashboard/test_layout_guard.py
+  tests/unit/dashboard/test_app_economy.py
+  tests/unit/dashboard/test_app_trade_welfare.py
+  tests/unit/dashboard/test_app_fx_gold.py tests/unit/dashboard/test_app_labor.py
+  -q --no-cov` → **41 passed**; the dashboard subset → **630 passed** (628 before,
+  +2 new guard tests); `make check` → **1446 passed, 3 skipped**, coverage
+  **89.22 %**; `poetry run mypy src dashboard` → **0 errors**; `ruff
+  check`/`ruff format --check` clean; the export smoke → **1 passed**. Grep of the
+  four page modules for `st.` / `streamlit` → none.
+- **Visual evidence** (`docs/phase-7.2/wave-d-assets/`): the ten-page 1440×900 set
+  `partB-all-pages/` (post-Task-36), diffed against `partA-all-pages/`
+  (post-Task-35), plus four-page scrolled crops in `task-36/after-scroll/`.
+  - `correlation`, `catalog`, `inflation`, `welfare`, `market`, `gdp`,
+    `trade_energy` — **0 changed pixels**. The two `render_domain_page` pages are
+    byte-identical, confirming `render_page_header` reproduces `st.title`.
+  - `fx_gold` — 5980 px inside y 198–252: the amber TGJU caveat callout (accent bar
+    and glyph) replacing the plain `st.warning`.
+  - `labor` — 12774 px inside y 198–277: the blue SCI caveat callout replacing the
+    plain `st.info` (taller because the caveat wraps to two lines).
+  - `overview` — 819 px in three small digit regions (rows 531–539, 583–594,
+    844–855) at the freshness table's relative-age column. **Not a code change:**
+    `relative_time_label` floors the elapsed seconds, and the three collections
+    stamped 19:44 / 19:43 / 19:42 UTC on 2026-09-13 crossed their exact 8/10-day
+    boundary at 19:44 UTC — between the Task 35 capture (≈19:13 UTC) and this one.
+    The Overview code path is untouched (its Task 35 before/after diff was 0 px).
+- **Deviations:** none in behaviour. The `MIGRATED_PAGES` page-module question
+  above is the one interpretation recorded.
+- **Commit:** this entry is committed with the Task 36 commit.

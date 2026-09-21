@@ -167,14 +167,30 @@ CATALOG_FILTER_STATE_KEYS: Final[tuple[str, ...]] = (
 
 
 def render_domain_page(
-    title: str,
+    title_key: str,
     domains: Iterable[str],
     key_prefix: str,
     default_indicators: list[str] | None = None,
     repository: DashboardRepository | None = None,
 ) -> None:
-    """Render a domain-specific Gold exploration page."""
-    st.title(title)
+    """Render a domain-specific Gold exploration page.
+
+    The page opens with the shared page header (D11), so the two pages that use
+    this composition -- GDP & Economy and Trade & Energy -- draw the same header
+    shape as every other migrated page and the D11 guard can check them. Neither
+    page has a caveat, so no callout is rendered; a page that needs one (FX & Gold,
+    Labor) composes its own header through :func:`render_fx_gold_page` /
+    :func:`render_labor_page`.
+
+    Args:
+        title_key: Catalog key of the page title (``page.<key>``), not a resolved
+            string: :func:`render_page_header` resolves it
+        domains: Catalog domains the page owns
+        key_prefix: Widget-key prefix for the page's filters
+        default_indicators: Ids selected by default, when any
+        repository: Repository seam, or ``None`` for the cached query wrappers
+    """
+    render_page_header(title_key)
     render_domain_body(
         domains,
         key_prefix,
@@ -1518,12 +1534,12 @@ def _count_label(value: object) -> str:
 def render_fx_gold_page(repository: DashboardRepository | None = None) -> None:
     """Render the TGJU FX/gold page with snapshot limitations.
 
-    The page title is rendered once here; the body composition is
-    :func:`render_domain_body` rather than :func:`render_domain_page`, so the
-    title cannot appear twice on the same page.
+    The page header carries the snapshot caveat, so the title and the warning are
+    one shared component (Task 18 + Task 17) instead of a raw ``st.title`` /
+    ``st.warning``. The body composition is :func:`render_domain_body` rather than
+    :func:`render_domain_page`, so the title cannot appear twice on the same page.
     """
-    st.title(t("page.fx_gold"))
-    st.warning(t("warn.tgju_snapshot"))
+    render_page_header("page.fx_gold", callout_key="warn.tgju_snapshot")
     render_domain_body(
         ("fx", "gold"),
         "fx_gold",
@@ -1584,16 +1600,19 @@ def render_labor_page(repository: DashboardRepository | None = None) -> None:
     implied trend. The unemployment series carries no derived Gold rows today, so
     the "Include derived series" control is inert until the ETL publishes one --
     exactly as it behaves for every other domain without derived rows.
+
+    The page header carries the SCI publication caveat (Task 18 + Task 17), so the
+    title and the notice are one shared component rather than a raw ``st.title`` /
+    ``st.info``.
     """
-    st.title(t("page.labor"))
-    st.info(t("warn.labor_publication"))
+    render_page_header("page.labor", callout_key="warn.labor_publication", tone="info")
     domain_list = [LABOR_DOMAIN]
     if repository is None:
         catalog = cached_list_indicators(domains=tuple(domain_list))
     else:
         catalog = repository.list_indicators(domains=domain_list)
     if catalog.empty:
-        st.info(t("empty.no_indicators_for_page"))
+        render_empty("empty.no_indicators_for_page")
         return
     render_domain_body(
         domain_list,

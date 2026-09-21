@@ -1045,8 +1045,8 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** reuse `warn.tgju_snapshot`, `warn.labor_publication`.
 - **Depends:** Tasks 34, 35.
 - **Acceptance:**
-  - [ ] No raw `st.title`/`st.warning`/`st.info` in the four migrated paths.
-  - [ ] Guard passes; all four smoke tests pass.
+  - [x] No raw `st.title`/`st.warning`/`st.info` in the four migrated paths.
+  - [x] Guard passes; all four smoke tests pass.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_layout_guard.py tests/unit/dashboard/test_app_economy.py tests/unit/dashboard/test_app_trade_welfare.py tests/unit/dashboard/test_app_fx_gold.py tests/unit/dashboard/test_app_labor.py -q`.
 
 ### 37. (D) OWNER VISUAL REVIEW — generic domain explorer

@@ -44,8 +44,10 @@ BANNED_KEYWORDS: Final[frozenset[str]] = frozenset({"unsafe_allow_html"})
 
 #: Module → the migrated page functions in it. Starts with the Overview (Wave C)
 #: and grows once per wave; the plan writes the same map with a trailing ``...``.
-#: The Overview's two section renderers are listed alongside its entry function so
-#: the guard covers the whole page composition, not just its first call.
+#: A page's whole composition is listed, not just its entry function: the
+#: Overview's two section renderers, and for the A2 archetype (Wave D) the generic
+#: composition, its section/scaled-chart/capped-rows helpers, and the two pages
+#: that compose their own header (FX & Gold, Labor).
 MIGRATED_PAGES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
         "dashboard/page_view.py": frozenset(
@@ -53,9 +55,31 @@ MIGRATED_PAGES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
                 "render_overview_page",
                 "_render_domain_counts",
                 "_render_coverage_section",
+                # A2 — the generic domain explorer (Wave D, Task 36).
+                "render_domain_page",
+                "render_domain_body",
+                "_render_series_section",
+                "_render_scaled_chart",
+                "_render_capped_rows",
+                "render_fx_gold_page",
+                "render_labor_page",
             }
         ),
     }
+)
+
+#: The four A2 page modules (GDP & Economy, Trade & Energy, FX & Gold, Labor).
+#: Each is a **thin delegate**: no function of its own, one call to a migrated
+#: ``page_view`` composition function, and no direct Streamlit call. The guard
+#: below is function-scoped, so it has nothing to inspect inside them; these two
+#: tests pin the invariant that makes that safe -- a page module that grows a
+#: function or reaches for Streamlit itself is a composition the guard is not
+#: covering.
+A2_PAGE_MODULES: Final[tuple[str, ...]] = (
+    "dashboard/pages/3_GDP_Economy.py",
+    "dashboard/pages/4_Trade_Welfare_Energy.py",
+    "dashboard/pages/5_FX_Gold.py",
+    "dashboard/pages/10_Labor.py",
 )
 
 #: Modules that own the contract's implementation and therefore must call the
@@ -164,10 +188,68 @@ def test_no_layout_violation_in_a_migrated_function() -> None:
 def test_the_guard_scans_the_migrated_modules() -> None:
     modules = migrated_modules()
 
-    # Not vacuous: the Overview's composition is actually scanned.
+    # Not vacuous: every migrated composition lives in the one page module.
     assert [module for module, _ in modules] == ["dashboard/page_view.py"]
     assert all(path.is_file() for _, path in modules)
     assert "render_overview_page" in MIGRATED_PAGES["dashboard/page_view.py"]
+
+
+def test_the_guard_covers_the_a2_archetype() -> None:
+    """Wave D (Task 36): the four generic-domain pages' compositions are listed."""
+    migrated = MIGRATED_PAGES["dashboard/page_view.py"]
+
+    assert {
+        "render_domain_page",
+        "render_domain_body",
+        "_render_series_section",
+        "_render_scaled_chart",
+        "_render_capped_rows",
+        "render_fx_gold_page",
+        "render_labor_page",
+    } <= migrated
+    # The functions are real, so the guard is not checking a stale name.
+    source = (REPOSITORY_ROOT / "dashboard/page_view.py").read_text("utf-8")
+    declared = {
+        node.name
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    assert migrated <= declared
+
+
+def test_the_four_a2_page_modules_are_thin_delegates() -> None:
+    """A page module holds no function and calls no Streamlit display API.
+
+    The guard is function-scoped, so it cannot inspect a module whose whole body
+    is one call to a migrated composition function. This test is what makes that
+    safe: it fails if a page module grows a composition of its own, which the
+    guard would then not be covering.
+    """
+    for module in A2_PAGE_MODULES:
+        source = (REPOSITORY_ROOT / module).read_text("utf-8")
+        tree = ast.parse(source)
+
+        assert not [
+            node for node in tree.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        ], module
+        assert not [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "st"
+        ], module
+        assert find_layout_violations(source, module=module) == []
+        # The module composes through exactly one migrated entry point.
+        called = {
+            node.value.func.id
+            for node in tree.body
+            if isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+        }
+        assert len(called) == 1, module
+        assert called <= MIGRATED_PAGES["dashboard/page_view.py"], module
 
 
 def test_guard_flags_a_raw_metric_in_a_migrated_function() -> None:

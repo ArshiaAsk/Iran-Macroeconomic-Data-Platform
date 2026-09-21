@@ -611,9 +611,16 @@ not the page modules, because the components themselves must call those APIs.
 
 **Status:** the contract above is ratified (D11) and **enforced** since Task 33 by
 `tests/unit/dashboard/test_layout_guard.py`, whose `MIGRATED_PAGES` map starts
-with the Overview's migrated functions and grows once per wave. Until a function
-is listed, it is not checked. The guard's whitelist is pinned against the list
-above by its own test, so the two cannot drift.
+with the Overview's migrated functions and grows once per wave — Task 36 added the
+A2 archetype's whole composition (`render_domain_page`, `render_domain_body`,
+`_render_series_section`, `_render_scaled_chart`, `_render_capped_rows`,
+`render_fx_gold_page`, `render_labor_page`). Until a function is listed, it is not
+checked. A page module that is a **thin delegate** (no function of its own, one
+call to a migrated composition function, no direct Streamlit call) has nothing
+for a function-scoped guard to inspect; two tests in that file pin the four A2
+page modules to that shape, so a page module that grows a composition of its own
+fails rather than silently escaping the guard. The guard's whitelist is pinned
+against the list above by its own test, so the two cannot drift.
 
 ## 13. Do / Don't
 
