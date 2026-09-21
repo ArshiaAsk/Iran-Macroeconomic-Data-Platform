@@ -626,7 +626,7 @@ functions, growing once per wave. Until a function is listed, it is not checked.
 | Metric/subheader type scale | **Resolved by Step 0e** — the theme is now pinned to `TYPE_SCALE` (h1 28px/700, section 18px/600, metric value 28px/600); the mockup's line-heights and the KPI label's 13px/500 are not theme options, and **Task 29** pinned them in `direction.py` | `tokens.py` now holds `TYPE_SCALE`, so the scale is no longer "the theme's own"; the remaining three values are scoped CSS |
 | KPI tag placement | A real `st.badge` beneath the metric, not the mockup's inline label tag (Task 29) | The `:orange-badge[…]` markdown shorthand leaks its syntax into the metric label and the tooltip's accessible name |
 | KPI tooltip glyph | Streamlit's native `help=` marker (a circled `?`) rather than the mockup's circled `i` (Task 29) | The tooltip is the native `st.metric(help=…)`; `st.html` strips `<svg>`, and the native marker cannot be restyled without targeting a hashed class |
-| Secondary KPI cell width | The two secondary cells are equal-width, not the mockup's `flex: 1.35` (Task 29) | `render_kpi_band` composes one equal-weight `st.columns` row; the mockup's wider secondary cells are a component-geometry change, recorded for the Task 34 owner review rather than made in Task 29 |
+| Secondary KPI cell width | **Resolved by P2 (Wave C part 2)** — `kpi_column_weights` gives each secondary cell weight `1.35` against `1` for a primary cell, matching the mockup's `.kpi.sec{flex:1.35}` | `st.columns` owns the geometry and takes the ratio as weights; Task 29 left the cells equal-width and flagged it, and P2 made the ratio explicit and unit-tested |
 | Freshness last-collection header | `زمان گردآوری` (`table.collection_timestamp`, reused) rather than the mockup's `آخرین گردآوری` (Task 30) | The plan says to reuse the existing key; a second key with the mockup's wording would duplicate one header |
 | Freshness section summary | The `{fresh} بهروز · {stale} کهنه` trailing text is one muted run, not the mockup's amber stale count (Task 30) | The section header's trailing slot is markdown; colouring one number inside it would need HTML the component does not emit |
 | Bar-list domain order | **Resolved by P1 (Wave C part 2)** — `ordered_domain_rows` sorts the rows count-descending, ties by the domain's Persian display name ascending, so the bars match the mockup's order | The mockup's bars are count-descending; Task 31 left `available_domains`'s order and flagged it here, and P1 made the sort explicit and unit-tested |
@@ -647,9 +647,10 @@ functions, growing once per wave. Until a function is listed, it is not checked.
   label** (13px/500, was 12.25px/400) and the **secondary KPI value** (20px, the
   theme sets one 28px size). All five values are asserted in
   `test_direction.py`/`test_layout.py` and measured live (section 3).
-- **KPI band fidelity for the Task 34 owner review.** The secondary cells are
-  equal-width rather than the mockup's `flex: 1.35`, and the "نیازمند بررسی" tag
-  renders beneath the metric rather than inline in the label (section 14).
+- **KPI band fidelity for the Task 34 owner review.** The "نیازمند بررسی" tag
+  renders beneath the metric rather than inline in the label (section 14). The
+  secondary-cell width is now the mockup's `flex: 1.35` ratio (P2,
+  `kpi_column_weights`), so only the tag placement remains an open deviation.
 - **Deferred:** dark mode (D14), the explicit refresh control, indicator search on
   domain pages, the IMF forecast/actual labeling (needs an ETL change), and the
   cache-TTL item.

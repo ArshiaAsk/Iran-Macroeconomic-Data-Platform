@@ -18,6 +18,8 @@ from dashboard.components.html_table import StatusChip
 from dashboard.components.layout import (
     STATUS_CHIPS,
     BarRow,
+    KpiCell,
+    kpi_column_weights,
     render_bar_list,
     status_chip_cell,
 )
@@ -312,6 +314,42 @@ def test_kpi_band_typography_pins_the_scale_the_theme_cannot_express() -> None:
     # The boundary hook and the every-secondary-cell hook are distinct selectors:
     # only the latter may size the value.
     assert CSS_SELECTORS["kpi_secondary_group"] != CSS_SELECTORS["kpi_secondary_cell"]
+
+
+def test_kpi_column_weights_give_secondary_cells_the_mockup_ratio() -> None:
+    """P2: the mockup's `.kpi.sec{flex:1.35}` is expressed as the columns spec."""
+    cells = [
+        KpiCell("metric.sources", "۷"),
+        KpiCell("metric.domains", "۹"),
+        KpiCell("metric.derived_series", "۳۲", secondary=True),
+        KpiCell("metric.orphan_series", "۳۲", secondary=True),
+    ]
+
+    assert kpi_column_weights(cells) == [1.0, 1.0, 1.35, 1.35]
+
+
+def test_kpi_column_weights_default_every_cell_to_primary() -> None:
+    cells = [KpiCell("metric.sources", "۷"), KpiCell("metric.domains", "۹")]
+
+    assert kpi_column_weights(cells) == [1.0, 1.0]
+
+
+def test_kpi_band_renders_a_mixed_band_with_the_secondary_weights() -> None:
+    """A band with mixed cells still renders every cell (the weights are a spec)."""
+    app = _run(KPI_BAND_SCRIPT)
+
+    assert not app.exception
+    assert len(app.metric) == 6
+    assert kpi_column_weights(
+        [
+            KpiCell("metric.sources", "۷"),
+            KpiCell("metric.domains", "۹"),
+            KpiCell("metric.active_indicators", "۵۰"),
+            KpiCell("metric.gold_observations", "۸٬۱۹۵"),
+            KpiCell("metric.derived_series", "۳۲", secondary=True),
+            KpiCell("metric.orphan_series", "۳۲", secondary=True),
+        ]
+    ) == [1.0, 1.0, 1.0, 1.0, 1.35, 1.35]
 
 
 def test_kpi_band_rejects_an_unknown_tone() -> None:

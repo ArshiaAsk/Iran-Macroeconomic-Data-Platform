@@ -1720,3 +1720,29 @@ were never staged or committed (Task 7 owns them).
 - **Deviations:** none. The bar order now matches the mockup; the §14 note is
   resolved rather than carried.
 - **Commit:** recorded in the "Wave C part 2a gate" entry below.
+
+### P2 — secondary KPI cell width (mockup `flex: 1.35`)
+
+- **Files:** `dashboard/components/layout.py` (new pure `kpi_column_weights`
+  + `_KPI_PRIMARY_WEIGHT`/`_KPI_SECONDARY_WEIGHT`; `render_kpi_band` passes the
+  weights to `st.columns`), `tests/unit/dashboard/test_layout.py`,
+  `docs/phase-7.2/design-system.md` (§14 row resolved, §15 note updated).
+- **Build:** `kpi_column_weights(cells)` returns `1.35` for a cell flagged
+  `secondary` and `1.0` otherwise; `render_kpi_band` renders
+  `st.columns(kpi_column_weights(cells))` instead of an equal-weight row. The
+  ratio lives in the component (not CSS) because `st.columns` owns the geometry.
+- **Verify:**
+  - `poetry run pytest tests/unit/dashboard/test_layout.py -q --no-cov` → 44
+    passed (3 new: the 1.35/1.0 spec on a mixed band, all-primary default, and a
+    mixed 6-cell band still rendering every cell).
+  - **Measured (live DOM, 1440 px):** the four primary cells render
+    **143.85 px** and the two secondary cells **198.30 px** — a rendered ratio of
+    **1.378**. The `flex-basis` percentages Streamlit derives from the weights are
+    **14.9254 %** (primary) and **20.1493 %** (secondary), i.e. exactly **1.35×**;
+    the rendered widths diverge from 1.35 only because Streamlit's basis is
+    `calc(<pct>% - 14px)`, so a fixed 14 px gap is subtracted from every cell.
+    The spec is exact; the rendered ratio is ~1.38.
+- **Deviations:** none. The `1.378` rendered ratio (vs the spec's exact `1.35`) is
+  an artifact of Streamlit's `calc(% - gap)` column basis, recorded here rather
+  than worked around.
+- **Commit:** recorded in the "Wave C part 2a gate" entry below.
