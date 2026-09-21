@@ -329,6 +329,31 @@ mockup's 48 px top bar — Task 28 builds the mockup's bar as a new element and 
 not restyle the native one. The native alert ships **no icon element**, which is
 why the callout glyph is drawn in CSS.
 
+**Sidebar brand + DB status (Task 27, fallback 2).** The sidebar brand and the
+DB-status indicator are CSS-pinned, not rendered by `st.logo` or
+`st.markdown` brand calls:
+
+- **Brand:** `[data-testid="stSidebarHeader"]` is empty chrome when no `st.logo`
+  is used, so the mark and the brand text are CSS pseudo-elements:
+  `::before` is a CSS-drawn accent square (no SVG — `st.html` strips `<svg>`),
+  and `::after` carries the escaped brand text from `t("app.brand")`. The header
+  is a flex row (`display: flex; align-items: center; gap: 10px`) so the mark
+  and text line up at the RTL start. The brand text is escaped by
+  `_escape_css_string` (backslashes, double quotes and control characters) before
+  interpolation into the `content` declaration. The pure builder is
+  `brand_sidebar_css(brand_text)` in `direction.py`; the text is resolved by the
+  entrypoint (`t("app.brand")`) and passed to `inject_direction_css(brand_text=…)`.
+- **DB status:** `[data-testid="stSidebarUserContent"]` is pinned to the sidebar
+  bottom by `order: 2; margin-top: auto` (the spike's corrected recipe). The
+  status is the shared `render_status_dot` component (Task 11), not a native
+  `st.success`/`st.error` alert: the sidebar footer needs a compact dot + label,
+  not a full alert banner. The tone is `ok` (connected) or `err` (unavailable).
+
+**Deviation from the mockup.** The mockup's brand block shows a custom logo
+glyph; the fallback uses a plain accent-coloured square because no brand asset
+exists and `st.html` strips inline SVG. The square is a CSS shape, not a glyph,
+so it scales with the font size and stays within the accent token.
+
 ## 7. `st.html` survival (DOMPurify, `USE_PROFILES:{html:true}`)
 
 `st.html` is not iframed and ignores JavaScript by default. What survives, verified

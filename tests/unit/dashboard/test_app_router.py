@@ -13,10 +13,10 @@ from streamlit.testing.v1 import AppTest
 
 from dashboard.i18n import t
 from dashboard.navigation import PAGES
-from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT
+from tests.unit.dashboard.app_smoke import REPOSITORY_ROOT, html_texts
 
 
-def test_entrypoint_renders_the_default_page(fake_streamlit_connection) -> None:
+def test_entrypoint_renders_the_default_page(fake_streamlit_connection: None) -> None:
     app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
     app.run()
 
@@ -25,3 +25,31 @@ def test_entrypoint_renders_the_default_page(fake_streamlit_connection) -> None:
     # The in-page title and the sidebar label share the page's i18n key.
     assert [title.value for title in app.title] == [t(f"page.{default_key}")]
     assert t(f"page.{default_key}") == t(f"nav.{default_key}")
+
+
+def test_database_status_renders_a_status_dot_not_an_alert(
+    fake_streamlit_connection: None,
+) -> None:
+    """The DB status is the pinned status-dot component (Task 27), not a native
+    ``st.success``/``st.error`` alert."""
+    app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
+    app.run()
+
+    assert not app.exception
+    html = " ".join(html_texts(app))
+    assert "dot tone-ok" in html or "dot tone-err" in html
+    assert t("app.db_status_online") in html or t("app.db_status_offline") in html
+
+
+def test_brand_text_appears_in_the_injected_stylesheet(
+    fake_streamlit_connection: None,
+) -> None:
+    """The sidebar brand is CSS-pinned (fallback 2): the brand text from
+    ``t("app.brand")`` is interpolated into the stylesheet, not rendered by
+    ``st.logo`` or a ``st.markdown`` brand call."""
+    app = AppTest.from_file(REPOSITORY_ROOT / "dashboard" / "app.py", default_timeout=20)
+    app.run()
+
+    assert not app.exception
+    styles = " ".join(m.value for m in app.markdown)
+    assert t("app.brand") in styles

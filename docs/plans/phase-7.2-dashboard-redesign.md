@@ -909,9 +909,9 @@ Every task lists **Files**, **Build**, **i18n keys**, **Depends**, a checkbox
 - **i18n keys:** `app.brand`="سامانهٔ داده‌ها", `app.db_status_label`="پایگاه داده متصل", `app.db_status_offline`="پایگاه داده متصل نیست".
 - **Depends:** Tasks 9, 20.
 - **Acceptance:**
-  - [ ] DB status is pinned at the sidebar bottom and no longer an alert box.
-  - [ ] The chosen brand fallback is recorded in the design-system doc, with the mockup deviation if fallback (2)/(3) is used.
-  - [ ] Router test still renders the default page.
+  - [x] DB status is pinned at the sidebar bottom and no longer an alert box.
+  - [x] The chosen brand fallback is recorded in the design-system doc, with the mockup deviation if fallback (2)/(3) is used.
+  - [x] Router test still renders the default page.
 - **Verify:** `poetry run pytest tests/unit/dashboard/test_app_router.py -q` + manual browser check.
 
 ### 28. (B) BUILD the top bar / breadcrumb with the last-collection stamp

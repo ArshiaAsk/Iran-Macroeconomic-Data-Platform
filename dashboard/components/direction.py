@@ -35,6 +35,7 @@ __all__ = [
     "CSS_SELECTORS",
     "FONT_STACK",
     "apply_plotly_typography",
+    "brand_sidebar_css",
     "direction_css",
     "inject_direction_css",
     "plotly_template",
@@ -139,7 +140,11 @@ _CHROME_COMMENT: Final[str] = (
 _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
     ("sidebar", "width: 256px !important; min-width: 256px !important;"),
     ("sidebar_content", "display: flex !important; flex-direction: column;"),
-    ("sidebar_header", "order: 0;"),
+    (
+        "sidebar_header",
+        "order: 0; display: flex; align-items: center; gap: 10px; "
+        "padding: 1.25rem 1rem 0.75rem;",
+    ),
     ("sidebar_nav", "order: 1;"),
     ("sidebar_user_content", "order: 2; margin-top: auto;"),
     (
@@ -150,7 +155,73 @@ _CHROME_RULES: Final[tuple[tuple[str, str], ...]] = (
     ("main_block_container", "max-width: 1360px !important;"),
 )
 
-#: Component CSS for the RTL HTML table and its chip/dot/two-line cells (Task
+#: Brand block (Task 27, brand fallback 2). The sidebar header is empty chrome
+#: when no ``st.logo`` is used, so the mark and the brand text are CSS
+#: pseudo-elements pinned to ``stSidebarHeader``. The text comes from
+#: :func:`dashboard.i18n.t` (``app.brand``) and is escaped by
+#: :func:`_escape_css_string` before interpolation — a Persian literal cannot
+#: live in a CSS string unescaped because a stray backslash or quote would break
+#: the ``content`` declaration. The mark is a CSS-drawn accent square (no SVG:
+#: ``st.html`` strips ``<svg>`` per wave-0-spike.md §6).
+_BRAND_COMMENT: Final[str] = (
+    "/* Sidebar brand (Task 27, fallback 2): CSS-pinned mark + text on "
+    "stSidebarHeader. Brand text is escaped and interpolated from i18n. */"
+)
+
+
+def _escape_css_string(text: str) -> str:
+    """Escape a string for safe interpolation into a CSS double-quoted ``content`` value.
+
+    CSS string literals terminate on an unescaped ``"`` and interpret ``\\`` as an
+    escape sequence introducer, so both must be doubled. Control characters
+    (0x00-0x1F) are illegal in CSS strings and are emitted as hex escapes with a
+    trailing space delimiter. Persian/Arabic characters need no escaping.
+    """
+    chars: list[str] = []
+    for char in text:
+        if char == "\\":
+            chars.append("\\\\")
+        elif char == '"':
+            chars.append('\\"')
+        elif ord(char) < 0x20:
+            chars.append(f"\\{ord(char):06x} ")
+        else:
+            chars.append(char)
+    return "".join(chars)
+
+
+def brand_sidebar_css(brand_text: str) -> str:
+    """Return the CSS rules that pin the sidebar brand mark and text.
+
+    The brand lives on ``[data-testid="stSidebarHeader"]`` as two
+    pseudo-elements: ``::before`` is a CSS-drawn accent mark (no SVG), and
+    ``::after`` carries the escaped brand text. The header's own flex rule
+    (in :data:`_CHROME_RULES`) lays them out side by side at the RTL start.
+
+    Args:
+        brand_text: The already-resolved brand string (call ``t("app.brand")``
+            first). It is escaped before interpolation so it cannot break the
+            CSS ``content`` declaration.
+
+    Returns:
+        Two CSS rules (``::before`` + ``::after``) as one string, ready to
+        append to the stylesheet.
+    """
+    escaped = _escape_css_string(brand_text)
+    header = CSS_SELECTORS["sidebar_header"]
+    before = (
+        f'{header}::before {{ content: ""; flex: none; box-sizing: border-box; '
+        f"width: 26px; height: 26px; border-radius: 7px; "
+        f"background: var(--accent); }} "
+    )
+    after = (
+        f'{header}::after {{ content: "{escaped}"; '
+        f"font-family: {FONT_STACK}; font-weight: 700; font-size: 15px; "
+        f"line-height: 1.4; color: var(--text-1); }} "
+    )
+    return _BRAND_COMMENT + "\n" + before + after
+
+
 #: 15). Emitted once by :func:`inject_direction_css` rather than a ``<style>`` per
 #: table. Values mirror ``docs/design/phase-7.2/overview-redesign-mockup.html``
 #: (``.dt``/``.chip``/``.dot``/``.unit``/``.ltr``) and read the design tokens, so
@@ -349,18 +420,31 @@ def direction_css() -> str:
     )
 
 
-def inject_direction_css() -> None:
+def inject_direction_css(brand_text: str | None = None) -> None:
     """Inject the scoped stylesheet into the running app.
 
     The rules are wrapped in a ``<style>`` element: ``st.markdown`` renders a bare
     CSS string as visible page text, so without the wrapper the stylesheet source
     leaks into the DOM instead of styling it.
 
+    When ``brand_text`` is provided, the sidebar brand rules from
+    :func:`brand_sidebar_css` are appended to the stylesheet so the brand mark
+    and text land on ``stSidebarHeader``. The caller resolves the text through
+    ``t("app.brand")`` before passing it in; the CSS module never imports the
+    string catalog, keeping it a pure styling layer.
+
     Called once per script run by the entrypoint. It is intentionally not guarded
     by ``st.session_state``: Streamlit drops elements that a run does not re-emit,
     so a guard would remove the stylesheet on the next rerun.
+
+    Args:
+        brand_text: Optional already-resolved brand string. When ``None`` the
+            stylesheet omits the brand rules (used by tests and standalone runs).
     """
-    st.markdown(f"<style>{direction_css()}</style>", unsafe_allow_html=True)
+    stylesheet = direction_css()
+    if brand_text is not None:
+        stylesheet += "\n" + brand_sidebar_css(brand_text)
+    st.markdown(f"<style>{stylesheet}</style>", unsafe_allow_html=True)
 
 
 def plotly_template() -> go.layout.Template:

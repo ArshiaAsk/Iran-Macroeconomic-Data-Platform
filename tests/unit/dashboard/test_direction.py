@@ -13,7 +13,9 @@ from streamlit.testing.v1 import AppTest
 from dashboard.components.direction import (
     CSS_SELECTORS,
     FONT_STACK,
+    _escape_css_string,
     apply_plotly_typography,
+    brand_sidebar_css,
     direction_css,
     inject_direction_css,
     plotly_template,
@@ -181,3 +183,82 @@ def test_chrome_block_does_not_touch_main_container_top_padding() -> None:
     css = direction_css()
 
     assert "padding-top" not in css
+
+
+# --- Task 27: sidebar brand (fallback 2) — CSS-pinned mark + text ---
+
+BRAND = "داده‌های اقتصاد کلان ایران"
+
+
+def test_escape_css_string_doubles_backslashes() -> None:
+    assert _escape_css_string("a\\b") == "a\\\\b"
+
+
+def test_escape_css_string_escapes_double_quotes() -> None:
+    assert _escape_css_string('a"b') == 'a\\"b'
+
+
+def test_escape_css_string_hex_escapes_control_characters() -> None:
+    # A NUL (U+0000) is illegal in a CSS string; it must become a hex escape.
+    assert _escape_css_string("a\x00b") == "a\\000000 b"
+
+
+def test_escape_css_string_leaves_persian_unchanged() -> None:
+    assert _escape_css_string(BRAND) == BRAND
+
+
+def test_brand_css_emits_before_mark_and_after_text() -> None:
+    css = brand_sidebar_css(BRAND)
+
+    header = CSS_SELECTORS["sidebar_header"]
+    assert f"{header}::before" in css
+    assert f"{header}::after" in css
+    # The mark is a CSS-drawn square (no SVG, no text glyph).
+    assert 'content: ""' in css
+    # The brand text is interpolated into the ::after content property.
+    assert f'content: "{BRAND}"' in css
+    assert "var(--accent)" in css  # mark fill
+    assert "font-weight: 700" in css  # brand text
+
+
+def test_brand_css_escapes_the_brand_text() -> None:
+    """A brand containing a backslash or quote cannot break the CSS content string."""
+    css = brand_sidebar_css('test"brand\\path')
+
+    assert 'content: "test\\"brand\\\\path"' in css
+
+
+def test_brand_css_is_not_part_of_direction_css() -> None:
+    """The brand rules are dynamic (they carry i18n text) and live in their own
+    builder, so direction_css() stays brand-free and the no-arg injection test
+    stays green."""
+    assert "stSidebarHeader" not in direction_css().replace(CSS_SELECTORS["sidebar_header"], "")
+
+
+_BRAND_INJECTION_SCRIPT = (
+    "from dashboard.components.direction import inject_direction_css\n"
+    f'inject_direction_css(brand_text="{BRAND}")\n'
+)
+
+
+def test_inject_with_brand_text_appends_brand_rules() -> None:
+    app = AppTest.from_string(_BRAND_INJECTION_SCRIPT)
+    app.run()
+
+    assert not app.exception
+    injected = app.markdown[0].value
+    assert injected.startswith("<style>")
+    assert injected.endswith("</style>")
+    assert BRAND in injected
+    assert "::after" in injected
+
+
+def test_inject_without_brand_text_omits_brand_rules() -> None:
+    """The no-arg call path (used by tests and standalone runs) stays brand-free."""
+    app = AppTest.from_string(INJECTION_SCRIPT)
+    app.run()
+
+    assert not app.exception
+    injected = app.markdown[0].value
+    assert injected == f"<style>{direction_css()}</style>"
+    assert "::after" not in injected

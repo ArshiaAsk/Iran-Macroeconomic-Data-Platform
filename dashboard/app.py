@@ -8,6 +8,7 @@ still be driven directly by ``AppTest``.
 import streamlit as st
 
 from dashboard.components.direction import inject_direction_css
+from dashboard.components.layout import render_status_dot
 from dashboard.connection import get_connection
 from dashboard.i18n import t
 from dashboard.navigation import GROUPS, PAGES, PageSpec
@@ -37,12 +38,19 @@ def build_navigation() -> dict[str, list[st.Page]]:
 
 
 def render_database_status() -> None:
-    """Render the database-status banner in the sidebar."""
+    """Render the database-status indicator in the sidebar's pinned footer.
+
+    The indicator uses the shared status-dot component (Task 11) rather than a
+    native ``st.success``/``st.error`` alert: the sidebar footer needs a compact
+    dot + label, not a full alert banner. The tone is ``ok`` when the database
+    is reachable and ``err`` when it is not. The label text resolves through
+    :func:`dashboard.i18n.t`.
+    """
     connection = get_connection()
     if connection.test_connection():
-        st.success(t("app.db_connected"))
+        render_status_dot(t("app.db_status_online"), tone="ok")
     else:
-        st.error(t("app.db_unavailable"))
+        render_status_dot(t("app.db_status_offline"), tone="err")
 
 
 def main() -> None:
@@ -57,7 +65,9 @@ def main() -> None:
     with st.sidebar:
         # Injected in the sidebar so the (invisible) stylesheet element cannot
         # push page content down, and re-emitted every run so Streamlit keeps it.
-        inject_direction_css()
+        # The brand text is resolved here (not in the CSS module) and escaped
+        # before interpolation by brand_sidebar_css().
+        inject_direction_css(brand_text=t("app.brand"))
         render_database_status()
     navigation.run()
 

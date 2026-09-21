@@ -1151,3 +1151,42 @@ were never staged or committed (Task 7 owns them).
   days; the TTL is short enough to reflect a new collection run quickly without
   re-querying on every Streamlit rerun.
 - **Commit hash:** `00024ba`
+
+## Task 27 — BUILD the sidebar shell (brand, DB status)
+
+- **Files:** `dashboard/components/direction.py`, `dashboard/app.py`,
+  `dashboard/i18n.py`, `docs/phase-7.2/design-system.md`,
+  `tests/unit/dashboard/test_direction.py`, `tests/unit/dashboard/test_app_router.py`.
+- **Build:**
+  - Added `app.brand`, `app.db_status_label`, `app.db_status_online`,
+    `app.db_status_offline` to `dashboard/i18n.py`.
+  - Added a pure `_escape_css_string` helper and `brand_sidebar_css(brand_text)`
+    builder to `dashboard/components/direction.py`. The brand mark is a CSS-drawn
+    accent square in `stSidebarHeader::before`; the brand text is escaped and
+    interpolated into `stSidebarHeader::after`. `inject_direction_css` accepts an
+    optional `brand_text` and appends the brand rules when provided.
+  - Updated the `sidebar_header` chrome rule to `display: flex; align-items:
+    center; gap: 10px; padding: 1.25rem 1rem 0.75rem;`.
+  - Replaced `st.success`/`st.error` in `render_database_status` with the shared
+    `render_status_dot` component, using tones `ok`/`err` and short labels.
+  - `app.py` now calls `inject_direction_css(brand_text=t("app.brand"))`.
+  - Recorded the brand fallback (2) recipe and DB-status pin in
+    `docs/phase-7.2/design-system.md` §6.
+- **Verify:**
+  - `poetry run ruff check` on modified files → clean.
+  - `poetry run ruff format --check` on modified files → clean.
+  - `poetry run mypy src dashboard` → 0 errors.
+  - `poetry run pytest tests/unit/dashboard/test_direction.py
+    tests/unit/dashboard/test_app_router.py -q --no-cov` → 27 passed.
+  - `poetry run pytest tests/unit/dashboard -q --no-cov` → 518 passed, no
+    regressions.
+  - Visual check: `python scripts/dashboard_screenshots.py --out-dir
+    docs/phase-7.2/wave-b-assets/task-27-sidebar` → 10 PNGs at 1440×900; the
+    default page shows the brand block (accent mark + "داده‌های اقتصاد کلان
+    ایران") and the DB status dot at the sidebar bottom.
+- **Deviations:**
+  - The mockup's brand glyph is replaced by a CSS-drawn accent square because no
+    brand asset exists and `st.html` strips inline SVG.
+  - The brand text wraps in the 256px sidebar; the mark and first line sit on
+    one row, and the remaining text wraps below.
+- **Commit hash:** pending

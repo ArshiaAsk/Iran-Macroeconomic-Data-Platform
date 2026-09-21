@@ -52,10 +52,10 @@ STRING_CATALOG: Final[Mapping[str, str]] = MappingProxyType(
     {
         # Shell chrome.
         "app.title": "سامانه داده‌های اقتصاد کلان ایران",
-        "app.db_connected": "اتصال به پایگاه داده برقرار است",
-        "app.db_unavailable": (
-            "پایگاه داده در دسترس نیست. پستگرس را با «make db-up» اجرا و مهاجرت‌ها را اعمال کنید."
-        ),
+        "app.brand": "داده‌های اقتصاد کلان ایران",
+        "app.db_status_label": "وضعیت پایگاه داده",
+        "app.db_status_online": "متصل",
+        "app.db_status_offline": "قطع",
         # Sidebar groups (mirror dashboard.navigation.GROUPS).
         "group.overview_analysis": "مرور و تحلیل",
         "group.domains": "حوزه‌ها",
