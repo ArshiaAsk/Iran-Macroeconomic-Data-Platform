@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phases 1–7 complete, and the Phase 7.1 dashboard refresh is implemented (Tasks 1–25). Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. Phase 7.1 rebuilt the dashboard presentation: a `st.navigation` router + page registry, full Persian/RTL localization with a Jalali display policy, Market/Labor/Welfare pages, derived-series exposure with parent provenance, chain-linking transparency, correlation guardrails and catalog search (see `docs/phase-7.1/README.md`). The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 7.1 Tasks 27–28 (extended test suite + analyst acceptance pass) and the cache-TTL item are deferred. Phase 8 (production readiness) is next
+* **Lifecycle Stage:** Active implementation — Phases 1–7 complete; the Phase 7.1 dashboard refresh (Tasks 1–25) and the Phase 7.2 dashboard redesign (Waves 0–H) are implemented. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. Phase 7.1 rebuilt the dashboard presentation: a `st.navigation` router + page registry, full Persian/RTL localization with a Jalali display policy, Market/Labor/Welfare pages, derived-series exposure with parent provenance, chain-linking transparency, correlation guardrails and catalog search (see `docs/phase-7.1/README.md`). Phase 7.2 rebuilt that presentation on a shared design system — vendored Vazirmatn, design tokens and a theme lock, scoped RTL CSS, and shared layout/KPI/section/filter/state components adopted by all ten pages under the D11 layout contract (see `docs/phase-7.2/README.md` and `docs/phase-7.2/design-system.md`). The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 7.1 Tasks 27–28 (extended test suite + analyst acceptance pass), the cache-TTL item, and Phase 7.2's accepted deviations (F1 padding, F7 coverage-column wrap, the D3 Gregorian/Jalali bidi direction, and the unverified `<td title>` hover tooltip) are deferred. Phase 8 (production readiness) is next
 
 ## Tech Stack
 
@@ -98,7 +98,7 @@ iran-macro-platform/
 │   ├── database/            # Schema, connection, hypertable setup
 │   └── utils/               # Validation, logging, config, retry, period helpers ✓
 ├── alembic/                 # Migration environment and versions
-├── dashboard/               # Streamlit app — Persian/RTL router (Phase 7.1) ✓
+├── dashboard/               # Streamlit app — Persian/RTL router (Phase 7.2) ✓
 ├── airflow/                 # DAG definitions — Phase 3
 ├── tests/
 │   ├── unit/                # Unit tests for all modules
@@ -114,7 +114,8 @@ iran-macro-platform/
 │   ├── phase-5/             # SCI reports + CBI gate record ✓
 │   ├── phase-6/             # TSETMC/HBSIR reports + scope-narrowing record ✓
 │   ├── phase-7/             # Dashboard runbook (historical) ✓
-│   └── phase-7.1/           # Dashboard refresh runbook + validation ✓
+│   ├── phase-7.1/           # Dashboard refresh runbook + validation ✓
+│   └── phase-7.2/           # Dashboard redesign design system + validation ✓
 ├── scripts/                 # Utility scripts (init-db.sql)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
@@ -648,9 +649,13 @@ is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
 | `dashboard/formatting.py` | Persian digits/separators, Jalali + `Asia/Tehran` display formatters |
 | `dashboard/page_view.py` | Page composition (filters, Gold load, sections) |
 | `dashboard/components/direction.py` | Scoped RTL CSS + Plotly typography template |
+| `dashboard/components/tokens.py` | Design tokens (colours, radii, type scale) read by the theme and the Plotly template |
+| `dashboard/components/layout.py` | Shared layout components (`render_page_header`, `render_kpi_band`, `render_section_header`, `render_filter_bar`) |
 | `dashboard/repository.py` | Read-only SQL (LEFT JOIN catalog + parent provenance) |
 | `docs/phase-7.1/README.md` | Dashboard refresh runbook (Persian page guide, Jalali policy, deferred scope) |
 | `docs/phase-7.1/VALIDATION.md` | Phase 7.1 validation record + accepted deviations/gaps |
+| `docs/phase-7.2/design-system.md` | Phase 7.2 tokens, theme mapping, component catalogue and D11 layout contract |
+| `docs/phase-7.2/README.md` | Dashboard redesign runbook + validation status |
 | `docs/phase-2/data_dictionary.md` | Indicator catalog with coverage observed from a real run |
 
 ## Important Constraints
@@ -696,6 +701,9 @@ is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
 | Dashboard runbook (Persian pages, Jalali policy, deferred scope) | `docs/phase-7.1/README.md` |
 | Dashboard refresh implementation notes | `docs/phase-7.1/IMPLEMENTATION.md` |
 | Dashboard refresh validation + accepted deviations | `docs/phase-7.1/VALIDATION.md` |
+| Dashboard redesign design system + D11 page contract | `docs/phase-7.2/design-system.md` |
+| Dashboard redesign runbook + validation record | `docs/phase-7.2/README.md` |
+| Phase 8 production-readiness plan (next phase) | `docs/plans/phase-8-production-readiness.md` |
 | Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents
