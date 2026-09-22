@@ -50,7 +50,7 @@ poetry install                    # Install dependencies
 # Development
 make format                       # Format code with ruff
 make lint                         # Lint with ruff
-make typecheck                    # Type check with mypy
+make typecheck                    # Type check src + dashboard with mypy
 make test                         # Run unit tests (skips integration)
 make test-integration             # Run integration tests (requires Docker)
 make test-all                     # Run unit + integration tests
@@ -445,8 +445,8 @@ is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
 - **The dev-only screenshot script** (`scripts/dashboard_screenshots.py`) captures
   one PNG per registered page; it is **not** a CI gate. Restart the dev server
   before a capture set and record the commit under capture.
-- **Gate per wave:** `make check` plus `poetry run mypy src dashboard` (the
-  typecheck target covers `src/` only) and the ten-page router smoke
+- **Gate per wave:** `make check` (whose `typecheck` target now covers `src/`
+  **and** `dashboard/`) plus the ten-page router smoke
   (`tests/unit/dashboard/test_all_pages_smoke.py`).
 - **Do not touch `src/`, `alembic/` or `airflow/` for a presentation change.**
 

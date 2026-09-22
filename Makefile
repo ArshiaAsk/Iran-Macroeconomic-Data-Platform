@@ -15,8 +15,8 @@ format: ## Format code with ruff
 lint: ## Lint code with ruff
 	poetry run ruff check .
 
-typecheck: ## Run type checking with mypy
-	poetry run mypy src/
+typecheck: ## Run type checking with mypy (src + dashboard)
+	poetry run mypy src dashboard
 
 test: ## Run unit tests with coverage (skips integration; use test-all for everything)
 	poetry run pytest -m "not integration"
