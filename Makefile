@@ -1,4 +1,4 @@
-.PHONY: help format lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean dashboard dashboard-screenshots airflow-init airflow-up airflow-down airflow-status airflow-logs
+.PHONY: help format format-check lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean dashboard dashboard-screenshots airflow-init airflow-up airflow-down airflow-status airflow-logs
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -11,6 +11,9 @@ install: ## Install dependencies with Poetry
 
 format: ## Format code with ruff
 	poetry run ruff format .
+
+format-check: ## Check formatting without rewriting files
+	poetry run ruff format --check .
 
 lint: ## Lint code with ruff
 	poetry run ruff check .
