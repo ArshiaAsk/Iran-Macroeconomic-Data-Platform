@@ -1,0 +1,48 @@
+name: CI
+
+# CI runs the project's quality gates on every push to main and every pull
+# request. It tests only — it never deploys (AGENTS.md's local-only deployment
+# constraint governs where the platform runs, not where its tests run).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+# Cancel superseded runs on the same ref so a fast follow-up push does not queue
+# behind a stale one (finite Actions minutes).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static gates (ruff, mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Poetry must be on PATH before actions/setup-python's poetry cache step
+      # runs, so it is installed first.
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: poetry
+
+      # The `airflow` extra is required: the DAG import tests do not skip.
+      # The tsetmc/hbsir extras are optional and their tests skip.
+      - name: Install dependencies
+        run: poetry install --with dev --extras airflow
+
+      - name: Lint (ruff check)
+        run: poetry run ruff check .
+
+      # Non-mutating: CI must fail on drift, never rewrite the checkout (D9).
+      - name: Format check (ruff format --check)
+        run: poetry run ruff format --check .
+
+      - name: Type check (mypy src dashboard)
+        run: poetry run mypy src dashboard
