@@ -115,6 +115,7 @@ data/bronze/
 # and must be committed so parsers can be regression-tested offline.
 !tests/fixtures/**/*.xlsx
 !tests/fixtures/**/*.xls
+!tests/fixtures/**/*.csv
 
 # HBSIR local settings (written on first use; holds an absolute Data/ path)
 config/hbsir_settings.yaml

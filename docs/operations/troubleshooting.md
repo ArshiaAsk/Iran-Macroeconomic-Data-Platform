@@ -357,3 +357,92 @@ poetry run pytest -m "integration and not live" -q \
 
 Expected: **132 passed, 0 skipped**. If the job failed on the schema step, see
 scenario 5.
+
+---
+
+## 15. `poetry install` fails: `SecretServiceNotAvailableException`
+
+**Symptom**
+
+```text
+SecretServiceNotAvailableException
+Message recipient disconnected from message bus without replying
+Cannot install <package>.
+```
+
+**Diagnosis.** Poetry's keyring integration is enabled (`keyring.enabled = true`)
+and tries to reach a desktop secret service over D-Bus. On a headless machine —
+a CI runner, an SSH session, a container — there is no such service, so the
+install aborts. Reproduced during the Phase 8 fresh-clone walkthrough
+(`docs/phase-8/VALIDATION.md`).
+
+**Fix.** Disable keyring for the command (there are no private indexes to
+authenticate against):
+
+```bash
+POETRY_KEYRING_ENABLED=false poetry install --with dev --extras airflow
+```
+
+To make it permanent for the environment: `poetry config keyring.enabled false`.
+
+---
+
+## 16. `alembic upgrade head` fails: `password authentication failed`
+
+**Symptom**
+
+```text
+sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server
+at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication
+failed for user "iran_macro"
+```
+
+**Diagnosis.** The `.env` `DATABASE_PASSWORD` does not match the
+`POSTGRES_PASSWORD` the Compose service creates the role with
+(`docker-compose.yml`). The connection parts (`DATABASE_HOST/PORT/NAME/USER/
+PASSWORD`) are what the app reads — `src/utils/config.py` builds the URL from
+them, and `DATABASE_URL` in `.env` is **not** read by the application.
+
+```bash
+grep -E '^DATABASE_(PASSWORD|PORT)' .env
+grep -A2 'POSTGRES_PASSWORD' docker-compose.yml
+```
+
+**Fix.** Make the two match. The shipped `.env.example` uses the Compose default
+(`iran_macro_pass`); if you changed one, change the other (and for a shared
+database, change **both**, never leave the default). Then re-run
+`poetry run alembic upgrade head`.
+
+---
+
+## 17. A second clone / stack fails: `container name "/iran_macro_postgres" is already in use`
+
+**Symptom**
+
+```text
+Error response from daemon: Conflict. The container name "/iran_macro_postgres"
+is already in use by container "…".
+```
+
+**Diagnosis.** `docker-compose.yml` sets a fixed `container_name:
+iran_macro_postgres`, so two Compose projects on the same Docker daemon (for
+example a fresh clone alongside the original checkout) cannot both start —
+Compose isolates the *volume* by project name but the container name is global.
+Surfaced by the Phase 8 fresh-clone walkthrough (`docs/phase-8/VALIDATION.md`).
+
+**Fix.** Run one stack at a time. Stop the other project's container, or rename
+it so the new stack can claim the name (the named volume is untouched either
+way):
+
+```bash
+# in the other checkout
+docker compose stop
+docker rename iran_macro_postgres iran_macro_postgres_hold
+
+# … run the new stack, then restore the original
+docker rename iran_macro_postgres_hold iran_macro_postgres
+docker compose start
+```
+
+If you run a scratch stack regularly, give it its own project name and port
+(`DATABASE_PORT`) — but the container name still has to be free.

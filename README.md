@@ -73,8 +73,8 @@ status/limitations index.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/iran-macro-platform.git
-cd iran-macro-platform
+git clone https://github.com/ArshiaAsk/Iran-Macroeconomic-Data-Platform.git
+cd Iran-Macroeconomic-Data-Platform
 ```
 
 ### 2. Install Dependencies
@@ -445,6 +445,17 @@ poetry add package@^1.0.0
 # Clear cache
 poetry cache clear . --all
 ```
+
+On a headless machine (no desktop keyring / D-Bus session), `poetry install` can
+fail with `SecretServiceNotAvailableException` / `Cannot install …`. Disable
+Poetry's keyring integration for the command:
+
+```bash
+POETRY_KEYRING_ENABLED=false poetry install --with dev --extras airflow
+```
+
+See [docs/operations/troubleshooting.md](docs/operations/troubleshooting.md) for
+the full guide.
 
 ---
 
