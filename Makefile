@@ -1,4 +1,4 @@
-.PHONY: help format format-check lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check install clean dashboard dashboard-screenshots health airflow-init airflow-up airflow-down airflow-status airflow-logs
+.PHONY: help format format-check lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check backup restore install clean dashboard dashboard-screenshots health airflow-init airflow-up airflow-down airflow-status airflow-logs
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -68,6 +68,13 @@ db-check: ## Check database connection and TimescaleDB status
 	@docker compose exec postgres psql -U iran_macro -d iran_macro_db -c "SELECT version();" > /dev/null && echo "✓ Database connection successful" || echo "✗ Database connection failed"
 	@echo "Checking TimescaleDB extension..."
 	@docker compose exec postgres psql -U iran_macro -d iran_macro_db -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'timescaledb';" | grep timescaledb && echo "✓ TimescaleDB extension installed" || echo "✗ TimescaleDB extension not found"
+
+backup: ## Back up the database to backups/ (pg_dump -Fc)
+	bash scripts/backup_db.sh
+
+restore: ## Restore a backup into a scratch database (BACKUP_FILE=backups/<name>.bak [TARGET_DB=...])
+	@test -n "$(BACKUP_FILE)" || { echo "usage: make restore BACKUP_FILE=backups/<name>.bak [TARGET_DB=<scratch-db>]"; exit 1; }
+	bash scripts/restore_db.sh "$(BACKUP_FILE)" $(if $(TARGET_DB),--target $(TARGET_DB),)
 
 clean: ## Remove generated files and caches
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
