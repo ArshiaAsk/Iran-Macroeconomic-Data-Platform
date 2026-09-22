@@ -120,6 +120,7 @@ data/bronze/
 config/hbsir_settings.yaml
 
 # Backup files
+backups/
 *.bak
 *.backup
 
