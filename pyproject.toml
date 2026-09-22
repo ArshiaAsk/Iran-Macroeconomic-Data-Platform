@@ -163,6 +163,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--cov=src",
+    "--cov=dashboard",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=80",
