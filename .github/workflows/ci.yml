@@ -1,0 +1,175 @@
+name: CI
+
+# CI runs the project's quality gates on every push to main and every pull
+# request. It tests only — it never deploys (AGENTS.md's local-only deployment
+# constraint governs where the platform runs, not where its tests run).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+# Cancel superseded runs on the same ref so a fast follow-up push does not queue
+# behind a stale one (finite Actions minutes).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static gates (ruff, mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Poetry must be on PATH before actions/setup-python's poetry cache step
+      # runs, so it is installed first.
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: poetry
+
+      # The `airflow` extra is required: the DAG import tests do not skip.
+      # The tsetmc/hbsir extras are optional and their tests skip.
+      - name: Install dependencies
+        run: poetry install --with dev --extras airflow
+
+      - name: Lint (ruff check)
+        run: poetry run ruff check .
+
+      # Non-mutating: CI must fail on drift, never rewrite the checkout (D9).
+      - name: Format check (ruff format --check)
+        run: poetry run ruff format --check .
+
+      - name: Type check (mypy src dashboard)
+        run: poetry run mypy src dashboard
+
+  unit:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev --extras airflow
+
+      # Coverage is a property of the source, not the interpreter (D10), so the
+      # 80% gate runs on the 3.12 leg only. addopts already supplies
+      # --cov=src --cov=dashboard --cov-fail-under=80, so no extra flags here.
+      - name: Unit tests (coverage gate)
+        if: matrix.python-version == '3.12'
+        run: poetry run pytest -m "not integration"
+
+      # --no-cov disables coverage outright and overrides the inherited
+      # --cov-fail-under=80, so the 3.11 leg still runs every test.
+      - name: Unit tests (no coverage)
+        if: matrix.python-version != '3.12'
+        run: poetry run pytest -m "not integration" --no-cov
+
+  integration:
+    name: Integration tests (pinned TimescaleDB)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Same pin as docker-compose.yml (D11). A fresh service container starts
+        # with the TimescaleDB extension but WITHOUT the bronze/silver/gold/
+        # metadata schemas -- scripts/init-db.sql only runs on a container's
+        # first init, which never happens here -- so the schemas are created
+        # explicitly before migrating.
+        # Resolved digest: sha256:6343bdc87ca132c6b53acb26113a6bad1821d188fa39975a745f32ddd9757634
+        image: timescale/timescaledb:2.28.3-pg15
+        env:
+          POSTGRES_USER: iran_macro
+          POSTGRES_PASSWORD: iran_macro_pass
+          POSTGRES_DB: iran_macro_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iran_macro -d iran_macro_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # The service container's port is internal (5432); the local .env 5433
+      # override is a host-only concern and is never used in CI.
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: iran_macro_db
+      DATABASE_USER: iran_macro
+      DATABASE_PASSWORD: iran_macro_pass
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev --extras airflow
+
+      # alembic cannot create a fresh database: no migration contains CREATE
+      # SCHEMA, so `alembic upgrade head` would die with
+      # `InvalidSchemaName: schema "bronze" does not exist`. Apply the layer
+      # schemas and the extension first.
+      - name: Create layer schemas and the TimescaleDB extension
+        run: >-
+          PGPASSWORD="$DATABASE_PASSWORD" psql
+          -h "$DATABASE_HOST" -p "$DATABASE_PORT" -U "$DATABASE_USER"
+          -d "$DATABASE_NAME" -v ON_ERROR_STOP=1 -f scripts/init-db.sql
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
+
+      # Live-network tests are excluded because they are gated on
+      # RUN_LIVE_API_TESTS and would otherwise register as expected skips. The
+      # marker expression selects every integration test (136 - 4 live = 132),
+      # including the one integration-marked export test that lives outside
+      # tests/integration/, so no path is passed. --cov-fail-under=0 matches
+      # `make test-integration`: an integration-only run must not be judged by
+      # the project-wide 80% gate.
+      - name: Integration tests
+        run: >-
+          poetry run pytest -m "integration and not live" -q
+          --cov-fail-under=0 --junitxml=integration-report.xml
+
+      # The whole point of this job: a missing database makes the fixture call
+      # pytest.skip, which would otherwise masquerade as a green run. Any skip
+      # here is a failure.
+      - name: Assert no integration tests skipped
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("integration-report.xml").getroot()
+          skipped = [
+              (case.get("name"), case.find("skipped").get("message"))
+              for case in root.iter("testcase")
+              if case.find("skipped") is not None
+          ]
+          if skipped:
+              print(f"ERROR: {len(skipped)} integration test(s) skipped:")
+              for name, message in skipped:
+                  print(f"  - {name}: {message}")
+              sys.exit(1)
+          print("OK: no integration tests skipped")
+          PY

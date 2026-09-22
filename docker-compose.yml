@@ -1,6 +1,12 @@
 services:
   postgres:
-    image: timescale/timescaledb:latest-pg15
+    # Pinned deliberately (D11): a floating `latest` tag would let local, CI and
+    # any future environment diverge, and a TimescaleDB minor upgrade changes
+    # extension behaviour and the dump/restore contract. This is the version the
+    # platform is validated against (TimescaleDB 2.28.3 / PG 15.18).
+    # Resolved digest: sha256:6343bdc87ca132c6b53acb26113a6bad1821d188fa39975a745f32ddd9757634
+    # Keep in sync with .github/workflows/ci.yml (services.postgres.image).
+    image: timescale/timescaledb:2.28.3-pg15
     container_name: iran_macro_postgres
     environment:
       POSTGRES_USER: iran_macro

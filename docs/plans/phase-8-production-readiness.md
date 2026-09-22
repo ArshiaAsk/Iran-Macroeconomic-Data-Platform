@@ -62,8 +62,11 @@ evidence.
   default), reporting **TimescaleDB 2.28.3 on PostgreSQL 15.18**, and the image
   resolves to the digest
   `sha256:6343bdc87ca132c6b53acb26113a6bad1821d188fa39975a745f32ddd9757634`.
-  The pinned tag `timescale/timescaledb:2.28.3-pg15` **verified now to exist**
-  (`docker manifest inspect`), so a concrete pin is available (D11).
+  The pinned tag `timescale/timescaledb:2.28.3-pg15` **verified now to exist** and
+  to resolve to that **same** digest by pulling the tag and comparing digests
+  (`docker pull` + `docker inspect --format '{{index .RepoDigests 0}}'`) — **not**
+  `docker manifest inspect`, which is geo-blocked (403) in this environment (see
+  NOTES) — so a concrete pin is available (D11).
 - **The schemas and extension are created by `scripts/init-db.sql`**
   (`CREATE EXTENSION timescaledb` + `bronze`/`silver`/`gold`/`metadata`), and the
   hypertable + compression policy by
@@ -246,7 +249,7 @@ component (closing two gate gaps). **Not** a data or ML change.
 | **D8** | **D1/D2 (TGJU coverage window, SCI missing Gold) stay out of Phase 8.** | Data-correctness findings needing live data and a new collection run; mixing them into a tooling phase would obscure both. They remain in the Phase 7.2 Deferred Scope list. |
 | **D9** | **CI runs `ruff format --check .`, never `make check`.** | `make check` runs `ruff format .` in place (`Makefile:13`), which would mutate the CI checkout and could mask drift. Local `make check` is unchanged. |
 | **D10** | **Python matrix = 3.11 and 3.12; static gates run once on 3.12.** | `pyproject.toml:10` allows `>=3.11,<3.13`. A full static run per version costs runner minutes for no additional signal; tests are the version-sensitive part. |
-| **D11** | **Pin the TimescaleDB image; no floating tags.** Use `timescale/timescaledb:2.28.3-pg15` (the version the platform is validated against) in **both** `docker-compose.yml` and the CI `services:` block. Record the resolved digest alongside it. | `latest-pg15` silently moves, so local, CI and any future environment can diverge — and a TimescaleDB minor upgrade changes extension behaviour and the dump/restore contract. A floating tag also makes a "works locally, fails in CI" report unfalsifiable. The pinned tag is **verified now to exist**, and matches the running extension (2.28.3 / PG 15.18). |
+| **D11** | **Pin the TimescaleDB image; no floating tags.** Use `timescale/timescaledb:2.28.3-pg15` (the version the platform is validated against) in **both** `docker-compose.yml` and the CI `services:` block. Record the resolved digest alongside it. | `latest-pg15` silently moves, so local, CI and any future environment can diverge — and a TimescaleDB minor upgrade changes extension behaviour and the dump/restore contract. A floating tag also makes a "works locally, fails in CI" report unfalsifiable. The pinned tag is **verified now to exist** — by pulling it and comparing its digest against the running image's digest, since `docker manifest inspect` is geo-blocked (403) here (see NOTES) — and matches the running extension (2.28.3 / PG 15.18). |
 
 ### Assumptions to verify in Task 1 (Wave 0)
 
@@ -260,9 +263,13 @@ component (closing two gate gaps). **Not** a data or ML change.
 - `pg_dump`/`pg_restore` are present in that image (they ship with the
   PostgreSQL client, which the image includes) and the `iran_macro` role can
   dump the database.
-- The 136 integration tests all pass against a fresh database created by
-  `alembic upgrade head` (README claims 128 pass / 4 live skipped; the count has
-  drifted and must be re-measured).
+- The 136 integration tests all pass against a fresh database (README claims 128
+  pass / 4 live skipped; the count has drifted and must be re-measured). **Task 1
+  finding:** `alembic upgrade head` alone **cannot** create a fresh database — no
+  migration contains `CREATE SCHEMA`, so it fails with `InvalidSchemaName: schema
+  "bronze" does not exist`. The schemas come from `scripts/init-db.sql`, which
+  only runs on a container's first init; the CI integration job must apply it
+  before migrating (Task 8).
 - The owner accepts committing `poetry.lock` (D2).
 
 ---
@@ -445,11 +452,18 @@ all precede Task 6.
   versions (`SELECT extversion FROM pg_extension WHERE extname='timescaledb';`
   and `SHOW server_version;`) and the resolved image digest
   (`docker inspect --format '{{index .RepoDigests 0}}' <image>`), then confirm
-  the pinned tag resolves (`docker manifest inspect
-  timescale/timescaledb:2.28.3-pg15`) and that switching `docker-compose.yml` to
+  the pinned tag resolves to that **same digest** by pulling it and comparing
+  digests (`docker pull timescale/timescaledb:2.28.3-pg15 && docker inspect
+  --format '{{index .RepoDigests 0}}' timescale/timescaledb:2.28.3-pg15`) —
+  `docker manifest inspect` is geo-blocked (403) here and must **not** be used —
+  and that switching `docker-compose.yml` to
   it keeps the existing volume working. Confirm a GitHub Actions
   service container can run the pinned image and that the
-  workflow syntax validates (`gh workflow list` after Task 6).
+  workflow syntax validates (`gh workflow list` after Task 6). Note that a fresh
+  service container has the TimescaleDB extension but **not** the
+  `bronze`/`silver`/`gold`/`metadata` schemas — `scripts/init-db.sql` only runs on
+  a container's first init — so the integration job must apply the schema
+  statements before `alembic upgrade head` (see Task 8).
 - **PATTERN:** `docs/phase-7.2/wave-0-spike.md` (the Wave 0 capability-probe record).
 - **DEPENDENCIES:** Docker running; GitHub repo access.
 - **GOTCHA:** The local container publishes host port **5433** (`.env` override),
@@ -588,13 +602,20 @@ all precede Task 6.
   2. `.github/workflows/ci.yml` — the `integration` job's `services.postgres.image`.
   Record the resolved digest (Task 1) as a comment beside each pin, and note the
   pinned extension/server version (2.28.3 / PG 15.18) in `docs/operations/ci.md`.
-  Confirm no `latest` tag remains in either file.
+  Confirm no `latest` tag remains in either file. Verify the pin by **pulling the
+  tag and comparing its digest against the running image's digest** (`docker pull
+  timescale/timescaledb:2.28.3-pg15` then `docker inspect --format '{{index
+  .RepoDigests 0}}'` on both) — do **not** use `docker manifest inspect`, which is
+  geo-blocked (403) here (see NOTES).
 - **IMPLEMENT (job):** Add an `integration` job using that pinned image, with the
   env vars `POSTGRES_USER/PASSWORD/DB`, a published port, and a health check
   (`pg_isready`). Steps: checkout, install, set `DATABASE_HOST/PORT/NAME/USER/
-  PASSWORD` for the runner, `poetry run alembic upgrade head`, then
-  `poetry run pytest -m integration`. Ensure the job **fails** if any test skips
-  (e.g. assert the skip count is zero via a `--junitxml` parse or a
+  PASSWORD` for the runner, **create the layer schemas and the extension before
+  migrating** — apply `scripts/init-db.sql` (or run the equivalent
+  `CREATE EXTENSION IF NOT EXISTS timescaledb` + `CREATE SCHEMA IF NOT EXISTS
+  bronze/silver/gold/metadata` statements) — then `poetry run alembic upgrade
+  head`, then `poetry run pytest -m integration`. Ensure the job **fails** if any
+  test skips (e.g. assert the skip count is zero via a `--junitxml` parse or a
   `-p no:cacheprovider` + `-ra` review step), so a missing database cannot pass.
 - **PATTERN:** `docker-compose.yml` (image + `pg_isready` healthcheck);
   `alembic/env.py:22` (the URL comes from the env vars).
@@ -608,7 +629,19 @@ all precede Task 6.
   skips silently when PostgreSQL is unreachable — the "no silent skips"
   assertion is the whole point of this task. The service container's port is
   internal (5432); do not reuse the local 5433 override.
-- **VALIDATE:** `grep -rn "latest-pg15" docker-compose.yml .github/ || echo "no floating tags"`; then `gh run watch`; then locally `make db-up && poetry run alembic upgrade head && poetry run pytest -m integration`
+- **GOTCHA:** A fresh pinned TimescaleDB container has the **extension but not the
+  `bronze`/`silver`/`gold`/`metadata` schemas**. `scripts/init-db.sql` is mounted
+  via `docker-entrypoint-initdb.d` and only runs on the container's **first**
+  initialisation, so a GitHub Actions `services:` container (which starts from a
+  fresh, empty volume every run) will not have the schemas. No migration contains
+  `CREATE SCHEMA`, so `alembic upgrade head` dies with
+  `psycopg2.errors.InvalidSchemaName: schema "bronze" does not exist`. The
+  integration job must apply `scripts/init-db.sql` (or the equivalent `CREATE
+  SCHEMA` statements) **before** `alembic upgrade head`. The integration tests
+  themselves do not depend on alembic — their fixture does `CREATE SCHEMA IF NOT
+  EXISTS` + `create_all_tables()` — but the job's explicit migration step does,
+  so the ordering is mandatory.
+- **VALIDATE:** `grep -rn "latest-pg15" docker-compose.yml .github/ || echo "no floating tags"`; `docker pull timescale/timescaledb:2.28.3-pg15 && docker inspect --format '{{index .RepoDigests 0}}' timescale/timescaledb:2.28.3-pg15` (digest matches the running image — **not** `docker manifest inspect`, which is geo-blocked here); then `gh run watch`; then locally `make db-up && poetry run alembic upgrade head && poetry run pytest -m integration`
 
 ### 9. DOCUMENT required checks and branch protection
 
@@ -1105,6 +1138,23 @@ Mapped to `PRD.md` §13 (Task 19/20) and §14.4.
 - **Local port 5433 vs CI port 5432.** The local `.env` publishes 5433 because a
   system PostgreSQL holds 5432. CI uses the default. Never copy local connection
   facts into the workflow.
+- **Docker gotchas surfaced by Task 1 (Wave 0).** Three local-environment facts
+  that Wave B must not rediscover:
+  - **Docker Hub is geo-blocked here.** `docker manifest inspect` (and any direct
+    `registry-1.docker.io` call) returns `403` ("configured to block access from
+    your country"). Image pulls still work via the `docker.arvancloud.ir`
+    registry mirror, but only through `docker pull`/`docker run` — **not**
+    `docker manifest inspect`. Verify a tag by pulling it and comparing digests.
+  - **`docker-credential-desktop` is missing from `$PATH`.** `~/.docker/config.json`
+    sets `"credsStore": "desktop"`, so `docker pull`/`docker run` fail with
+    `error getting credentials`. Workaround: write `{"auths":{}}` to a temp dir
+    and run with `DOCKER_CONFIG=<tmpdir>`.
+  - **`PGDATA` is a volume subdirectory.** The compose service sets
+    `PGDATA=/var/lib/postgresql/data/pgdata`, so the real cluster lives in a
+    subdirectory of the `postgres_data` volume. Starting any scratch container
+    against that volume **without** the same `PGDATA` silently initialises a
+    second, empty cluster at the volume root instead of opening the real one — a
+    mis-set `PGDATA` therefore looks like it "worked".
 - **`make check` vs CI.** Locally, `make check` runs `ruff format .` in place and
   is the developer convenience target. CI runs `ruff format --check .` and
   `ruff check .` separately. A Verify that runs only pytest can miss formatting

@@ -17,7 +17,7 @@ The platform solves critical challenges for economic research:
 
 * **Type:** Data Engineering Platform + Analytics Dashboard (Hybrid)
 * **Primary workflow:** Multi-source ETL → Time-series storage → Chain-linking transformations → Interactive dashboard
-* **Lifecycle Stage:** Active implementation — Phases 1–7 complete, and the Phase 7.1 dashboard refresh is implemented (Tasks 1–25). Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. Phase 7.1 rebuilt the dashboard presentation: a `st.navigation` router + page registry, full Persian/RTL localization with a Jalali display policy, Market/Labor/Welfare pages, derived-series exposure with parent provenance, chain-linking transparency, correlation guardrails and catalog search (see `docs/phase-7.1/README.md`). The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 7.1 Tasks 27–28 (extended test suite + analyst acceptance pass) and the cache-TTL item are deferred. Phase 8 (production readiness) is next
+* **Lifecycle Stage:** Active implementation — Phases 1–7 complete; the Phase 7.1 dashboard refresh (Tasks 1–25) and the Phase 7.2 dashboard redesign (Waves 0–H) are implemented. Phase 4 added the generic pipeline runner plus the IMF (annual WEO, with forecasts) and EIA (monthly energy) API connectors. Phase 5 added the SCI domestic scraper (monthly CPI + quarterly unemployment, real 1395→1400 chain-linking) and its weekly DAG. Phase 6 added the two **package-backed** connectors — TSETMC (daily TEDPIX + `RET1D`/`MA30`/`.ME`) and HBSIR (weighted Gini, relative poverty, income deciles) — behind optional `tsetmc`/`hbsir` extras, plus a daily DAG. Phase 7.1 rebuilt the dashboard presentation: a `st.navigation` router + page registry, full Persian/RTL localization with a Jalali display policy, Market/Labor/Welfare pages, derived-series exposure with parent provenance, chain-linking transparency, correlation guardrails and catalog search (see `docs/phase-7.1/README.md`). Phase 7.2 rebuilt that presentation on a shared design system — vendored Vazirmatn, design tokens and a theme lock, scoped RTL CSS, and shared layout/KPI/section/filter/state components adopted by all ten pages under the D11 layout contract (see `docs/phase-7.2/README.md` and `docs/phase-7.2/design-system.md`). The OPEC basket, the **CBI TSD** scraper, and the TSETMC trading-value / market-P/E / market-cap portion of the Phase 6 scope are **deferred** — the first two sources block programmatic access, the last has no historical source in the package (see `docs/phase-4/VALIDATION.md`, `docs/phase-5/VALIDATION.md`, and `docs/phase-6/VALIDATION.md`). Phase 7.1 Tasks 27–28 (extended test suite + analyst acceptance pass), the cache-TTL item, and Phase 7.2's accepted deviations (F1 padding, F7 coverage-column wrap, the D3 Gregorian/Jalali bidi direction, and the unverified `<td title>` hover tooltip) are deferred. Phase 8 (production readiness) is complete (Waves 0–G): GitHub Actions CI (static, unit matrix on 3.11/3.12, integration against the pinned `timescale/timescaledb:2.28.3-pg15` service), the pinned database image, the widened gate (`mypy src dashboard`, coverage over `src/` + `dashboard/`), a committed `poetry.lock`, `scripts/health_check.py`, the `pg_dump`/`pg_restore` backup/restore scripts with a tested roundtrip, `scripts/benchmark_queries.py` with a committed `docs/phase-8/benchmarks.json` baseline, the architecture/runbook/troubleshooting documentation (`docs/architecture.md`, `docs/operations/`), and the fresh-clone acceptance walkthrough recorded in `docs/phase-8/VALIDATION.md` (the walkthrough also surfaced and fixed the untracked CSV test fixtures that broke `make check` on a fresh clone). Open owner items: pushing the branch to confirm a green CI run, enabling branch protection, and choosing a LICENSE
 
 ## Tech Stack
 
@@ -49,12 +49,19 @@ poetry install                    # Install dependencies
 
 # Development
 make format                       # Format code with ruff
+make format-check                 # Check formatting without rewriting (CI gate)
 make lint                         # Lint with ruff
-make typecheck                    # Type check with mypy
+make typecheck                    # Type check src + dashboard with mypy
 make test                         # Run unit tests (skips integration)
 make test-integration             # Run integration tests (requires Docker)
 make test-all                     # Run unit + integration tests
 make check                        # Run all quality gates (format + lint + typecheck + test)
+
+# Operations
+make health                       # Report connector health and data freshness (exit 0/1/2)
+make benchmark                    # Benchmark hot queries vs the committed baseline
+make backup                       # Back up the database to backups/ (pg_dump -Fc)
+make restore BACKUP_FILE=…        # Restore a backup into a scratch database
 
 # Database
 poetry run alembic upgrade head            # Apply migrations
@@ -98,7 +105,7 @@ iran-macro-platform/
 │   ├── database/            # Schema, connection, hypertable setup
 │   └── utils/               # Validation, logging, config, retry, period helpers ✓
 ├── alembic/                 # Migration environment and versions
-├── dashboard/               # Streamlit app — Persian/RTL router (Phase 7.1) ✓
+├── dashboard/               # Streamlit app — Persian/RTL router (Phase 7.2) ✓
 ├── airflow/                 # DAG definitions — Phase 3
 ├── tests/
 │   ├── unit/                # Unit tests for all modules
@@ -107,6 +114,8 @@ iran-macro-platform/
 ├── docs/
 │   ├── research/            # Research documents
 │   ├── plans/               # Per-phase implementation plans
+│   ├── architecture.md      # Architecture + data-flow document ✓
+│   ├── operations/          # Runbook, troubleshooting guide, CI operations ✓
 │   ├── phase-1/             # Phase 1 validation + implementation report
 │   ├── phase-2/             # Indicator catalog (observed coverage)
 │   ├── phase-3/             # TGJU scraper reports
@@ -114,8 +123,10 @@ iran-macro-platform/
 │   ├── phase-5/             # SCI reports + CBI gate record ✓
 │   ├── phase-6/             # TSETMC/HBSIR reports + scope-narrowing record ✓
 │   ├── phase-7/             # Dashboard runbook (historical) ✓
-│   └── phase-7.1/           # Dashboard refresh runbook + validation ✓
-├── scripts/                 # Utility scripts (init-db.sql)
+│   ├── phase-7.1/           # Dashboard refresh runbook + validation ✓
+│   ├── phase-7.2/           # Dashboard redesign design system + validation ✓
+│   └── phase-8/             # Production-readiness spike + benchmark baseline ✓
+├── scripts/                 # init-db.sql + health/backup/restore/benchmark CLIs
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies + tool configs
 ├── Makefile                 # Common commands
@@ -444,8 +455,8 @@ is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
 - **The dev-only screenshot script** (`scripts/dashboard_screenshots.py`) captures
   one PNG per registered page; it is **not** a CI gate. Restart the dev server
   before a capture set and record the commit under capture.
-- **Gate per wave:** `make check` plus `poetry run mypy src dashboard` (the
-  typecheck target covers `src/` only) and the ten-page router smoke
+- **Gate per wave:** `make check` (whose `typecheck` target now covers `src/`
+  **and** `dashboard/`) plus the ten-page router smoke
   (`tests/unit/dashboard/test_all_pages_smoke.py`).
 - **Do not touch `src/`, `alembic/` or `airflow/` for a presentation change.**
 
@@ -648,10 +659,21 @@ is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
 | `dashboard/formatting.py` | Persian digits/separators, Jalali + `Asia/Tehran` display formatters |
 | `dashboard/page_view.py` | Page composition (filters, Gold load, sections) |
 | `dashboard/components/direction.py` | Scoped RTL CSS + Plotly typography template |
+| `dashboard/components/tokens.py` | Design tokens (colours, radii, type scale) read by the theme and the Plotly template |
+| `dashboard/components/layout.py` | Shared layout components (`render_page_header`, `render_kpi_band`, `render_section_header`, `render_filter_bar`) |
 | `dashboard/repository.py` | Read-only SQL (LEFT JOIN catalog + parent provenance) |
 | `docs/phase-7.1/README.md` | Dashboard refresh runbook (Persian page guide, Jalali policy, deferred scope) |
 | `docs/phase-7.1/VALIDATION.md` | Phase 7.1 validation record + accepted deviations/gaps |
+| `docs/phase-7.2/design-system.md` | Phase 7.2 tokens, theme mapping, component catalogue and D11 layout contract |
+| `docs/phase-7.2/README.md` | Dashboard redesign runbook + validation status |
 | `docs/phase-2/data_dictionary.md` | Indicator catalog with coverage observed from a real run |
+| `docs/architecture.md` | Architecture + data-flow document (layers, DAGs, read path, timezone policy, limitations index) |
+| `docs/operations/runbook.md` | Operational runbook (health, backup/restore, migrations, benchmarks) |
+| `docs/operations/troubleshooting.md` | Troubleshooting guide (14 scenarios) |
+| `docs/operations/ci.md` | CI jobs, required checks and branch protection |
+| `scripts/health_check.py` | Read-only connector-health + data-freshness CLI (exit 0/1/2) |
+| `scripts/backup_db.sh` / `scripts/restore_db.sh` | `pg_dump -Fc` backup and the documented TimescaleDB restore procedure |
+| `scripts/benchmark_queries.py` | Hot-query benchmarks vs the committed `docs/phase-8/benchmarks.json` baseline |
 
 ## Important Constraints
 
@@ -696,6 +718,13 @@ is at `docs/plans/phase-7.2-dashboard-redesign.md`; the reference is
 | Dashboard runbook (Persian pages, Jalali policy, deferred scope) | `docs/phase-7.1/README.md` |
 | Dashboard refresh implementation notes | `docs/phase-7.1/IMPLEMENTATION.md` |
 | Dashboard refresh validation + accepted deviations | `docs/phase-7.1/VALIDATION.md` |
+| Dashboard redesign design system + D11 page contract | `docs/phase-7.2/design-system.md` |
+| Dashboard redesign runbook + validation record | `docs/phase-7.2/README.md` |
+| Architecture + data-flow (layers, DAGs, read path, timezone policy) | `docs/architecture.md` |
+| Operations runbook (health, backup/restore, migrations, benchmarks) | `docs/operations/runbook.md` |
+| Troubleshooting (14 scenarios) | `docs/operations/troubleshooting.md` |
+| CI jobs, required checks and branch protection | `docs/operations/ci.md` |
+| Phase 8 production-readiness plan | `docs/plans/phase-8-production-readiness.md` |
 | Phase implementation plans | `docs/plans/` |
 
 ## Notes for AI Agents
