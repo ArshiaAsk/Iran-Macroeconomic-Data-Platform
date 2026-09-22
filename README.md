@@ -248,7 +248,7 @@ iran-macro-platform/
 │   ├── phase-7/             # Dashboard runbook (historical)
 │   ├── phase-7.1/           # Dashboard refresh runbook + validation
 │   ├── phase-7.2/           # Dashboard redesign design system + validation
-│   └── phase-8/             # Production-readiness spike + benchmark baseline
+│   └── phase-8/             # Production-readiness spike, validation record + benchmark baseline
 ├── scripts/                 # Utility scripts (init-db.sql, health/backup/benchmark CLIs)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies
@@ -389,6 +389,8 @@ it.
 - **[docs/phase-7.1/README.md](docs/phase-7.1/README.md)** — Dashboard refresh runbook (Persian/RTL, navigation, Jalali policy, deferred scope)
 - **[docs/phase-7.2/README.md](docs/phase-7.2/README.md)** — Dashboard redesign runbook (design system, shell, D11 page contract)
 - **[docs/phase-7.2/design-system.md](docs/phase-7.2/design-system.md)** — Phase 7.2 tokens, theme mapping, component catalogue and layout contract
+- **[docs/phase-8/VALIDATION.md](docs/phase-8/VALIDATION.md)** — Phase 8 production-readiness validation record
+- **[docs/operations/](docs/operations/)** — Operational runbook, troubleshooting guide and CI operations
 - **[docs/phase-1/VALIDATION.md](docs/phase-1/VALIDATION.md)** — Phase 1 validation checklist
 - **[docs/plans/](docs/plans/)** — Per-phase implementation plans
 
@@ -532,13 +534,14 @@ the full guide.
 - [x] Design system, runbook and validation record (`docs/phase-7.2/`)
 - [ ] Accepted deviations (owner-approved): F1 content padding, F7 coverage-column wrap, the D3 Gregorian/Jalali bidi direction, and the `<td title>` hover tooltip (unverified in a browser)
 
-### Phase 8: Production Readiness (Week 8) ✅ IMPLEMENTED
+### Phase 8: Production Readiness (Week 8) ✅ COMPLETE (Waves 0–G)
 - [x] CI/CD pipeline (GitHub Actions: static, unit matrix, integration)
 - [x] Pinned database image; quality-gate closure (typecheck/coverage/format-check); commit `poetry.lock`
 - [x] Monitoring health-check script; backup/restore scripts + tested roundtrip
 - [x] Query benchmarks with a committed baseline (`docs/phase-8/benchmarks.json`)
 - [x] Architecture doc, operational runbook, troubleshooting guide, and documentation drift fixes
-- [ ] Fresh-clone acceptance walkthrough and `docs/phase-8/VALIDATION.md` (Wave G) — pending
+- [x] Fresh-clone acceptance walkthrough and `docs/phase-8/VALIDATION.md` (Wave G)
+- [ ] Open owner items: push the branch and confirm a green CI run, enable branch protection, and choose a LICENSE — see `docs/phase-8/VALIDATION.md`
 
 ---
 
