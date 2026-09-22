@@ -46,3 +46,37 @@ jobs:
 
       - name: Type check (mypy src dashboard)
         run: poetry run mypy src dashboard
+
+  unit:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev --extras airflow
+
+      # Coverage is a property of the source, not the interpreter (D10), so the
+      # 80% gate runs on the 3.12 leg only. addopts already supplies
+      # --cov=src --cov=dashboard --cov-fail-under=80, so no extra flags here.
+      - name: Unit tests (coverage gate)
+        if: matrix.python-version == '3.12'
+        run: poetry run pytest -m "not integration"
+
+      # --no-cov disables coverage outright and overrides the inherited
+      # --cov-fail-under=80, so the 3.11 leg still runs every test.
+      - name: Unit tests (no coverage)
+        if: matrix.python-version != '3.12'
+        run: poetry run pytest -m "not integration" --no-cov
