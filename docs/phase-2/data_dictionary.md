@@ -2,6 +2,14 @@
 
 **Status:** ✅ OBSERVED — recorded from a real end-to-end run on August 19, 2026.
 
+> **Registered indicators (reconciled 2026-09-22).**
+> `metadata.indicator_catalog` holds **54 indicators** across the seven
+> implemented sources: `world_bank` 12, `sci` 18 (14 canonical + 4 inactive
+> base-year segments), `hbsir` 12, `imf` 6, `tgju` 3, `eia` 2, `tsetmc` 1. OPEC
+> and CBI have **no** catalog rows — they are deferred, not planned. Per-source
+> type, frequency, status and the recorded reason for each deferral are in
+> [../architecture.md](../architecture.md#connector-status-and-limitations).
+
 > **Dashboard surfacing (Phase 7.1).** Every indicator documented below is
 > reachable in the Persian dashboard
 > ([runbook](../phase-7.1/README.md#persian-page-guide)): World Bank/IMF/EIA and
@@ -284,18 +292,21 @@ accumulating observations over time.
 
 ## Indicators
 
-**Phase 3 Implementation** covers 3 representative indicators for integration tests:
+**Phase 3 Implementation** registers 3 indicators. The scraper navigates the TGJU
+**profile slug** (left column); the **registered indicator id** (second column) is
+what appears in `metadata.indicator_catalog` and Gold. The two are mapped in
+`src/connectors/tgju_scraper.py` (`_INDICATORS`).
 
-| Indicator ID | Name | Unit | Domain | Type |
-|--------------|------|------|--------|------|
-| `price_dollar_rl` | US Dollar (Free Market) | IRR | `fx` | Currency |
-| `geram18` | 18-Karat Gold | IRR/gram | `gold` | Commodity |
-| `sekee` | Emami Gold Coin | IRR/coin | `gold` | Coin |
+| Source profile | Registered indicator id | Name | Unit | Domain | Frequency |
+|----------------|-------------------------|------|------|--------|-----------|
+| `price_dollar_rl` | `TGJU.USD.FREE` | USD Free Market Rate | IRR | `fx` | daily |
+| `geram18` | `TGJU.GOLD.18K` | 18K Gold per Gram | IRR | `gold` | daily |
+| `sekee` | `TGJU.GOLD.EMAMI` | Emami Gold Coin | IRR | `gold` | daily |
 
-**Full implementation** (Airflow orchestration, Phase 3 completion) will add:
-- Additional FX pairs (EUR, GBP, AED, TRY, CNY)
-- Gold varieties (24K, 17K)
-- Other coins (Azadi, Gerami, Half-Bahar)
+The catalog registers **only these three** TGJU indicators. Additional FX pairs
+(EUR, GBP, AED, TRY, CNY), gold varieties (24K, 17K) and other coins (Azadi,
+Gerami, Half-Bahar) are **not ingested** — adding them is future work, not part
+of any completed phase.
 
 ## Scraper Architecture
 
