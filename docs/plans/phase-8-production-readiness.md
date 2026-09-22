@@ -260,9 +260,13 @@ component (closing two gate gaps). **Not** a data or ML change.
 - `pg_dump`/`pg_restore` are present in that image (they ship with the
   PostgreSQL client, which the image includes) and the `iran_macro` role can
   dump the database.
-- The 136 integration tests all pass against a fresh database created by
-  `alembic upgrade head` (README claims 128 pass / 4 live skipped; the count has
-  drifted and must be re-measured).
+- The 136 integration tests all pass against a fresh database (README claims 128
+  pass / 4 live skipped; the count has drifted and must be re-measured). **Task 1
+  finding:** `alembic upgrade head` alone **cannot** create a fresh database — no
+  migration contains `CREATE SCHEMA`, so it fails with `InvalidSchemaName: schema
+  "bronze" does not exist`. The schemas come from `scripts/init-db.sql`, which
+  only runs on a container's first init; the CI integration job must apply it
+  before migrating (Task 8).
 - The owner accepts committing `poetry.lock` (D2).
 
 ---
@@ -449,7 +453,11 @@ all precede Task 6.
   timescale/timescaledb:2.28.3-pg15`) and that switching `docker-compose.yml` to
   it keeps the existing volume working. Confirm a GitHub Actions
   service container can run the pinned image and that the
-  workflow syntax validates (`gh workflow list` after Task 6).
+  workflow syntax validates (`gh workflow list` after Task 6). Note that a fresh
+  service container has the TimescaleDB extension but **not** the
+  `bronze`/`silver`/`gold`/`metadata` schemas — `scripts/init-db.sql` only runs on
+  a container's first init — so the integration job must apply the schema
+  statements before `alembic upgrade head` (see Task 8).
 - **PATTERN:** `docs/phase-7.2/wave-0-spike.md` (the Wave 0 capability-probe record).
 - **DEPENDENCIES:** Docker running; GitHub repo access.
 - **GOTCHA:** The local container publishes host port **5433** (`.env` override),
@@ -592,9 +600,12 @@ all precede Task 6.
 - **IMPLEMENT (job):** Add an `integration` job using that pinned image, with the
   env vars `POSTGRES_USER/PASSWORD/DB`, a published port, and a health check
   (`pg_isready`). Steps: checkout, install, set `DATABASE_HOST/PORT/NAME/USER/
-  PASSWORD` for the runner, `poetry run alembic upgrade head`, then
-  `poetry run pytest -m integration`. Ensure the job **fails** if any test skips
-  (e.g. assert the skip count is zero via a `--junitxml` parse or a
+  PASSWORD` for the runner, **create the layer schemas and the extension before
+  migrating** — apply `scripts/init-db.sql` (or run the equivalent
+  `CREATE EXTENSION IF NOT EXISTS timescaledb` + `CREATE SCHEMA IF NOT EXISTS
+  bronze/silver/gold/metadata` statements) — then `poetry run alembic upgrade
+  head`, then `poetry run pytest -m integration`. Ensure the job **fails** if any
+  test skips (e.g. assert the skip count is zero via a `--junitxml` parse or a
   `-p no:cacheprovider` + `-ra` review step), so a missing database cannot pass.
 - **PATTERN:** `docker-compose.yml` (image + `pg_isready` healthcheck);
   `alembic/env.py:22` (the URL comes from the env vars).
@@ -608,6 +619,18 @@ all precede Task 6.
   skips silently when PostgreSQL is unreachable — the "no silent skips"
   assertion is the whole point of this task. The service container's port is
   internal (5432); do not reuse the local 5433 override.
+- **GOTCHA:** A fresh pinned TimescaleDB container has the **extension but not the
+  `bronze`/`silver`/`gold`/`metadata` schemas**. `scripts/init-db.sql` is mounted
+  via `docker-entrypoint-initdb.d` and only runs on the container's **first**
+  initialisation, so a GitHub Actions `services:` container (which starts from a
+  fresh, empty volume every run) will not have the schemas. No migration contains
+  `CREATE SCHEMA`, so `alembic upgrade head` dies with
+  `psycopg2.errors.InvalidSchemaName: schema "bronze" does not exist`. The
+  integration job must apply `scripts/init-db.sql` (or the equivalent `CREATE
+  SCHEMA` statements) **before** `alembic upgrade head`. The integration tests
+  themselves do not depend on alembic — their fixture does `CREATE SCHEMA IF NOT
+  EXISTS` + `create_all_tables()` — but the job's explicit migration step does,
+  so the ordering is mandatory.
 - **VALIDATE:** `grep -rn "latest-pg15" docker-compose.yml .github/ || echo "no floating tags"`; then `gh run watch`; then locally `make db-up && poetry run alembic upgrade head && poetry run pytest -m integration`
 
 ### 9. DOCUMENT required checks and branch protection
