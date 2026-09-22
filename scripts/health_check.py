@@ -238,7 +238,7 @@ def evaluate_health(
     collection = _latest_collection_by_source(freshness)
     observed = _coverage_by_source(coverage)
 
-    names = sorted(set(collection) | set(observed))
+    names = sorted(set(collection) | set(observed) | _coverage_source_names(coverage))
     sources: list[SourceHealth] = []
     for name in names:
         last_collection, collection_status, error = collection.get(name, (None, None, None))
@@ -287,6 +287,17 @@ def _latest_collection_by_source(
             None if error is None or pd.isna(error) else str(error),
         )
     return result
+
+
+def _coverage_source_names(coverage: pd.DataFrame) -> set[str]:
+    """Every source named by the coverage frame, observed or not.
+
+    A catalog indicator with no Gold rows still names a source, and that source
+    must be reported (as ``no_data``) rather than silently dropped.
+    """
+    if coverage.empty or "source_name" not in coverage.columns:
+        return set()
+    return {str(name) for name in coverage["source_name"].dropna().unique() if name is not None}
 
 
 def _coverage_by_source(
