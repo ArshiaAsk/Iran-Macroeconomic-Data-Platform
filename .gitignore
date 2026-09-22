@@ -34,7 +34,8 @@ venv.bak/
 .python-version
 
 # Poetry
-poetry.lock
+# poetry.lock is committed deliberately (Phase 8, D2) so CI installs a
+# reproducible dependency graph from the resolved versions.
 
 # IDE
 .vscode/
