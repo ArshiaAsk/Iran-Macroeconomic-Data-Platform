@@ -43,6 +43,12 @@ Data Sources (APIs + Scrapers)
   Streamlit Dashboard (Interactive analytics)
 ```
 
+See **[docs/architecture.md](docs/architecture.md)** for the full architecture
+and data-flow document: the medallion schemas and tables, the connector →
+pipeline → Gold flow, the four Airflow DAGs and their schedules, the dashboard's
+read path, the storage/display timezone policy, and the connector
+status/limitations index.
+
 ---
 
 ## Prerequisites
@@ -231,6 +237,8 @@ iran-macro-platform/
 ├── docs/
 │   ├── research/            # Research documents
 │   ├── plans/               # Phase implementation plans
+│   ├── architecture.md      # Architecture + data-flow document
+│   ├── operations/          # Runbook, troubleshooting guide, CI operations
 │   ├── phase-1/             # Phase 1 validation + implementation report
 │   ├── phase-2/             # Indicator catalog (observed coverage)
 │   ├── phase-3/             # TGJU scraper reports
@@ -239,8 +247,9 @@ iran-macro-platform/
 │   ├── phase-6/             # TSETMC/HBSIR reports + scope record
 │   ├── phase-7/             # Dashboard runbook (historical)
 │   ├── phase-7.1/           # Dashboard refresh runbook + validation
-│   └── phase-7.2/           # Dashboard redesign design system + validation
-├── scripts/                 # Utility scripts (init-db.sql)
+│   ├── phase-7.2/           # Dashboard redesign design system + validation
+│   └── phase-8/             # Production-readiness spike + benchmark baseline
+├── scripts/                 # Utility scripts (init-db.sql, health/backup/benchmark CLIs)
 ├── docker-compose.yml       # Local infrastructure
 ├── pyproject.toml           # Poetry dependencies
 ├── Makefile                 # Common commands
@@ -338,9 +347,11 @@ make test-all
 RUN_LIVE_API_TESTS=1 poetry run pytest -m live
 ```
 
-Current status: **1,473 unit tests passing** (3 live tests skipped by default) at
-**89.22% coverage** (measured over `src/`), plus **136 integration tests** that
-require a running database. `mypy src dashboard` (68 files) and `ruff` are clean.
+Current status: **1,514 unit tests passing** (3 live tests skipped by default) at
+**90.33% coverage** (measured over `src/` **and** `dashboard/` as one aggregated
+ratio; `src/` alone is 89%), plus **136 integration tests** — 132 against a
+running database and 4 live-network tests skipped by default. `mypy src dashboard`
+(68 files) and `ruff` are clean.
 
 ### Coverage Requirements
 
@@ -366,6 +377,10 @@ it.
 
 - **[AGENTS.md](AGENTS.md)** — Project conventions and AI agent guidance
 - **[PRD.md](PRD.md)** — Product requirements and implementation plan
+- **[docs/architecture.md](docs/architecture.md)** — Architecture and data-flow document (layers, DAGs, read path, timezone policy)
+- **[docs/operations/runbook.md](docs/operations/runbook.md)** — Operational runbook (health, backup/restore, migrations, benchmarks)
+- **[docs/operations/troubleshooting.md](docs/operations/troubleshooting.md)** — Troubleshooting guide (14 scenarios)
+- **[docs/operations/ci.md](docs/operations/ci.md)** — CI jobs, required checks and branch protection
 - **[docs/research/init-research.md](docs/research/init-research.md)** — Data source analysis
 - **[docs/phase-2/data_dictionary.md](docs/phase-2/data_dictionary.md)** — Indicator catalog with observed coverage (World Bank, IMF, EIA)
 - **[docs/phase-3/README.md](docs/phase-3/README.md)** — TGJU scraper implementation and validation
@@ -506,12 +521,13 @@ poetry cache clear . --all
 - [x] Design system, runbook and validation record (`docs/phase-7.2/`)
 - [ ] Accepted deviations (owner-approved): F1 content padding, F7 coverage-column wrap, the D3 Gregorian/Jalali bidi direction, and the `<td title>` hover tooltip (unverified in a browser)
 
-### Phase 8: Production Readiness (Week 8) ⏳ NEXT
-- [ ] CI/CD pipeline (GitHub Actions: static, unit matrix, integration)
-- [ ] Pinned database image; quality-gate closure (typecheck/coverage/format-check); commit `poetry.lock`
-- [ ] Monitoring health-check script; backup/restore scripts + tested roundtrip
-- [ ] Query benchmarks with a committed baseline
-- [ ] Architecture doc, operational runbook, troubleshooting guide, and documentation drift fixes
+### Phase 8: Production Readiness (Week 8) ✅ IMPLEMENTED
+- [x] CI/CD pipeline (GitHub Actions: static, unit matrix, integration)
+- [x] Pinned database image; quality-gate closure (typecheck/coverage/format-check); commit `poetry.lock`
+- [x] Monitoring health-check script; backup/restore scripts + tested roundtrip
+- [x] Query benchmarks with a committed baseline (`docs/phase-8/benchmarks.json`)
+- [x] Architecture doc, operational runbook, troubleshooting guide, and documentation drift fixes
+- [ ] Fresh-clone acceptance walkthrough and `docs/phase-8/VALIDATION.md` (Wave G) — pending
 
 ---
 
@@ -549,4 +565,4 @@ See `AGENTS.md` for code conventions and patterns.
 For questions or issues, please open a GitHub issue.
 
 **Maintainer:** Arshia Askarzadeh 
-**Project Status:** Phases 1–7 complete; the Phase 7.1 dashboard refresh and the Phase 7.2 dashboard redesign are implemented (Persian/RTL `st.navigation` UI on a shared design system — tokens, vendored Vazirmatn, scoped RTL CSS, shared layout/KPI/filter/state components, all ten pages migrated to the D11 contract). Phase 7.2 is complete pending owner acceptance; its accepted deviations (F1 padding, F7 wrap, D3 bidi direction, the `<td title>` hover tooltip) and the Phase 7.1 Tasks 27–28 (extended tests, analyst acceptance pass) and cache-TTL item remain deferred. SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented and validated against live runs (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source); Phase 8 (production readiness) next
+**Project Status:** Phases 1–7 complete; the Phase 7.1 dashboard refresh and the Phase 7.2 dashboard redesign are implemented (Persian/RTL `st.navigation` UI on a shared design system — tokens, vendored Vazirmatn, scoped RTL CSS, shared layout/KPI/filter/state components, all ten pages migrated to the D11 contract). Phase 7.2 is complete pending owner acceptance; its accepted deviations (F1 padding, F7 wrap, D3 bidi direction, the `<td title>` hover tooltip) and the Phase 7.1 Tasks 27–28 (extended tests, analyst acceptance pass) and cache-TTL item remain deferred. SCI domestic CPI/labour pipeline and the Phase 6 TSETMC/HBSIR market & survey connectors implemented and validated against live runs (CBI, OPEC, and part of the TSETMC scope deferred: no accessible source). Phase 8 (production readiness) is implemented — CI (static + unit matrix + pinned-TimescaleDB integration), the pinned database image, the widened gate (`mypy src dashboard`, `--cov=src --cov=dashboard`), committed `poetry.lock`, the health-check and backup/restore scripts with a tested roundtrip, the query benchmarks with a committed baseline, and the architecture/runbook/troubleshooting documentation. The fresh-clone acceptance walkthrough and `docs/phase-8/VALIDATION.md` (Wave G) remain pending; branch protection and the LICENSE are open owner decisions.
