@@ -1,4 +1,4 @@
-.PHONY: help format format-check lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check backup restore install clean dashboard dashboard-screenshots health airflow-init airflow-up airflow-down airflow-status airflow-logs
+.PHONY: help format format-check lint typecheck test test-unit test-integration test-all check db-up db-down db-shell db-reset db-check backup restore install clean dashboard dashboard-screenshots health benchmark airflow-init airflow-up airflow-down airflow-status airflow-logs
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -40,6 +40,9 @@ dashboard-screenshots: ## Capture 1440x900 screenshots of all dashboard pages (r
 
 health: ## Report connector health and data freshness
 	poetry run python scripts/health_check.py
+
+benchmark: ## Run query benchmarks and compare against the stored baseline
+	poetry run python scripts/benchmark_queries.py
 
 test-all: ## Run unit + integration tests (requires Docker)
 	poetry run pytest
