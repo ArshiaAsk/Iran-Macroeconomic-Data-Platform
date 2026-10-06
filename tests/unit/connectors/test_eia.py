@@ -30,6 +30,7 @@ from src.utils.exceptions import ConnectionError as PlatformConnectionError
 from src.utils.exceptions import DataRetrievalError, ParsingError
 from src.utils.periods import FREQUENCY_MONTHLY
 from src.utils.retry import RateLimiter, RetryPolicy
+from src.utils.sanitize import REDACTED
 from tests.conftest import (
     EIA_TEST_KEY,
     FakeHTTPSession,
@@ -367,6 +368,31 @@ def test_request_url_never_leaks_the_api_key() -> None:
     assert "api_key" not in fetched.request_url
 
 
+def test_fetch_series_redacts_the_echoed_api_key() -> None:
+    """EIA echoes the request under ``response.request.params``; redact it.
+
+    This is the regression the published snapshot exposed: the connector never
+    intended to store the key, but the API echoed it back and the payload was
+    persisted verbatim.
+    """
+
+    def router(url: str, params: dict[str, object]) -> dict[str, object]:
+        return {
+            "apiVersion": "2.1.13",
+            "request": {"params": dict(params)},
+            "response": {"total": "1", "data": [{"period": "2024-01", "value": "1"}]},
+        }
+
+    connector = build_connector(FakeHTTPSession(router=router))
+
+    fetched = connector.fetch_series(CRUDE)
+
+    echoed = fetched.raw_envelope["raw_response"][0]
+    assert echoed["request"]["params"]["api_key"] == REDACTED
+    assert echoed["request"]["params"]["length"] == 5000
+    assert EIA_TEST_KEY not in str(fetched.raw_envelope)
+
+
 def test_collection_metadata_never_leaks_the_api_key() -> None:
     """Neither provenance dict may carry the credential."""
     connector = build_connector(eia_session_for([CRUDE]))
@@ -401,7 +427,7 @@ def test_retry_errors_do_not_leak_the_api_key() -> None:
         connector.fetch_series(CRUDE)
 
     assert EIA_TEST_KEY not in str(excinfo.value)
-    assert "***" in str(excinfo.value)
+    assert REDACTED in str(excinfo.value)
 
 
 def test_server_errors_are_retried_then_reported() -> None:

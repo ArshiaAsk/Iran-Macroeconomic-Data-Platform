@@ -12,8 +12,10 @@ Observed API behaviour this module has to absorb (probed 2026-09-12)
   ``{"error": {"code": "API_KEY_MISSING"}}``; an invalid one 403
   ``API_KEY_INVALID``. ``RetryPolicy`` treats every non-429 4xx as permanent, so
   auth failures surface immediately instead of being retried four times. The key
-  is read from ``EIA_API_KEY`` and must never appear in Bronze provenance or
-  logs.
+  is read from ``EIA_API_KEY`` and sent only on the live request; the connector
+  strips it from the stored ``request_url`` and, because EIA *echoes* the
+  request back under ``response.request.params``, redacts that echoed copy with
+  :func:`src.utils.sanitize.redact_secrets` before it reaches Bronze.
 * **Facets filter server-side.** Iran is ``facets[countryRegionId][]=IRN``;
   crude + NGPL production is ``productId=55`` and total liquids ``productId=53``
   with ``activityId=1`` ("Production").
@@ -48,6 +50,7 @@ from src.utils.exceptions import DataRetrievalError, ParsingError
 from src.utils.logging import get_logger, log_with_context
 from src.utils.periods import FREQUENCY_MONTHLY
 from src.utils.retry import RateLimiter, RetryPolicy
+from src.utils.sanitize import redact_secrets, sanitize_text
 from src.utils.validation import ValidationResult, validate_data_quality
 
 logger = get_logger(__name__)
@@ -256,7 +259,7 @@ class EiaConnector(DataConnector):
                 # requests embeds the prepared URL -- api_key included -- in its
                 # HTTPError text, which would otherwise reach retry logs and the
                 # run report. Re-raise with the credential scrubbed.
-                msg = _scrub_api_key(str(exc), self.config.api_key)
+                msg = sanitize_text(str(exc), [self.config.api_key])
                 raise HTTPError(msg, response=exc.response, request=exc.request) from exc
             try:
                 payload = response.json()
@@ -424,7 +427,14 @@ class EiaConnector(DataConnector):
             "rows_usable": int(len(frame)),
             "total_reported": total_reported,
         }
-        raw_envelope = {"rows": list(rows), "meta": meta, "raw_response": raw_pages}
+        # EIA echoes the request (api_key included) under
+        # ``response.request.params``; redact that copy before the payload
+        # reaches Bronze. ``rows`` and ``meta`` carry no credentials.
+        raw_envelope = {
+            "rows": list(rows),
+            "meta": meta,
+            "raw_response": redact_secrets(raw_pages, [self.config.api_key]),
+        }
 
         log_with_context(
             logger,
@@ -502,13 +512,6 @@ class EiaConnector(DataConnector):
         params = self._params(indicator, offset=0, length=self.config.page_length)
         params.pop("api_key", None)
         return f"{self.config.data_url()}?{urllib.parse.urlencode(params)}"
-
-
-def _scrub_api_key(message: str, api_key: str | None) -> str:
-    """Replace a credential with a placeholder before it is logged or raised."""
-    if not api_key:
-        return message
-    return message.replace(api_key, "***")
 
 
 def _as_int(value: Any) -> int | None:
