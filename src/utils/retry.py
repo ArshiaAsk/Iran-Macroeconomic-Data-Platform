@@ -27,6 +27,7 @@ from requests import HTTPError, Timeout
 from src.utils.config import get_config
 from src.utils.exceptions import DataRetrievalError
 from src.utils.logging import get_logger, log_with_context
+from src.utils.sanitize import sanitize_text
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -165,7 +166,7 @@ class RetryPolicy:
                     attempt=attempt,
                     max_attempts=self.max_attempts,
                     delay=round(delay, 3),
-                    error=str(exc),
+                    error=sanitize_text(str(exc)),
                     **context,
                 )
                 self.sleep(delay)
@@ -173,7 +174,7 @@ class RetryPolicy:
         elapsed = time.monotonic() - started
         msg = (
             f"{operation_name} failed after {self.max_attempts} attempt(s) "
-            f"in {elapsed:.2f}s: {last_exc}"
+            f"in {elapsed:.2f}s: {sanitize_text(str(last_exc))}"
         )
         raise DataRetrievalError(msg) from last_exc
 
