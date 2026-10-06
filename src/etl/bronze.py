@@ -5,6 +5,12 @@ Bronze is immutable by contract (AGENTS.md): once written, a row is never
 updated or deleted. Storing the untouched response means a parsing bug can be
 fixed and the data re-derived without hitting the source again.
 
+One deliberate exception to "verbatim": values stored under a credential key
+name (``api_key``, ``token``, ``password``, ...) are replaced with ``REDACTED``
+by :func:`src.utils.sanitize.redact_secrets` before the row is written. Bronze
+is long-lived and, in the published snapshot, shared, so a leaked credential
+there is effectively permanent. Everything not under such a key is untouched.
+
 Envelope convention
 -------------------
 The World Bank Indicators API returns a two-element JSON *array*
@@ -22,6 +28,7 @@ from sqlalchemy.orm import Session
 from src.database.schema import BronzeRaw, DataCollectionLog
 from src.utils.exceptions import ParsingError
 from src.utils.logging import get_logger, log_with_context
+from src.utils.sanitize import redact_secrets, sanitize_text, sanitize_url
 
 logger = get_logger(__name__)
 
@@ -125,16 +132,24 @@ def write_bronze(
     Returns:
         Primary key of the new Bronze row, usable as a Silver foreign key
     """
-    raw_data = wrap_envelope(raw_envelope)
+    # Security boundary: every connector funnels through here, so a credential
+    # that a connector forgot to strip (or that an API echoed back) is redacted
+    # exactly once, centrally, before it can be persisted. Everything that is
+    # not under a sensitive key name is stored verbatim.
+    raw_data = redact_secrets(wrap_envelope(raw_envelope))
     row_count = len(extract_rows(raw_data))
+
+    safe_request_url = sanitize_url(request_url)
+    safe_metadata = redact_secrets(record_metadata) if record_metadata is not None else None
+    safe_error = sanitize_text(error_message) if error_message else error_message
 
     bronze_row = BronzeRaw(
         source_name=source_name,
         source_type=source_type,
         raw_data=raw_data,
-        request_url=request_url,
+        request_url=safe_request_url,
         http_status_code=http_status_code,
-        record_metadata=record_metadata,
+        record_metadata=safe_metadata,
     )
     session.add(bronze_row)
     # Flush (not commit) so the generated UUID is available to Silver while the
@@ -146,10 +161,10 @@ def write_bronze(
             source_name=source_name,
             status=status,
             records_collected=row_count,
-            error_message=error_message,
+            error_message=safe_error,
             execution_time_seconds=execution_time_seconds,
             record_metadata={
-                **(record_metadata or {}),
+                **(safe_metadata or {}),
                 "bronze_id": str(bronze_row.id),
             },
         )

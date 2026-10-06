@@ -20,6 +20,7 @@ from src.etl.bronze import (
     write_bronze,
 )
 from src.utils.exceptions import ParsingError
+from src.utils.sanitize import REDACTED
 from tests.conftest import FakeSession, load_world_bank_fixture
 
 GDP = "NY.GDP.MKTP.CD"
@@ -215,3 +216,36 @@ def test_write_bronze_counts_zero_observations(fake_session: FakeSession) -> Non
 
     assert fake_session.added_of(DataCollectionLog)[0].records_collected == 0
     assert fake_session.added_of(BronzeRaw)[0].raw_data["rows"] == []
+
+
+def test_write_bronze_redacts_credentials_at_the_boundary(fake_session: FakeSession) -> None:
+    """A connector that forgets to strip a key still cannot persist it."""
+    secret = "live-key-value"
+    raw_envelope = {
+        "rows": [{"period": "2024-01", "value": "1"}],
+        "raw_response": [{"request": {"params": {"api_key": secret, "length": 1}}}],
+    }
+
+    write_bronze(
+        fake_session,  # type: ignore[arg-type]
+        source_name="eia",
+        source_type=SOURCE_TYPE_API,
+        raw_envelope=raw_envelope,
+        request_url=f"https://api.eia.gov/v2/international/data/?api_key={secret}&length=1",
+        record_metadata={"indicator_id": "EIA.IRN.CRUDE_PRODUCTION", "token": secret},
+        error_message=f"boom for url https://api.eia.gov/v2/data/?api_key={secret}",
+    )
+
+    row = fake_session.added_of(BronzeRaw)[0]
+    assert row.raw_data["raw_response"][0]["request"]["params"]["api_key"] == REDACTED
+    assert row.raw_data["raw_response"][0]["request"]["params"]["length"] == 1
+    assert row.raw_data["rows"] == raw_envelope["rows"]
+    assert secret not in str(row.raw_data)
+    assert row.request_url is not None
+    assert secret not in row.request_url
+    assert row.record_metadata["token"] == REDACTED
+
+    log = fake_session.added_of(DataCollectionLog)[0]
+    assert log.error_message is not None
+    assert secret not in log.error_message
+    assert log.record_metadata["token"] == REDACTED
